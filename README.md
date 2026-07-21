@@ -88,3 +88,10 @@ phonebook, and a direct `patala-payfast` rail. See `PATALA.md` §4.
 ## License
 
 MIT. No token. No protocol tax.
+
+---
+
+<p align="center">
+  <a href="https://vulos.org"><img src="docs/assets/vulos-logo.png" alt="vulos" height="20"></a><br>
+  <sub><a href="https://vulos.org"><b>vulos</b></a> — open by design</sub>
+</p>

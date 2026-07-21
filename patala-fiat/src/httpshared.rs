@@ -1,5 +1,6 @@
 //! Shared HTTP-safety and webhook-HMAC infrastructure used by every network
-//! adapter in this crate (currently: `stripe`, `paystack`).
+//! adapter in this crate (currently: `stripe`, `paystack`, `adyen`,
+//! `checkoutcom`, `mollie`, `mercadopago`).
 //!
 //! Ported from cackle's `internal/payments/httpshared.go` (the bounded-read
 //! discipline) plus the common hex-encoded-HMAC-over-a-signed-payload
@@ -11,7 +12,14 @@
 //! the raw body directly; Stripe signs `"{timestamp}.{raw body}"`) differ
 //! and stay in each adapter's own `webhook` module.
 
-#![cfg(any(feature = "stripe", feature = "paystack"))]
+#![cfg(any(
+    feature = "stripe",
+    feature = "paystack",
+    feature = "adyen",
+    feature = "checkoutcom",
+    feature = "mollie",
+    feature = "mercadopago"
+))]
 
 /// Cackle's `maxResponseBodyBytes` (`internal/payments/paystack.go`) and
 /// `stripeMaxBodyBytes` (`stripe.go`) are both `1 << 20` (1 MiB) — cackle
@@ -48,10 +56,17 @@ pub fn bounded_len_check(body: &[u8], limit: usize) -> Result<(), &'static str> 
 
 /// Verify `hex_signature` is a valid hex-encoded HMAC-SHA256 of
 /// `signed_payload` under `secret`, constant-time, failing closed on
-/// anything malformed. Used by the `stripe` feature's webhook module
-/// (Stripe signs `"{t}.{raw_body}"`, per
-/// <https://docs.stripe.com/webhooks/signatures>).
-#[cfg(feature = "stripe")]
+/// anything malformed. Used by:
+/// - the `stripe` feature's webhook module (Stripe signs
+///   `"{t}.{raw_body}"`, per <https://docs.stripe.com/webhooks/signatures>);
+/// - the `checkoutcom` feature's webhook module (Checkout.com signs the raw
+///   body directly, header `Cko-Signature`, per
+///   <https://checkout.com/docs/developer-resources/webhooks/manage-webhooks/set-up-your-webhook-receiver>);
+/// - the `mercadopago` feature's webhook module (Mercado Pago signs a
+///   constructed manifest string, not the raw body -- see that module's own
+///   doc comment -- header `x-signature`, per
+///   <https://www.mercadopago.com/developers/en/docs/checkout-api/additional-content/security/signature>).
+#[cfg(any(feature = "stripe", feature = "checkoutcom", feature = "mercadopago"))]
 pub fn verify_hmac_sha256_hex(secret: &[u8], signed_payload: &[u8], hex_signature: &str) -> bool {
     verify_hmac_hex::<hmac::Hmac<sha2::Sha256>>(secret, signed_payload, hex_signature)
 }
@@ -66,7 +81,44 @@ pub fn verify_hmac_sha512_hex(secret: &[u8], signed_payload: &[u8], hex_signatur
     verify_hmac_hex::<hmac::Hmac<sha2::Sha512>>(secret, signed_payload, hex_signature)
 }
 
-#[cfg(any(feature = "stripe", feature = "paystack"))]
+/// Verify `base64_signature` is a valid base64-encoded HMAC-SHA256 of
+/// `signed_payload` under `secret`, constant-time, failing closed on
+/// anything malformed (including undecodable base64 -- mirrors cackle's own
+/// `verifyAdyenHMAC`, which treats a base64 decode failure the same as a
+/// signature mismatch: `ErrAdyenInvalidSignature` either way). Used by the
+/// `adyen` feature's webhook module -- Adyen is the only adapter in this
+/// crate whose signature is base64, not hex, per
+/// <https://docs.adyen.com/development-resources/webhooks/secure-webhooks/verify-hmac-signatures>.
+#[cfg(feature = "adyen")]
+pub fn verify_hmac_sha256_base64(
+    secret: &[u8],
+    signed_payload: &[u8],
+    base64_signature: &str,
+) -> bool {
+    use base64::Engine;
+    use hmac::Mac;
+    if secret.is_empty() || base64_signature.trim().is_empty() {
+        return false;
+    }
+    let Ok(expected_bytes) =
+        base64::engine::general_purpose::STANDARD.decode(base64_signature.trim())
+    else {
+        return false;
+    };
+    let Ok(mut mac) = <hmac::Hmac<sha2::Sha256> as hmac::digest::KeyInit>::new_from_slice(secret)
+    else {
+        return false;
+    };
+    mac.update(signed_payload);
+    mac.verify_slice(&expected_bytes).is_ok()
+}
+
+#[cfg(any(
+    feature = "stripe",
+    feature = "paystack",
+    feature = "checkoutcom",
+    feature = "mercadopago"
+))]
 fn verify_hmac_hex<M>(secret: &[u8], signed_payload: &[u8], hex_signature: &str) -> bool
 where
     M: hmac::Mac + hmac::digest::KeyInit,
@@ -87,7 +139,14 @@ where
 }
 
 #[cfg(test)]
-#[cfg(any(feature = "stripe", feature = "paystack"))]
+#[cfg(any(
+    feature = "stripe",
+    feature = "paystack",
+    feature = "adyen",
+    feature = "checkoutcom",
+    feature = "mollie",
+    feature = "mercadopago"
+))]
 mod tests {
     use super::*;
 
@@ -129,5 +188,28 @@ mod tests {
         assert!(!verify_hmac_sha512_hex(secret, b"tampered", &sig));
         assert!(!verify_hmac_sha512_hex(b"wrong-secret", payload, &sig));
         assert!(!verify_hmac_sha512_hex(secret, payload, "not-hex!!"));
+    }
+
+    #[cfg(feature = "adyen")]
+    #[test]
+    fn hmac_sha256_base64_genuine_verifies_tampered_fails_closed() {
+        use base64::Engine;
+        use hmac::Mac;
+        let secret = b"adyen-test-hmac-key";
+        let payload = b"psp_1:::ord_1:5000:EUR:AUTHORISATION:true";
+        let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(secret).unwrap();
+        mac.update(payload);
+        let sig = base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes());
+
+        assert!(verify_hmac_sha256_base64(secret, payload, &sig));
+        assert!(!verify_hmac_sha256_base64(secret, b"tampered", &sig));
+        assert!(!verify_hmac_sha256_base64(b"wrong-secret", payload, &sig));
+        assert!(!verify_hmac_sha256_base64(
+            secret,
+            payload,
+            "not-valid-base64!!"
+        ));
+        assert!(!verify_hmac_sha256_base64(b"", payload, &sig));
+        assert!(!verify_hmac_sha256_base64(secret, payload, ""));
     }
 }

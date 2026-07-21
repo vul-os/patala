@@ -19,6 +19,15 @@ categories = ["cryptography", "network-programming"]
 default = []
 stripe = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
 paystack = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+# Adyen's webhook HMAC signature is base64-encoded (not hex, unlike every
+# other adapter in this crate) -- see adyen/webhook.rs -- hence the extra
+# dep:base64, gated to this feature only.
+adyen = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "dep:base64"]
+checkoutcom = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+# Mollie's classic webhook carries NO signature at all -- see mollie/webhook.rs
+# -- so this feature needs no HMAC/hex deps, only reqwest.
+mollie = ["dep:reqwest"]
+mercadopago = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
 
 [dependencies]
 patala-core = { path = "../patala-core" }
@@ -30,6 +39,7 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 hmac = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
 hex = { version = "0.4", optional = true }
+base64 = { version = "0.22", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }

@@ -16,6 +16,10 @@
 //! | [`manual`] | The offline, always-available default rail | `internal/payments/manual.go` |
 //! | `stripe` (feature `stripe`) | Pilot 1: Checkout Sessions | `internal/payments/stripe.go` |
 //! | `paystack` (feature `paystack`) | Pilot 2: Transaction API | `internal/payments/paystack.go` |
+//! | `adyen` (feature `adyen`) | Pay by Link | `internal/payments/adyen.go` |
+//! | `checkoutcom` (feature `checkoutcom`) | Hosted Payments Page | `internal/payments/checkoutcom.go` |
+//! | `mollie` (feature `mollie`) | Payments API | `internal/payments/mollie.go` |
+//! | `mercadopago` (feature `mercadopago`) | Checkout Pro (Preferences) | `internal/payments/mercadopago.go` |
 //!
 //! ## Honesty conventions (binding — `PATALA.md` §8, carried into this crate)
 //!
@@ -58,10 +62,25 @@
 //! `default-members` precisely because its default build stays this lean —
 //! see that file's own comment.
 
+#[cfg(feature = "adyen")]
+pub mod adyen;
+#[cfg(feature = "checkoutcom")]
+pub mod checkoutcom;
 pub mod currency;
-#[cfg(any(feature = "stripe", feature = "paystack"))]
+#[cfg(any(
+    feature = "stripe",
+    feature = "paystack",
+    feature = "adyen",
+    feature = "checkoutcom",
+    feature = "mollie",
+    feature = "mercadopago"
+))]
 pub mod httpshared;
 pub mod manual;
+#[cfg(feature = "mercadopago")]
+pub mod mercadopago;
+#[cfg(feature = "mollie")]
+pub mod mollie;
 #[cfg(feature = "paystack")]
 pub mod paystack;
 pub mod registry;
@@ -72,6 +91,14 @@ pub use currency::CurrencyError;
 pub use manual::{ManualRail, ManualRecord, ManualStatus, RAIL_ID_MANUAL};
 pub use registry::{CapabilityFilter, Registry, RegistryError, ENV_PATALA_FIAT_RAILS};
 
+#[cfg(feature = "adyen")]
+pub use adyen::{AdyenConfig, AdyenRail};
+#[cfg(feature = "checkoutcom")]
+pub use checkoutcom::{CheckoutComConfig, CheckoutComRail};
+#[cfg(feature = "mercadopago")]
+pub use mercadopago::{MercadoPagoConfig, MercadoPagoRail};
+#[cfg(feature = "mollie")]
+pub use mollie::{MollieConfig, MollieRail};
 #[cfg(feature = "paystack")]
 pub use paystack::{PaystackConfig, PaystackRail};
 #[cfg(feature = "stripe")]

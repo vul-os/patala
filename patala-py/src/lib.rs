@@ -52,6 +52,17 @@
 //! does not grow or change shape when a real rail is added**, only the
 //! constructor list does. That is what "structured so real rails can be
 //! exposed later without redesign" means concretely here.
+//!
+//! ## `patala-fiat` (20 processor adapters, one constructor)
+//!
+//! Unlike the one-constructor-per-rail pattern above, `patala-fiat`'s 20
+//! feature-gated processor adapters (Stripe, Paystack, Adyen, ...) are
+//! exposed through a single by-name registry constructor,
+//! [`PatalaRail::new_fiat`], defined in `fiat.rs` (gated behind
+//! `--features fiat`, with each adapter behind its own additional
+//! `fiat-<name>` feature). See that file's module docs for the full
+//! justification of why by-name+config was chosen over 20 more typed
+//! constructors.
 
 use std::sync::{Arc, OnceLock};
 
@@ -73,6 +84,14 @@ use patala_stellar::{
 
 #[cfg(feature = "hyperswitch")]
 use patala_hyperswitch::{HyperswitchConfig, HyperswitchRail};
+
+// `patala-fiat`'s 20 processor adapters, exposed via ONE by-name registry
+// constructor (`PatalaRail::new_fiat`) rather than 20 typed ones -- see
+// `fiat.rs`'s module docs for the full justification. Declared as its own
+// file (not inline here) purely for size: twenty adapters' worth of
+// config-mapping code would otherwise dwarf this file.
+#[cfg(feature = "fiat")]
+mod fiat;
 
 uniffi::setup_scaffolding!();
 

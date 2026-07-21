@@ -48,6 +48,16 @@ tokio = { version = "1", features = ["rt-multi-thread"] }
 patala-solana = { path = "../patala-solana", optional = true }
 patala-stellar = { path = "../patala-stellar", optional = true }
 patala-hyperswitch = { path = "../patala-hyperswitch", optional = true }
+# `patala-fiat`'s 20 processor adapters (Stripe, Paystack, Adyen, ...),
+# exposed through ONE by-name constructor (`PatalaRail::new_fiat`, see
+# `src/fiat.rs`) rather than 20 typed ones. Optional for the same reason as
+# the three rails above: a plain `cargo build -p patala-py` (no `--features`)
+# must stay exactly as offline/dep-free as `patala-core` alone. Even with
+# the `fiat` feature on, `patala-fiat` itself pulls in none of its own
+# per-adapter network/crypto deps unless the matching `patala-fiat/<name>`
+# feature is also enabled (see the `fiat-*` features below) — see
+# `patala-fiat/src/lib.rs`'s own "offline-by-default" docs.
+patala-fiat = { path = "../patala-fiat", optional = true }
 
 [features]
 default = []
@@ -58,3 +68,59 @@ default = []
 solana = ["dep:patala-solana"]
 stellar = ["dep:patala-stellar"]
 hyperswitch = ["dep:patala-hyperswitch"]
+
+# `fiat` alone pulls in `patala-fiat` with ITS OWN default features only
+# (currency table + registry + the always-on, no-network `manual` rail —
+# see `patala-fiat/src/lib.rs`), enough for `PatalaRail::new_fiat("manual",
+# ...)` to work with zero new network/crypto deps. Each of the 20
+# processor adapters needs its own ADDITIONAL feature below, mirroring
+# `patala-fiat/Cargo.toml`'s own per-adapter feature list one-to-one
+# (`fiat-<name>` here enables exactly `patala-fiat/<name>`), namespaced
+# under `fiat-` to avoid colliding with this crate's own `solana`/
+# `stellar`/`hyperswitch` names. `fiat-all` enables every one at once —
+# meant for this crate's own tests and for regenerating the Go binding
+# with the full fiat surface (see `patala-go/Makefile`), not implied by
+# plain `fiat`.
+fiat = ["dep:patala-fiat"]
+fiat-adyen = ["fiat", "patala-fiat/adyen"]
+fiat-btcpay = ["fiat", "patala-fiat/btcpay"]
+fiat-checkoutcom = ["fiat", "patala-fiat/checkoutcom"]
+fiat-coinbasecommerce = ["fiat", "patala-fiat/coinbasecommerce"]
+fiat-flutterwave = ["fiat", "patala-fiat/flutterwave"]
+fiat-iyzico = ["fiat", "patala-fiat/iyzico"]
+fiat-lnbits = ["fiat", "patala-fiat/lnbits"]
+fiat-mercadopago = ["fiat", "patala-fiat/mercadopago"]
+fiat-midtrans = ["fiat", "patala-fiat/midtrans"]
+fiat-mollie = ["fiat", "patala-fiat/mollie"]
+fiat-opennode = ["fiat", "patala-fiat/opennode"]
+fiat-payfast = ["fiat", "patala-fiat/payfast"]
+fiat-paypal = ["fiat", "patala-fiat/paypal"]
+fiat-payu = ["fiat", "patala-fiat/payu"]
+fiat-paystack = ["fiat", "patala-fiat/paystack"]
+fiat-razorpay = ["fiat", "patala-fiat/razorpay"]
+fiat-square = ["fiat", "patala-fiat/square"]
+fiat-stripe = ["fiat", "patala-fiat/stripe"]
+fiat-xendit = ["fiat", "patala-fiat/xendit"]
+fiat-yoco = ["fiat", "patala-fiat/yoco"]
+fiat-all = [
+    "fiat-adyen",
+    "fiat-btcpay",
+    "fiat-checkoutcom",
+    "fiat-coinbasecommerce",
+    "fiat-flutterwave",
+    "fiat-iyzico",
+    "fiat-lnbits",
+    "fiat-mercadopago",
+    "fiat-midtrans",
+    "fiat-mollie",
+    "fiat-opennode",
+    "fiat-payfast",
+    "fiat-paypal",
+    "fiat-payu",
+    "fiat-paystack",
+    "fiat-razorpay",
+    "fiat-square",
+    "fiat-stripe",
+    "fiat-xendit",
+    "fiat-yoco",
+]

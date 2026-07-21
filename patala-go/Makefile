@@ -18,6 +18,15 @@ BINDINGS_DIR := $(CURDIR)/bindings
 PKG_DIR := $(BINDINGS_DIR)/patala
 UNAME_S := $(shell uname -s)
 
+# Cargo features to build patala-py's cdylib with, e.g. `FEATURES=fiat-all`
+# or `FEATURES=solana,stellar,hyperswitch,fiat-stripe`. Empty by default —
+# the exact status quo before `patala-fiat` was exposed here: a MockRail-only
+# cdylib with zero extra dependencies. `run-example-fiat`/`test-fiat` below
+# override this to `fiat-all` for you; set it by hand for any other
+# combination (`make FEATURES=fiat-stripe generate`).
+FEATURES ?=
+FEATURE_FLAG := $(if $(FEATURES),--features $(FEATURES))
+
 ifeq ($(UNAME_S),Darwin)
 	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.dylib
 	LIB_EXT := dylib
@@ -26,13 +35,13 @@ else
 	LIB_EXT := so
 endif
 
-.PHONY: rust-lib generate build run-example test clean check-uniffi-bindgen-go
+.PHONY: rust-lib generate build run-example run-example-fiat test test-fiat clean check-uniffi-bindgen-go
 
 # 1. Build the cdylib patala-go will link against (the same one patala-py
 #    loads — see README.md's "Which cdylib?" section for why reusing it is
-#    correct and not a layering violation).
+#    correct and not a layering violation). Respects $(FEATURES) — see above.
 rust-lib:
-	cd $(ROOT_DIR) && cargo build -p patala-py
+	cd $(ROOT_DIR) && cargo build -p patala-py $(FEATURE_FLAG)
 
 # 2. Generate the Go bindings from that cdylib's embedded UniFFI metadata.
 #    Requires `uniffi-bindgen-go` v0.5.0+v0.29.5 on PATH (matching the
@@ -75,6 +84,36 @@ test: generate
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		go test ./...
+
+# 5. Same as run-example/test above, but forces patala-py's cdylib to be
+#    rebuilt with every patala-fiat adapter compiled in (`fiat-all`, see
+#    patala-py/Cargo.toml), so `PatalaRailNewFiat`/`PatalaFiatProviders`
+#    (examples/fiatroundtrip) are actually reachable. This is the ONLY
+#    difference from `run-example`/`test` above — same generate -> build ->
+#    run pipeline, just with $(FEATURES) pinned to `fiat-all` regardless of
+#    whatever the bare `make generate` was last invoked with.
+#
+#    `examples/fiatroundtrip/main.go` carries a `//go:build fiat` constraint
+#    (Go has no Cargo-style optional-feature-per-dependency mechanism, so
+#    this is the Go-side equivalent): without `-tags fiat`, `go build ./...`/
+#    `go test ./...` above SKIP that directory entirely, which is exactly
+#    what keeps `build`/`test`/`run-example` working unchanged against a
+#    plain (non-fiat) cdylib — this target is the only one that opts in.
+run-example-fiat:
+	$(MAKE) FEATURES=fiat-all generate
+	cd $(CURDIR) && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
+		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
+		go run -tags fiat ./examples/fiatroundtrip
+
+test-fiat:
+	$(MAKE) FEATURES=fiat-all generate
+	cd $(CURDIR) && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
+		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
+		go test -tags fiat ./...
 
 clean:
 	rm -rf $(BINDINGS_DIR)

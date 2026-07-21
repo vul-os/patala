@@ -125,6 +125,128 @@ and branches on `._class` (`RailClass.NON_CUSTODIAL_FINAL` /
 `RailClass.CUSTODIAL_REVERSIBLE`) without ever needing to know or name the
 concrete provider, exactly as `PATALA.md` §3 requires.
 
+## `patala-fiat` (20 processor adapters, one by-name constructor)
+
+`patala-fiat` ships 20 feature-gated `CustodialReversible` processor
+adapters (Stripe, Paystack, Adyen, Checkout.com, Mollie, Mercado Pago,
+Flutterwave, iyzico, Midtrans, Yoco, PayFast, PayU, Razorpay, Square,
+Xendit, BTCPay, LNbits, OpenNode, Coinbase Commerce, PayPal) plus the
+always-on, zero-network `manual` rail. Rather than adding 20 more typed
+constructors (`new_stripe`, `new_paystack`, ...), these are exposed through
+**one** by-name registry constructor:
+
+```python
+PatalaRail.new_fiat(provider: str, config: dict[str, str]) -> PatalaRail
+```
+
+See `src/fiat.rs`'s module docs for the full "why by-name+config, not 20
+typed constructors" justification — short version: `patala-fiat` already
+solved "pick a rail by name + config" once, at its own `registry` layer;
+this is the FFI-facing continuation of that same design, not a second one,
+and it keeps the generated binding's surface small. `provider` is matched
+case-insensitively; an unknown name or a provider whose Cargo feature was
+not compiled into this build both raise `PatalaError.InvalidRequest` (never
+a panic, never a silent fallback to a different rail).
+
+### Cargo features
+
+- `fiat` — pulls in `patala-fiat` with its own default features only
+  (currency table + registry + `manual`, zero network/crypto deps). Enough
+  for `new_fiat("manual", ...)`.
+- `fiat-<name>` (one per adapter: `fiat-stripe`, `fiat-paystack`,
+  `fiat-adyen`, `fiat-btcpay`, `fiat-checkoutcom`, `fiat-coinbasecommerce`,
+  `fiat-flutterwave`, `fiat-iyzico`, `fiat-lnbits`, `fiat-mercadopago`,
+  `fiat-midtrans`, `fiat-mollie`, `fiat-opennode`, `fiat-payfast`,
+  `fiat-paypal`, `fiat-payu`, `fiat-razorpay`, `fiat-square`,
+  `fiat-xendit`, `fiat-yoco`) — each enables exactly `patala-fiat/<name>`,
+  pulling in only THAT adapter's network/crypto deps (mirrors
+  `patala-fiat/Cargo.toml`'s own per-adapter feature list one-to-one).
+- `fiat-all` — every `fiat-<name>` feature at once. Mainly for this crate's
+  own tests and for regenerating the Go binding with the full surface (see
+  `../patala-go/Makefile`'s `run-example-fiat`/`test-fiat` targets).
+
+A plain `cargo build -p patala-py` (no `--features`) is unaffected — no new
+dependency, no new symbol, exactly the same offline default as before.
+
+### `config` keys, by provider
+
+Every key below is the EXACT field name of that provider's own
+`<Provider>Config` struct in `patala-fiat` (see that adapter's own
+`config.rs` doc comment for full detail on each field) — this binding does
+not rename anything. A missing key for a required field is passed through
+as an empty string and rejected by that adapter's own `new()` constructor
+(every `patala-fiat` adapter already fails closed on an empty required
+field) with a `PatalaError.InvalidRequest` naming the field. Boolean fields
+are `"true"`/anything-else (case-insensitive); `currencies` is a
+comma-separated list, uppercased; numeric fields (`settlement_days`,
+`timeout_secs`, `settlement_seconds`, `quote_ttl_secs`) are parsed and, if
+present but malformed, rejected as `InvalidRequest` rather than silently
+defaulted (this binding is a programmatic config map, not a typo-prone
+shell env var, so failing closed on bad explicit input is the more honest
+choice — `PATALA.md` §8).
+
+| Provider (`new_fiat` name) | Required keys | Notable optional keys / defaults |
+|---|---|---|
+| `manual` | *(none)* | Always available once `fiat` is on; never dials the network. |
+| `stripe` | `secret_key`, `webhook_secret` | `currencies` empty = unrestricted. |
+| `paystack` | `secret_key` | `currencies` defaults to Paystack's own hardcoded list (NGN/GHS/ZAR/KES/USD). |
+| `adyen` | `api_key`, `merchant_account`, `hmac_key_hex`, `api_base_url` | `hmac_key_hex` must be valid hex. |
+| `btcpay` | `base_url`, `api_key`, `store_id`, `webhook_secret` | `settlement_seconds` optional (unset → `Settlement::Instant`). |
+| `checkoutcom` | `secret_key`, `webhook_secret`, `api_base_url` | |
+| `coinbasecommerce` | `api_key`, `webhook_secret` | `base_url` defaults to `https://api.commerce.coinbase.com`. |
+| `flutterwave` | `secret_key`, `webhook_hash` | `currencies` defaults to Flutterwave's own hardcoded list. |
+| `iyzico` | `api_key`, `secret_key` | `base_url` defaults to iyzico's production API; `currencies` defaults to TRY/USD/EUR/GBP. |
+| `lnbits` | `base_url`, `api_key`, `webhook_secret` | `quote_ttl_secs` defaults to 900s; must be a positive integer if given. |
+| `mercadopago` | `access_token`, `webhook_secret` | `currencies` defaults to Mercado Pago's own hardcoded LatAm list. |
+| `midtrans` | `server_key` | No `currencies` key — hardcoded IDR-only, same as `patala-fiat` itself. |
+| `mollie` | `api_key`, `webhook_url` | |
+| `opennode` | `api_key` | `base_url` defaults to `https://api.opennode.com`. |
+| `payfast` | `merchant_id`, `merchant_key` | `passphrase` optional (empty default). No `currencies` key — ZAR-only. |
+| `paypal` | `client_id`, `client_secret`, `webhook_id`, `env` (`"live"`/`"sandbox"`, exactly) | `env` has no default — a typo/other value is `InvalidRequest`, mirroring `PayPalConfig::from_env`'s own "never silently point at the wrong environment" rule. |
+| `payu` | `merchant_key`, `salt` | No `currencies` key — cackle hardcodes INR. |
+| `razorpay` | `key_id`, `key_secret`, `webhook_secret` | No `currencies` key — hardcoded INR. |
+| `square` | `access_token`, `webhook_signature_key`, `location_id`, `notification_url`, `api_base_url` | |
+| `xendit` | `secret_key`, `webhook_token` | `currencies` defaults to Xendit's own hardcoded list. |
+| `yoco` | `secret_key`, `webhook_secret` | No `currencies` key — hardcoded ZAR-only. |
+
+Every provider above also accepts `requires_kyc` (default `true`, except
+`btcpay`/`lnbits`/`coinbasecommerce`/`opennode` default `false` — the
+self-hosted/crypto-adjacent ones, matching `patala-fiat`'s own per-adapter
+default) and `settlement_days` (default `2`, card-network T+2) or
+`timeout_secs` (default `15`, or `20` for the crypto-adjacent adapters) —
+see the table above and each `build_<name>` function in `src/fiat.rs` for
+the exact default per field.
+
+```python
+from patala_py import PatalaRail
+
+rail = PatalaRail.new_fiat("manual", {})
+print(rail.id(), rail.capabilities())
+
+stripe = PatalaRail.new_fiat("stripe", {
+    "secret_key": "sk_live_...",
+    "webhook_secret": "whsec_...",
+})
+```
+
+`PatalaRail.fiat_providers()` (Python: `patala_fiat_providers()`, a free
+function — UniFFI does not currently support exporting a plain associated
+function with no `&self`/constructor from inside an `impl` block, see
+`src/fiat.rs`) lists every provider name this specific build can actually
+construct, so a caller can discover what's available instead of hardcoding
+a list that might not match the build.
+
+**UNVERIFIED AGAINST LIVE** for all 20 processor adapters — same status as
+`patala-fiat` itself (see its own crate docs): every unit test here only
+CONSTRUCTS a rail offline (proving the config-map → typed-Config → real-Rail
+path and the capability/class model), never calls `charge`/`verify` against
+a real processor. `manual`'s `charge`/`verify` round trip IS exercised for
+real (it never touches the network at all), and honestly reports
+`amount_minor: 0` / `verify() == false` until a separate, direct-Rust caller
+of `ManualRail::mark_paid` (not part of the `PaymentRail` trait, so
+unreachable through this generic by-name FFI surface) confirms it — see
+`src/fiat.rs`'s test docs.
+
 ## Packaging (TASK 2: genuinely `pip install`-able)
 
 **The shipping story is a maturin-built wheel — not the manual
@@ -285,3 +407,31 @@ Both steps were actually executed here, not just written:
 run". `pip install maturin` was confirmed resolvable from this network
 (`pip3 install --dry-run maturin` succeeded) if a packaged wheel is wanted
 later, but building one was out of scope for proving the binding works.
+
+## `patala-fiat` exposure: verified in this environment
+
+- `cargo build -p patala-py` (default, no `--features`) — succeeds, and
+  `cargo tree -p patala-py -e normal` confirms it pulls in **no**
+  `patala-fiat` at all (let alone `reqwest`/`hmac`/`sha2`).
+- `cargo build -p patala-py --features fiat` — succeeds; `cargo tree`
+  confirms `patala-fiat` is now a dependency but still pulls in **zero**
+  `reqwest`/`hmac`/`sha2`/`hex` (patala-fiat's own default features are
+  just the currency table + registry + `manual`).
+- `cargo build -p patala-py --features fiat-all` (all 20 processor
+  adapters) and `--features fiat-all,solana,stellar,hyperswitch` (every
+  feature this crate has, combined) both succeed.
+- `cargo test -p patala-py --features fiat-all` — 13/13 tests pass
+  (4 pre-existing MockRail tests + 9 new fiat tests: `manual`'s genuine
+  charge/verify round trip reporting honestly-pending, an unknown-provider
+  rejection, `fiat_providers()` always listing `manual`, and
+  construction-only offline tests for `stripe` — including a missing
+  required field — `paystack`'s default currency list, `paypal`'s
+  `env` validation, and `btcpay`'s numeric-field validation).
+  `--features fiat-all,solana,stellar,hyperswitch` together: 21/21 pass.
+- `cargo clippy -p patala-py --features fiat-all --all-targets -- -D
+  warnings` and the same for `fiat-all,solana,stellar,hyperswitch` — both
+  clean. `cargo fmt -p patala-py -- --check` — clean.
+- **UNVERIFIED AGAINST LIVE** for all 20 processor adapters (same status
+  as `patala-fiat` itself) — every fiat test above either stays fully
+  offline (`manual`) or only constructs a rail without calling
+  `charge`/`verify`, which would dial a real processor.

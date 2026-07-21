@@ -71,6 +71,64 @@ instead of Python:
   in `patala-py`, that constructor becomes reachable here too, the next time
   bindings are regenerated — no redesign, same as `patala-py`'s "adding a
   real rail later" story.
+- `PatalaRailNewFiat(provider string, config map[string]string) (*PatalaRail,
+  error)` — reaches `patala-fiat`'s 20 processor adapters (Stripe, Paystack,
+  Adyen, ...) plus the always-on `manual` rail through ONE by-name registry
+  constructor, generated the moment `patala-py`'s cdylib was built with
+  `--features fiat` (see "`patala-fiat` (20 processor adapters)" below —
+  this is generated Go, not hand-written, from the exact same
+  `#[uniffi::export]` surface `patala-py`'s own `src/fiat.rs` defines).
+- `PatalaFiatProviders() []string` — every fiat provider name reachable via
+  `PatalaRailNewFiat` in THIS specific build (a free function, not a
+  `PatalaRail` method — UniFFI does not currently support exporting a plain
+  associated function with no receiver/constructor from inside an `impl`
+  block, so this is generated at package scope instead).
+
+## `patala-fiat` (20 processor adapters, one by-name constructor)
+
+Same design `patala-py/README.md` documents in full (config-key table,
+per-provider defaults, honesty notes) — this section is the Go-specific
+delta only.
+
+**Build the cdylib with the fiat feature, then regenerate bindings** (the
+default `make generate`/`make build`/`make run-example`/`make test` targets
+are UNCHANGED and still build a MockRail-only, fiat-free cdylib — see
+"Build & run" below for what's new):
+
+```bash
+cd patala-go
+make FEATURES=fiat-all generate   # or e.g. FEATURES=fiat-stripe,fiat-paystack
+```
+
+**Calling it from Go:**
+
+```go
+rail, err := patala.PatalaRailNewFiat("manual", map[string]string{})
+// or, once fiat-stripe is compiled in:
+rail, err := patala.PatalaRailNewFiat("stripe", map[string]string{
+    "secret_key":     "sk_live_...",
+    "webhook_secret": "whsec_...",
+})
+```
+
+`config` keys are plain Go `map[string]string` — the exact same field
+names `patala-py/README.md`'s table documents (they come from the same
+Rust `#[uniffi::export]` surface, so there is nothing Go-specific to
+relearn). An unknown provider name, or a provider whose Cargo feature
+was not compiled into this build's cdylib, both return a Go `error`
+wrapping `PatalaError.InvalidRequest` — never a panic.
+
+**Why a Go build tag, not just a Cargo feature:** Go has no per-dependency
+optional-feature mechanism the way Cargo does, so
+`examples/fiatroundtrip/main.go` (which calls `PatalaRailNewFiat`/
+`PatalaFiatProviders`) carries a `//go:build fiat` constraint. Without
+`-tags fiat`, `go build ./...`/`go test ./...` skip that file/directory
+entirely — this is what keeps the plain `make build`/`make test`/
+`make run-example` targets working unchanged against a MockRail-only
+cdylib (they never pass `-tags fiat`); only `make run-example-fiat`/
+`make test-fiat` do. This is a Go-side concern only — `patala-py`'s own
+Rust code has no equivalent tag, since Cargo features already solve this
+for Rust.
 
 ## The cgo cost — read this first
 
@@ -207,6 +265,17 @@ make build         # steps 1(check)-3, then `go build ./...`
 make test          # steps 1(check)-3, then `go test ./...`
 ```
 
+All three targets above build a MockRail-only cdylib (`FEATURES` defaults to
+empty — the exact status quo before `patala-fiat` was exposed here). To get
+the fiat surface too:
+
+```bash
+make run-example-fiat   # FEATURES=fiat-all generate, then `go run -tags fiat ./examples/fiatroundtrip`
+make test-fiat          # FEATURES=fiat-all generate, then `go test -tags fiat ./...`
+# or by hand, any combination:
+make FEATURES=fiat-stripe,fiat-paystack generate
+```
+
 `make check-uniffi-bindgen-go` only verifies the binary is on `PATH` and
 prints the install command above if it's missing — `make` does not install
 Rust/Go toolchain binaries on your behalf.
@@ -220,6 +289,19 @@ Rust/Go toolchain binaries on your behalf.
 (asserting a genuine receipt verifies `true` and a tampered one verifies
 `false` — fail-closed, `PATALA.md` §3/§8), and asserts an unsupported
 currency surfaces as a typed error rather than a crash.
+
+`examples/fiatroundtrip/main.go` (`//go:build fiat`, see "`patala-fiat`"
+above) is the Go analogue of `patala-py/src/fiat.rs`'s own tests: it lists
+`PatalaFiatProviders()`, builds `"manual"` via `PatalaRailNewFiat` and does
+a genuine, fully offline `Charge` → `Verify` round trip against it
+(asserting the honestly-pending contract: `AmountMinor == 0` and
+`Verify() == false` until a separate, direct-Rust caller of `ManualRail`'s
+own `mark_paid` — not part of the `PaymentRail` trait, so unreachable
+through this generic by-name surface — confirms it), asserts an unknown
+provider name surfaces a typed `InvalidRequest` error, and CONSTRUCTS (never
+charges/verifies, which would dial a real processor) a `"stripe"` rail from
+a config map to prove `RailClass`/`HoldsFunds` come through correctly for a
+feature-gated processor adapter too.
 
 ## Verified in this environment (2026-07-21)
 
@@ -289,3 +371,85 @@ output shown above is from that final, in-tree run.
 
 `maturin`/Python tooling was not needed anywhere in this pipeline — this is a
 pure Rust+Go+cgo flow.
+
+## `patala-fiat` exposure: verified in this environment (2026-07-21)
+
+Every step below was actually executed here, against the same real
+toolchain as above:
+
+- **`cargo build -p patala-py --features fiat-all`** — built a cdylib with
+  all 20 `patala-fiat` processor adapters compiled in.
+- **`uniffi-bindgen-go <lib> --out-dir bindings --library --config
+  uniffi.toml`** against that cdylib — exited `0` and generated
+  `PatalaRailNewFiat(provider string, config map[string]string)
+  (*PatalaRail, error)` and `PatalaFiatProviders() []string` alongside
+  everything `make generate` already produced.
+- **`go build`/`go vet -tags fiat ./...`** — clean except the same one
+  benign `possible misuse of unsafe.Pointer` note as before (unchanged by
+  the fiat surface).
+- **`make run-example-fiat`** (the whole `FEATURES=fiat-all generate` →
+  `go run -tags fiat ./examples/fiatroundtrip` pipeline, one command) —
+  printed real output from a genuine call through cgo into the compiled
+  Rust cdylib:
+
+  ```
+  fiat providers compiled into this build: [adyen btcpay checkoutcom coinbasecommerce flutterwave iyzico lnbits manual mercadopago midtrans mollie opennode payfast paypal paystack payu razorpay square stripe xendit yoco]
+  manual capabilities OK: class=1 holds_funds=false
+  manual charge/verify OK: honestly pending (amount_minor=0, verify=false) until a human confirms it
+  unknown-provider error mapping OK: PatalaError: InvalidRequest: Message=unknown fiat provider "not-a-real-processor"; see patala-fiat's registry (PORTING.md) for the supported list
+  stripe construction-only OK: class=1 holds_funds=true (never charged/verified -- no live network)
+
+  ALL GO FIAT ROUNDTRIP ASSERTIONS PASSED
+  ```
+
+  That is 21 provider names (`manual` + all 20 processor adapters), a
+  genuine offline `manual` charge → verify round trip through cgo (proving
+  the by-name-provider → `map[string]string` config → real `PaymentRail`
+  plumbing works end to end, not just the type declarations), a real typed
+  error for an unrecognised provider name, and a real construction (not a
+  charge/verify — see "Example" above for why) of a feature-gated `stripe`
+  rail from a Go `map[string]string`, confirming `RailClassCustodialReversible`
+  and `HoldsFunds == true` come through the FFI boundary correctly.
+- **`make test-fiat`** — `go test -tags fiat ./...` reports `[no test
+  files]` for every package (there are no `_test.go` files in this
+  directory; `examples/fiatroundtrip` is exercised via `go run`, matching
+  `examples/roundtrip`'s own precedent) but this also proves the whole
+  package (including `examples/fiatroundtrip`, gated on `-tags fiat`)
+  still type-checks and links cleanly.
+- **The plain (non-fiat) targets were re-verified unaffected**: after the
+  above, `make build`/`make test`/`make run-example` (no `FEATURES`, no
+  `-tags fiat`) were re-run against a freshly regenerated MockRail-only
+  cdylib and passed exactly as they did before this task — confirming the
+  `//go:build fiat` constraint on `examples/fiatroundtrip/main.go` is what
+  keeps the default pipeline from needing (or breaking on the absence of)
+  `PatalaRailNewFiat`/`PatalaFiatProviders`.
+
+**UNVERIFIED AGAINST LIVE** for all 20 processor adapters, same as
+`patala-py`'s own fiat tests and `patala-fiat` itself — the Go example only
+ever constructs `stripe` (never charges/verifies it) and only ever
+charges/verifies `manual` (which never touches the network at all).
+
+### What a cackle consumer needs to know
+
+- `PatalaRailNewFiat`/`PatalaFiatProviders` only exist in bindings
+  generated from a cdylib built with `--features fiat` (plus whichever
+  `fiat-<name>` features you actually need) — a plain `cargo build -p
+  patala-py` (what `make build`/`make test`/`make run-example` still do by
+  default) does **not** include them. Regenerate with
+  `make FEATURES=fiat-all generate` (or a narrower feature list) before
+  wiring cackle onto this path.
+- Every `config` value is a string, even for numeric/boolean fields (Go's
+  `map[string]string`, matching UniFFI's `HashMap<String, String>` on the
+  Rust side) — e.g. `"settlement_days": "2"`, `"requires_kyc": "true"`,
+  not native Go `int`/`bool`.
+- `manual`'s `Charge`/`Verify` alone is not useful for a real payment flow
+  through this generic surface (see "Example" above) — cackle would need
+  either a real processor adapter (`fiat-stripe` et al.) or to talk to
+  `ManualRail`'s `mark_paid`/`mark_failed` directly in Rust (outside this
+  FFI boundary) if it wants the manual/bank-transfer flow to actually
+  settle.
+- This binding still carries the full cgo cost described above ("The cgo
+  cost — read this first") — nothing about `patala-fiat` changes that
+  trade-off. If cackle needs to stay `CGO_ENABLED=0`/pure-static,
+  `patala-sidecar` (once it grows the same by-name fiat endpoint) remains
+  the alternative path, not this one.

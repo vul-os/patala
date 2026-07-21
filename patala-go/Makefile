@@ -1,0 +1,80 @@
+# patala-go build pipeline.
+#
+# This wraps the exact commands documented in README.md so the whole
+# generate -> build -> run flow is one command, but every step is still
+# runnable by hand (see README.md "Build & run, step by step").
+#
+# Reuses patala-py's already-built cdylib (target/debug/libpatala_py.{dylib,so}):
+# that crate carries the #[uniffi::export] surface (PATALA.md §5) — this is
+# the SAME UniFFI surface, targeted at Go instead of Python. No new Rust
+# crate is added by this package.
+
+SHELL := /bin/bash
+ROOT_DIR := $(abspath $(CURDIR)/..)
+BINDINGS_DIR := $(CURDIR)/bindings
+# uniffi.toml's [bindings.go] package_name = "patala" makes uniffi-bindgen-go
+# nest its output one level down, at $(BINDINGS_DIR)/patala/ (this also
+# becomes the Go import path's last segment: .../patala-go/bindings/patala).
+PKG_DIR := $(BINDINGS_DIR)/patala
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.dylib
+	LIB_EXT := dylib
+else
+	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.so
+	LIB_EXT := so
+endif
+
+.PHONY: rust-lib generate build run-example test clean check-uniffi-bindgen-go
+
+# 1. Build the cdylib patala-go will link against (the same one patala-py
+#    loads — see README.md's "Which cdylib?" section for why reusing it is
+#    correct and not a layering violation).
+rust-lib:
+	cd $(ROOT_DIR) && cargo build -p patala-py
+
+# 2. Generate the Go bindings from that cdylib's embedded UniFFI metadata.
+#    Requires `uniffi-bindgen-go` v0.5.0+v0.29.5 on PATH (matching the
+#    workspace's pinned `uniffi = "0.29"` — see README.md "Installing
+#    uniffi-bindgen-go" for why the version must match and how to install
+#    the correct tag).
+check-uniffi-bindgen-go:
+	@command -v uniffi-bindgen-go >/dev/null 2>&1 || { \
+		echo "uniffi-bindgen-go not found on PATH."; \
+		echo "Install the version matching this workspace's uniffi = 0.29.5:"; \
+		echo "  cargo install --locked --git https://github.com/NordSecurity/uniffi-bindgen-go --tag v0.5.0+v0.29.5 uniffi-bindgen-go"; \
+		exit 1; \
+	}
+
+generate: rust-lib check-uniffi-bindgen-go
+	rm -rf $(BINDINGS_DIR)
+	mkdir -p $(BINDINGS_DIR)
+	uniffi-bindgen-go "$(LIB_FILE)" --out-dir $(BINDINGS_DIR) --library --config $(CURDIR)/uniffi.toml
+	cp "$(LIB_FILE)" $(PKG_DIR)/
+
+# 3. Build the Go module against the generated bindings. CGO_ENABLED=1 and
+#    a C toolchain are required from here on — see README.md's "The cgo
+#    cost" section.
+build: generate
+	cd $(CURDIR) && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		go build ./...
+
+# 4. Build and run the MockRail charge -> verify round-trip example.
+run-example: generate
+	cd $(CURDIR) && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
+		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
+		go run ./examples/roundtrip
+
+test: generate
+	cd $(CURDIR) && CGO_ENABLED=1 \
+		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
+		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
+		go test ./...
+
+clean:
+	rm -rf $(BINDINGS_DIR)

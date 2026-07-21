@@ -1,0 +1,5 @@
+# Generated Go bindings + the copied cdylib they link against are build
+# output, reproduced by the documented `make generate` / README.md steps —
+# not checked in. Same convention as /patala-py/bindings/ in the workspace
+# .gitignore.
+/bindings/

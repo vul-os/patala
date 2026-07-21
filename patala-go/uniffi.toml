@@ -1,0 +1,12 @@
+# Config for uniffi-bindgen-go's `--library` generation mode (see
+# ../Makefile's `generate` target and README.md).
+#
+# `package_name` overrides the Go package name that would otherwise default
+# to the UniFFI namespace baked into libpatala_py's metadata (the namespace
+# UniFFI derives from the crate name, "patala_py" — a historical artifact of
+# that crate being the first binding built, see README.md "Which cdylib?").
+# We want Go callers to `import ".../patala-go/bindings"` and refer to the
+# package as `patala`, not `patala_py`, since nothing about the generated Go
+# API is Python-specific.
+[bindings.go]
+package_name = "patala"

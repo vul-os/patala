@@ -7,6 +7,7 @@ members = [
     "patala-solana",
     "patala-stellar",
     "patala-hyperswitch",
+    "patala-fiat",
 ]
 # `patala-solana` (rail #2, §4, §7 — ported from magnetite-seams/src/solana),
 # `patala-stellar` (rail #3, §4, §6), and `patala-hyperswitch` (rail #4, §4 —
@@ -17,9 +18,20 @@ members = [
 # only `cargo build -p patala-solana` / `-p patala-stellar` / `-p
 # patala-hyperswitch` does. This is what keeps the *default* build offline
 # even though all three are real members (PATALA.md §8, §9).
-default-members = ["patala-core", "patala-py", "patala-sidecar"]
+default-members = ["patala-core", "patala-py", "patala-sidecar", "patala-fiat"]
 
 # `patala-py` (Python binding, §5) and `patala-sidecar` (local HTTP server,
 # §5) landed in an earlier wave; both depend only on `patala-core`'s public
 # trait and its `MockRail`, never on a real rail, so they build and test
 # fully offline and stay in `default-members`.
+#
+# `patala-fiat` (direct fiat-processor adapters ported from cackle's
+# internal/payments + internal/money — see patala-fiat/PORTING.md) uses the
+# OPPOSITE trick from patala-solana/stellar/hyperswitch above: instead of
+# living outside default-members, it stays IN default-members but gates its
+# real network deps (reqwest, hmac, sha2, hex) behind Cargo features
+# (`stripe`, `paystack`) that are OFF by default. So `cargo build`/`cargo
+# test` at the workspace root compiles patala-fiat's currency table,
+# provider-registry, and offline `manual` rail — but never links reqwest —
+# while `cargo test -p patala-fiat --all-features` exercises the Stripe/
+# Paystack pilots against wiremock.

@@ -1,0 +1,36 @@
+[package]
+name = "patala-fiat"
+version = "0.1.0"
+edition = "2021"
+description = "patala fiat foundation: the ISO-4217 minor-unit currency table, the provider-registry pattern (manual always-on/never-disableable), the offline `manual` PaymentRail, and two pilot CustodialReversible adapters (Stripe, Paystack) -- ported from cackle's internal/money + internal/payments (Go). Money-critical logic (currency exponents, amount conversions, fail-closed verify, webhook HMAC) is preserved faithfully; only the seam differs (patala-core's PaymentRail trait vs cackle's Provider interface). See PORTING.md."
+license = "MIT"
+repository = "https://github.com/vul-os/patala"
+keywords = ["payments", "fiat", "stripe", "paystack", "custodial"]
+categories = ["cryptography", "network-programming"]
+
+# This crate stays IN the workspace `default-members` (see the root
+# Cargo.toml) because its DEFAULT feature set is empty: the currency table,
+# the registry, and the `manual` (no-network) rail compile and test with no
+# optional dependency at all. `stripe` and `paystack` are separate,
+# opt-in Cargo features that pull in reqwest/hmac/sha2/hex -- never on by
+# default, so `cargo build`/`cargo test` at the workspace root never links
+# them (PATALA.md §8, §9).
+[features]
+default = []
+stripe = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+paystack = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+
+[dependencies]
+patala-core = { path = "../patala-core" }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
+hmac = { version = "0.12", optional = true }
+sha2 = { version = "0.10", optional = true }
+hex = { version = "0.4", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+wiremock = "0.6"

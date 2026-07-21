@@ -87,7 +87,7 @@ phonebook, and a direct `patala-payfast` rail. See `PATALA.md` §4.
 
 ## License
 
-MIT. No token. No protocol tax.
+[MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE) — © VulOS. No token. No protocol tax.
 
 ---
 

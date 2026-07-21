@@ -1,0 +1,29 @@
+[package]
+name = "patala-hyperswitch"
+version = "0.1.0"
+edition = "2021"
+description = "patala fiat rail: a thin HTTP client to a self-hosted Hyperswitch instance, presenting Hyperswitch's whole processor set (Stripe/Paystack/Xendit/...) as one CustodialReversible PaymentRail. ADOPTS Hyperswitch (Apache-2.0, Rust, self-hostable) rather than rebuilding processor SDKs. UNVERIFIED AGAINST LIVE -- see README."
+license = "MIT"
+repository = "https://github.com/vul-os/patala"
+keywords = ["payments", "hyperswitch", "fiat", "custodial"]
+categories = ["cryptography", "network-programming"]
+
+# This crate is NOT part of the default patala build (see the workspace
+# Cargo.toml `default-members`). It talks HTTP to a self-hosted Hyperswitch
+# instance and pulls in a real HTTP client + crypto deps deliberately kept out
+# of patala-core's mandatory dependency graph (PATALA.md §8, §9).
+
+[dependencies]
+patala-core = { path = "../patala-core" }
+async-trait = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+wiremock = "0.6"

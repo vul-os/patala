@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = ["patala-core"]
+
+# Rails (patala-solana, patala-stellar, patala-hyperswitch, ...), bindings
+# (patala-py), and the sidecar join this workspace as their own waves land —
+# see PATALA.md §4, §5, §9. Nothing here forces the default build to pull in
+# any of them: `patala-core` alone stays offline and dependency-light.

@@ -1,0 +1,23 @@
+[package]
+name = "patala-core"
+version = "0.1.0"
+edition = "2021"
+description = "The core seam of patala: one PaymentRail trait, a capability model with the settlement class in the type, class-respecting failover, and an offline deterministic mock rail. Non-custodial. No network or heavy deps in the default build."
+license = "MIT"
+repository = "https://github.com/vul-os/patala"
+keywords = ["payments", "non-custodial", "solana", "stellar", "hyperswitch"]
+categories = ["cryptography", "network-programming"]
+
+# NOTE: this crate is the whole default build. Real rails (solana, stellar,
+# hyperswitch, ...) are NOT dependencies of patala-core — they depend ON it,
+# from their own crates, in a later wave (see PATALA.md §4, §9). Keeping the
+# dependency direction this way is what lets the default build here, and CI,
+# stay fully offline forever, not just today.
+
+[dependencies]
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }

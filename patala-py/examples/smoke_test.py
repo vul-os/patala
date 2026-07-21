@@ -9,6 +9,12 @@ actual generated Python module calling into the actual compiled Rust cdylib
 over ctypes/UniFFI's FFI, exercising the same `PatalaRail` object
 `patala-py/src/lib.rs` defines.
 
+If the cdylib was built with `--features solana`/`stellar`/`hyperswitch`
+(README.md "Build & run"), this script also *constructs* the matching real
+rail(s) from Python and reads back `capabilities()` — proving `RailClass`/
+`RailCapabilities` and the real-rail constructors are reachable from Python,
+not just `MockRail`. No live network call is made against any real rail here.
+
 Run (from the workspace root, after generating bindings — see the README):
 
     PYTHONPATH=patala-py/bindings/python python3 patala-py/examples/smoke_test.py
@@ -83,6 +89,91 @@ def main() -> None:
         raise AssertionError("expected PatalaError.InvalidRequest for an unsupported currency")
     except PatalaError.InvalidRequest as e:
         print(f"error mapping OK: unsupported currency raised {e!r}")
+
+    # --- Real rails (TASK 1: patala-py exposes more than MockRail) ---
+    #
+    # `new_solana`/`new_stellar`/`new_hyperswitch` only exist on `PatalaRail`
+    # when the cdylib this module was generated from was built with the
+    # matching cargo feature (`cargo build -p patala-py --features solana`,
+    # etc — see README.md "Build & run"). This smoke test runs unmodified
+    # against every build: it *exercises* whichever real-rail constructors
+    # are present, and simply notes which ones are absent, rather than
+    # failing a plain MockRail-only build.
+    #
+    # No live network call is made here (no live Solana RPC / Horizon /
+    # Hyperswitch instance is reachable from this environment) — this proves
+    # the rail is constructible and its capability/class model is readable
+    # from Python, exactly what PATALA.md §3's "consumer reads class, never a
+    # provider-specific type" contract requires; a live `quote`/`charge`
+    # against these constructed rails remains UNVERIFIED AGAINST LIVE, same as
+    # the underlying Rust crates' own honesty notes.
+    real_rails_checked = []
+
+    if hasattr(PatalaRail, "new_solana"):
+        solana_rail = PatalaRail.new_solana(
+            rpc_url="https://api.devnet.solana.com",
+            cluster="devnet",
+            keypair_seed=None,  # verify-only rail; no signer attached
+        )
+        assert solana_rail.id() == "solana"
+        solana_caps = solana_rail.capabilities()
+        assert solana_caps._class == RailClass.NON_CUSTODIAL_FINAL
+        assert solana_caps.holds_funds is False
+        assert solana_caps.currencies == ["USDC"]
+        print(
+            f"real rail OK: solana constructed from Python, class={solana_caps._class}, "
+            f"currencies={solana_caps.currencies}, holds_funds={solana_caps.holds_funds}"
+        )
+        real_rails_checked.append("solana")
+
+    if hasattr(PatalaRail, "new_stellar"):
+        stellar_rail = PatalaRail.new_stellar(
+            horizon_url="https://horizon-testnet.stellar.org",
+            network="public",  # "public" needs no usdc_issuer (well-known Circle issuer)
+            usdc_issuer=None,
+            keypair_seed=None,
+        )
+        assert stellar_rail.id() == "stellar"
+        stellar_caps = stellar_rail.capabilities()
+        assert stellar_caps._class == RailClass.NON_CUSTODIAL_FINAL
+        assert stellar_caps.holds_funds is False
+        assert stellar_caps.currencies == ["USDC"]
+        print(
+            f"real rail OK: stellar constructed from Python, class={stellar_caps._class}, "
+            f"currencies={stellar_caps.currencies}, holds_funds={stellar_caps.holds_funds}"
+        )
+        real_rails_checked.append("stellar")
+
+    if hasattr(PatalaRail, "new_hyperswitch"):
+        hyperswitch_rail = PatalaRail.new_hyperswitch(
+            base_url="https://hyperswitch.internal.example.org",
+            api_key="snd_test_from_python_smoke",
+            connector="paystack",
+            webhook_secret=None,
+            requires_kyc=True,
+            currencies=["USD", "NGN"],
+            settlement_days=2,
+            timeout_secs=30,
+        )
+        assert hyperswitch_rail.id() == "hyperswitch"
+        hs_caps = hyperswitch_rail.capabilities()
+        assert hs_caps._class == RailClass.CUSTODIAL_REVERSIBLE
+        assert hs_caps.holds_funds is True, "the fronted processor custodies funds"
+        assert hs_caps.currencies == ["USD", "NGN"]
+        print(
+            f"real rail OK: hyperswitch constructed from Python, class={hs_caps._class}, "
+            f"currencies={hs_caps.currencies}, holds_funds={hs_caps.holds_funds}"
+        )
+        real_rails_checked.append("hyperswitch")
+
+    if real_rails_checked:
+        print(f"\nREAL RAILS REACHABLE FROM PYTHON: {', '.join(real_rails_checked)}")
+    else:
+        print(
+            "\n(no real-rail features were compiled into this build — only MockRail "
+            "was exercised; rebuild with --features solana,stellar,hyperswitch to "
+            "cover the real rails too)"
+        )
 
     print("\nALL PYTHON SMOKE ASSERTIONS PASSED")
 

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "patala-py"
+version = "0.1.0"
+description = "Python bindings for patala — a sovereign, centerless payment-rail substrate. MockRail is always available; SolanaRail/StellarRail/HyperswitchRail ship when the wheel is built with the matching cargo feature (solana/stellar/hyperswitch)."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Office/Business :: Financial",
+    "Intended Audience :: Developers",
+]
+keywords = ["payments", "non-custodial", "solana", "stellar", "hyperswitch", "uniffi"]
+
+[project.urls]
+Homepage = "https://github.com/vul-os/patala"
+Repository = "https://github.com/vul-os/patala"
+
+# maturin's native UniFFI support (`-b uniffi` / `bindings = "uniffi"`) drives
+# this crate's OWN `uniffi-bindgen` binary target (`src/bin/uniffi_bindgen.rs`,
+# already required for the manual `cargo run --bin uniffi-bindgen` flow this
+# crate's README documents) to generate `patala_py.py` and bundles it into the
+# wheel next to the compiled `cdylib`. No hand-written Python package, no
+# separately-installed `uniffi-bindgen` CLI, no `[project.scripts]` shim — the
+# exact same generator this crate already ships is what maturin calls.
+[tool.maturin]
+bindings = "uniffi"
+# `[lib] crate-type = ["cdylib", "lib"]` in Cargo.toml already provides the
+# cdylib target maturin builds from; nothing else needs to change there.
+module-name = "patala_py"
+manifest-path = "Cargo.toml"

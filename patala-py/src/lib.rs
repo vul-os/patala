@@ -61,7 +61,33 @@ use patala_core::{
     Settlement as CoreSettlement,
 };
 
+#[cfg(feature = "solana")]
+use patala_solana::{
+    keys::Keypair as SolanaKeypair, rpc::HttpRpc as SolanaHttpRpc, SolanaConfig, SolanaRail,
+};
+
+#[cfg(feature = "stellar")]
+use patala_stellar::{
+    keys::Keypair as StellarKeypair, rpc::HorizonRpc, StellarConfig, StellarRail,
+};
+
+#[cfg(feature = "hyperswitch")]
+use patala_hyperswitch::{HyperswitchConfig, HyperswitchRail};
+
 uniffi::setup_scaffolding!();
+
+/// Parse a caller-supplied 32-byte seed into a fixed-size array, failing
+/// closed (as `PatalaError::InvalidRequest`, never a panic) on any other
+/// length. Shared by every real-rail constructor that accepts a raw seed.
+#[cfg(any(feature = "solana", feature = "stellar"))]
+fn seed32(bytes: &[u8], rail: &str) -> Result<[u8; 32], PatalaError> {
+    bytes.try_into().map_err(|_| PatalaError::InvalidRequest {
+        message: format!(
+            "{rail} keypair seed must be exactly 32 bytes, got {}",
+            bytes.len()
+        ),
+    })
+}
 
 /// The shared runtime every [`PatalaRail`] method blocks on. One process-wide
 /// multi-thread runtime, created on first use — see the module docs' "Async
@@ -343,6 +369,158 @@ impl PatalaRail {
     }
 }
 
+// The three real-rail constructors below each live in their OWN
+// `#[uniffi::export] impl PatalaRail` block, with `#[cfg(feature = "...")]`
+// on the *block* itself rather than on individual methods inside the shared
+// block above. This is deliberate, not stylistic: `cfg` resolves before an
+// outer attribute macro like `#[uniffi::export]` runs when they are stacked
+// on the same item, so a `#[cfg]`-gated whole impl block is cleanly absent
+// from the macro's input in a feature-off build. `#[uniffi::export]` does
+// NOT reliably do the equivalent per-method inside one shared block — every
+// method in a single `#[uniffi::export] impl` contributes to that macro's
+// generated scaffolding regardless of any `#[cfg]` on the individual `fn`,
+// which breaks a real feature-gated default build with an E0599 ("function
+// not found") pointing at the constructor's own definition. Splitting into
+// one block per feature is what actually keeps the feature-free build
+// offline and green (verified in this environment) while still adding one
+// constructor per rail, exactly as the module docs describe.
+
+/// Build a rail backed by the real [`patala_solana::SolanaRail`]
+/// (`--features solana`; PATALA.md §4, §7). `NonCustodialFinal` —
+/// wallet-to-wallet SPL-USDC. `cluster` is `"devnet"` or
+/// `"mainnet"`/`"mainnet-beta"`; anything else is a
+/// `PatalaError::InvalidRequest`, never a silent default (`SolanaConfig`
+/// itself has no "unknown cluster" fallback, so neither does this
+/// constructor). `keypair_seed`, if given, must be exactly 32 raw Ed25519
+/// seed bytes — per `PATALA.md` §6 this is simultaneously the signing
+/// identity and the wallet funds move from, no separate mapping table. Omit
+/// it to build a verify-only rail (one that can `quote`/`verify` but not
+/// `charge`). This constructor only builds the rail object and talks to no
+/// network itself — `quote`/`charge`/`verify` are what actually hit
+/// `rpc_url`.
+#[cfg(feature = "solana")]
+#[uniffi::export]
+impl PatalaRail {
+    #[uniffi::constructor]
+    pub fn new_solana(
+        rpc_url: String,
+        cluster: String,
+        keypair_seed: Option<Vec<u8>>,
+    ) -> Result<Arc<Self>, PatalaError> {
+        let cfg = match cluster.as_str() {
+            "devnet" => SolanaConfig::devnet(rpc_url.clone()),
+            "mainnet" | "mainnet-beta" => SolanaConfig::mainnet(rpc_url.clone()),
+            other => {
+                return Err(PatalaError::InvalidRequest {
+                    message: format!(
+                        "unknown solana cluster {other:?}; use \"devnet\" or \"mainnet\""
+                    ),
+                })
+            }
+        };
+        let rpc: Arc<dyn patala_solana::rpc::SolanaRpc> = Arc::new(SolanaHttpRpc::new(rpc_url));
+        let mut rail = SolanaRail::new(cfg, rpc);
+        if let Some(seed) = keypair_seed {
+            rail = rail.with_signer(SolanaKeypair::from_seed(seed32(&seed, "solana")?));
+        }
+        Ok(Arc::new(Self {
+            inner: Arc::new(rail),
+        }))
+    }
+}
+
+/// Build a rail backed by the real [`patala_stellar::StellarRail`]
+/// (`--features stellar`; PATALA.md §4, §6 — **UNVERIFIED AGAINST LIVE
+/// STELLAR**, see `patala-stellar`'s own README). `NonCustodialFinal` —
+/// wallet-to-wallet native Circle USDC. `network` is `"testnet"` (which
+/// *requires* `usdc_issuer`, since the testnet issuer rotates and has no
+/// fixed well-known value — `StellarConfig::testnet` takes it explicitly) or
+/// `"public"`/`"mainnet"` (which ignores `usdc_issuer` and uses the
+/// well-known Circle mainnet issuer baked into `patala-stellar`).
+/// `keypair_seed`, if given, must be exactly 32 raw Ed25519 seed bytes
+/// (StrKey-encoded on-chain) — same "identity key doubles as wallet key"
+/// rule as Solana. Omit it for a verify-only rail.
+#[cfg(feature = "stellar")]
+#[uniffi::export]
+impl PatalaRail {
+    #[uniffi::constructor]
+    pub fn new_stellar(
+        horizon_url: String,
+        network: String,
+        usdc_issuer: Option<String>,
+        keypair_seed: Option<Vec<u8>>,
+    ) -> Result<Arc<Self>, PatalaError> {
+        let cfg = match network.as_str() {
+            "testnet" => {
+                let issuer = usdc_issuer.ok_or_else(|| PatalaError::InvalidRequest {
+                    message:
+                        "stellar network \"testnet\" requires usdc_issuer (the testnet issuer rotates and has no fixed default)"
+                            .to_string(),
+                })?;
+                StellarConfig::testnet(issuer)
+            }
+            "public" | "mainnet" => StellarConfig::public(),
+            other => {
+                return Err(PatalaError::InvalidRequest {
+                    message: format!(
+                        "unknown stellar network {other:?}; use \"testnet\" or \"public\""
+                    ),
+                })
+            }
+        };
+        let rpc: Arc<dyn patala_stellar::rpc::StellarRpc> = Arc::new(HorizonRpc::new(horizon_url));
+        let mut rail = StellarRail::new(cfg, rpc);
+        if let Some(seed) = keypair_seed {
+            rail = rail.with_signer(StellarKeypair::from_seed(seed32(&seed, "stellar")?));
+        }
+        Ok(Arc::new(Self {
+            inner: Arc::new(rail),
+        }))
+    }
+}
+
+/// Build a rail backed by the real [`patala_hyperswitch::HyperswitchRail`]
+/// (`--features hyperswitch`; PATALA.md §4 — **UNVERIFIED AGAINST LIVE**, see
+/// `patala-hyperswitch`'s own README). `CustodialReversible` — one HTTP
+/// client to a **self-hosted** Hyperswitch instance, presenting its whole
+/// processor set (Stripe/Paystack/Xendit/...) as a single rail; this crate
+/// never talks to a processor directly (`PATALA.md` §2, §4). `base_url`/
+/// `api_key` are required (no hardcoded endpoint — same invariant
+/// `HyperswitchConfig` itself enforces); `connector` pins one
+/// Hyperswitch-configured processor by name (e.g. `"paystack"`), `None` lets
+/// Hyperswitch's own merchant-account routing decide.
+#[cfg(feature = "hyperswitch")]
+#[uniffi::export]
+impl PatalaRail {
+    #[allow(clippy::too_many_arguments)]
+    #[uniffi::constructor]
+    pub fn new_hyperswitch(
+        base_url: String,
+        api_key: String,
+        connector: Option<String>,
+        webhook_secret: Option<String>,
+        requires_kyc: bool,
+        currencies: Vec<String>,
+        settlement_days: u8,
+        timeout_secs: u64,
+    ) -> Result<Arc<Self>, PatalaError> {
+        let config = HyperswitchConfig {
+            base_url,
+            api_key,
+            connector,
+            webhook_secret,
+            requires_kyc,
+            currencies,
+            settlement_days,
+            timeout_secs,
+        };
+        let rail = HyperswitchRail::new(config).map_err(PatalaError::from)?;
+        Ok(Arc::new(Self {
+            inner: Arc::new(rail),
+        }))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -434,5 +612,139 @@ mod tests {
             .charge(req(100, "order-py-4"))
             .expect_err("this rail is configured to always fail");
         assert!(matches!(err, PatalaError::Rail { .. }));
+    }
+
+    // The three tests below exercise the real-rail constructors added for
+    // TASK 1 (patala-py exposing SolanaRail/StellarRail/HyperswitchRail, not
+    // just MockRail). They only run when the matching feature is enabled
+    // (`cargo test -p patala-py --features solana,stellar,hyperswitch`) and
+    // are entirely offline: constructing a rail never dials the network —
+    // only `quote`/`charge`/`verify` would, and none of those are called
+    // here. They prove the capability/class model (`RailClass`,
+    // `RailCapabilities`) is reachable through `PatalaRail` for a *real*
+    // rail, not just `MockRail`.
+
+    #[cfg(feature = "solana")]
+    #[test]
+    fn new_solana_builds_offline_and_reports_non_custodial_final() {
+        let rail = PatalaRail::new_solana(
+            "http://127.0.0.1:1".into(), // never dialed by construction alone
+            "devnet".into(),
+            None,
+        )
+        .expect("constructing a SolanaRail must not require network access");
+        assert_eq!(rail.id(), "solana");
+        let caps = rail.capabilities();
+        assert_eq!(caps.class, RailClass::NonCustodialFinal);
+        assert!(
+            !caps.holds_funds,
+            "a wallet-to-wallet rail never custodies funds"
+        );
+        assert_eq!(caps.currencies, vec!["USDC".to_string()]);
+    }
+
+    #[cfg(feature = "solana")]
+    #[test]
+    fn new_solana_rejects_unknown_cluster() {
+        let result =
+            PatalaRail::new_solana("http://127.0.0.1:1".into(), "totally-bogus".into(), None);
+        match result {
+            Err(PatalaError::InvalidRequest { .. }) => {}
+            _ => panic!("an unknown cluster name must be refused, never silently defaulted"),
+        }
+    }
+
+    #[cfg(feature = "solana")]
+    #[test]
+    fn new_solana_rejects_wrong_length_seed() {
+        let result = PatalaRail::new_solana(
+            "http://127.0.0.1:1".into(),
+            "devnet".into(),
+            Some(vec![0u8; 4]),
+        );
+        match result {
+            Err(PatalaError::InvalidRequest { .. }) => {}
+            _ => panic!("a non-32-byte seed must be refused, never truncated/padded"),
+        }
+    }
+
+    #[cfg(feature = "stellar")]
+    #[test]
+    fn new_stellar_builds_offline_and_reports_non_custodial_final() {
+        let rail = PatalaRail::new_stellar(
+            "http://127.0.0.1:1".into(),
+            "testnet".into(),
+            Some("GATESTISSUERPLACEHOLDER00000000000000000000000000000000".into()),
+            None,
+        )
+        .expect("constructing a StellarRail must not require network access");
+        assert_eq!(rail.id(), "stellar");
+        let caps = rail.capabilities();
+        assert_eq!(caps.class, RailClass::NonCustodialFinal);
+        assert!(!caps.holds_funds);
+        assert_eq!(caps.currencies, vec!["USDC".to_string()]);
+    }
+
+    #[cfg(feature = "stellar")]
+    #[test]
+    fn new_stellar_testnet_requires_usdc_issuer() {
+        let result =
+            PatalaRail::new_stellar("http://127.0.0.1:1".into(), "testnet".into(), None, None);
+        match result {
+            Err(PatalaError::InvalidRequest { .. }) => {}
+            _ => panic!("testnet has no fixed issuer, so omitting it must be a hard error"),
+        }
+    }
+
+    #[cfg(feature = "stellar")]
+    #[test]
+    fn new_stellar_public_network_does_not_need_usdc_issuer() {
+        let rail =
+            PatalaRail::new_stellar("http://127.0.0.1:1".into(), "public".into(), None, None)
+                .expect("public network uses the well-known Circle mainnet issuer");
+        assert_eq!(rail.capabilities().class, RailClass::NonCustodialFinal);
+    }
+
+    #[cfg(feature = "hyperswitch")]
+    #[test]
+    fn new_hyperswitch_builds_offline_and_reports_custodial_reversible() {
+        let rail = PatalaRail::new_hyperswitch(
+            "https://hyperswitch.internal.example.org".into(),
+            "snd_test_abc".into(),
+            Some("paystack".into()),
+            None,
+            true,
+            vec!["USD".into(), "NGN".into()],
+            2,
+            30,
+        )
+        .expect("constructing a HyperswitchRail must not require network access");
+        assert_eq!(rail.id(), "hyperswitch");
+        let caps = rail.capabilities();
+        assert_eq!(caps.class, RailClass::CustodialReversible);
+        assert!(
+            caps.holds_funds,
+            "the fronted PROCESSOR custodies funds, even though patala itself never does"
+        );
+        assert_eq!(caps.currencies, vec!["USD".to_string(), "NGN".to_string()]);
+    }
+
+    #[cfg(feature = "hyperswitch")]
+    #[test]
+    fn new_hyperswitch_rejects_empty_base_url() {
+        let result = PatalaRail::new_hyperswitch(
+            "".into(),
+            "snd_test_abc".into(),
+            None,
+            None,
+            true,
+            vec!["USD".into()],
+            2,
+            30,
+        );
+        match result {
+            Err(PatalaError::InvalidRequest { .. }) => {}
+            _ => panic!("an empty base_url must be refused, never a silent no-op endpoint"),
+        }
     }
 }

@@ -158,6 +158,21 @@ the seam it already has.
   the *processor's*, surfaced via `holds_funds: true` on that rail's capabilities — never patala's.
 - Default build stays offline: no new mandatory deps, no network, CI needs no chain or processor.
 
+## 8b. Consumer guidance — provider credentials
+
+patala itself is stateless and holds no secrets: a rail is constructed from config the *consumer*
+supplies each time (a fiat rail's API keys, a crypto rail's signer). But a consumer that *persists*
+those provider credentials (a store's Stripe key, a gateway's Paystack secret) is handling live
+money-moving material, and should:
+
+- **Encrypt them at rest** (AES-256-GCM or equivalent) under a key that is not itself in the
+  database — never store a provider secret in plaintext.
+- **Make them write-only**: accept on create/update, never return them in an API response after.
+- **Scope access** to admin/management credentials only.
+
+This is not patala's job to enforce (it never sees the store) — it is stated here so a consumer
+building on the substrate does not have to learn it the hard way.
+
 ## 9. Repo shape
 
 ```

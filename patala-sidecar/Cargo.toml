@@ -1,0 +1,33 @@
+[package]
+name = "patala-sidecar"
+version = "0.1.0"
+edition = "2021"
+description = "A thin local HTTP server over patala-core (quote/charge/verify as JSON), for any language and for key isolation. See PATALA.md §5."
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "patala-sidecar"
+path = "src/main.rs"
+
+[lib]
+name = "patala_sidecar"
+path = "src/lib.rs"
+
+[dependencies]
+patala-core = { path = "../patala-core" }
+# Kept deliberately small: an HTTP framework, its async runtime, and JSON —
+# nothing chain- or processor-specific. Real rails join as optional
+# dependencies behind their own feature flags in a later wave (see
+# `src/registry.rs` doc comment) — never as a mandatory dependency of this
+# crate, so the sidecar's own default build stays exactly as offline as
+# `patala-core`'s.
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

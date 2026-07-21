@@ -1,0 +1,37 @@
+[package]
+name = "patala-py"
+version = "0.1.0"
+edition = "2021"
+description = "Python binding over patala-core (UniFFI). See PATALA.md §5: adapters are written once in Rust; this crate is the Python consumer of that one core."
+license = "MIT"
+publish = false
+
+# `cdylib` is the artifact Python actually loads (via ctypes, through the
+# UniFFI-generated wrapper module). `lib` is kept too so `cargo test` can run
+# ordinary Rust unit tests against this crate without going through Python at
+# all (see `src/lib.rs` tests).
+[lib]
+name = "patala_py"
+crate-type = ["cdylib", "lib"]
+
+# `uniffi-bindgen` is a tiny binary that just calls into the `uniffi` crate's
+# own bindgen entrypoint. It exists so bindings can be generated with
+# `cargo run --bin uniffi-bindgen` — no separately installed `uniffi-bindgen`
+# CLI, no `maturin`, required. See patala-py/README.md "Build & run" section.
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
+required-features = ["uniffi/cli"]
+
+[dependencies]
+patala-core = { path = "../patala-core" }
+# `uniffi` is the ONLY new mandatory dependency this crate adds beyond
+# patala-core; it never becomes a dependency of patala-core itself, so the
+# default workspace build (`patala-core` alone) stays exactly as offline and
+# dependency-light as before (PATALA.md §8).
+uniffi = { version = "0.29", features = ["cli"] }
+thiserror = "1"
+# Bridges patala-core's async trait to UniFFI's synchronous FFI surface — see
+# `src/lib.rs` module docs ("Async boundary") for why block_on and not a
+# foreign-async export.
+tokio = { version = "1", features = ["rt-multi-thread"] }

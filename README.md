@@ -8,13 +8,17 @@ holds no funds, takes no cut, and no one owns the network.
 (`vula` = "open"). `PATALA.md` is the anchor spec and single source of truth;
 this README describes what is actually built, honestly, as it lands.
 
-## Status: early and foundational
+## Status: foundational — built and unit-tested, rails unverified against live networks
 
-Right now this repo is `patala-core` and nothing else — one trait, one
-capability model, class-respecting failover, and an offline mock rail. No
-real payment rail (Solana, Stellar, Hyperswitch) ships yet. Read
-`PATALA.md` §4 and §9 for what's planned and in what order; don't assume
-anything beyond `patala-core/` exists until it's actually in this repo.
+The core, four rails, and the polyglot layer are all in this repo and pass a
+combined **110 offline tests** (clippy-clean, fmt-clean; the default build
+pulls no chain or processor). What that does *not* mean: the crypto and fiat
+rails have **not** been run against a live network from here — each says so
+plainly in its own README and names the exact step to validate (fund a
+testnet account, run the `#[ignore]`d, env-gated live test). Treat the rails
+as a tested foundation to validate against testnet, not as production-proven.
+The two things that genuinely executed end-to-end are the Python binding and
+the sidecar (real round-trips over a real interpreter and a real socket).
 
 ## The idea
 
@@ -55,22 +59,31 @@ No code path anywhere in this repo may make patala hold funds. A rail can set
 custodying money, e.g. Stripe behind Hyperswitch — but the substrate itself
 never does. There is no balance table, no payout queue, no ledger.
 
-## What's coming (not built yet — see `PATALA.md` for the plan)
+## What's built
 
-- `patala-solana` — the non-custodial Solana rail, moved from
-  `magnetite/magnetite-seams/src/solana/` and adapted to this trait.
-- `patala-stellar` — a new non-custodial Stellar rail (cheapest measured
-  fees of the in-scope chains).
-- `patala-hyperswitch` — a `PaymentRail` adapter to a self-hosted
-  Hyperswitch instance, presenting its whole processor set as one
-  `CustodialReversible` rail.
-- `patala-py` (bindings) and `patala-sidecar` (local HTTP/gRPC server), so
-  the same Rust-built rails are usable from any language without
-  reimplementing them.
+| Crate | What it is | Class | Tests | Live-verified? |
+|---|---|---|---|---|
+| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` | — | 13 | offline by design |
+| `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 41 (+1 gated) | **no — testnet step in its README** |
+| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) | **no — testnet step in its README** |
+| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 18 | **no — needs a live instance** |
+| `patala-py` | one UniFFI surface → Python now, Swift/Kotlin/wasm later | — | ✓ ran under Python 3.13 | executed |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | ✓ HTTP round-trip | executed |
 
-Every rail beyond the mock is feature-gated and optional; the default build
-of this repo stays fully offline no matter how many rails eventually exist
-here.
+**Fiat coverage is Hyperswitch's coverage, plus a direct-adapter escape
+hatch.** Any processor Hyperswitch supports is a config value — **Paystack is
+supported** (confirmed in Hyperswitch's connector list), so it's free through
+the adapter. A processor Hyperswitch lacks — **PayFast**, for example
+(confirmed absent) — gets its own thin `patala-<processor>` rail against the
+same `PaymentRail` trait. Nothing is ever locked out.
+
+Every rail beyond the mock is feature-gated and optional; the default build of
+this repo stays fully offline no matter how many rails exist here.
+
+## Deferred (designed for, not built)
+
+Any-stablecoin mint generalization, an Algorand rail, gateway-discovery
+phonebook, and a direct `patala-payfast` rail. See `PATALA.md` §4.
 
 ## License
 

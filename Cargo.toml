@@ -1,8 +1,25 @@
 [workspace]
 resolver = "2"
-members = ["patala-core"]
+members = [
+    "patala-core",
+    "patala-py",
+    "patala-sidecar",
+    "patala-solana",
+    "patala-stellar",
+    "patala-hyperswitch",
+]
+# `patala-solana` (rail #2, §4, §7 — ported from magnetite-seams/src/solana),
+# `patala-stellar` (rail #3, §4, §6), and `patala-hyperswitch` (rail #4, §4 —
+# thin HTTP client to a self-hosted Hyperswitch instance) carry real
+# network/crypto dependencies (reqwest, ed25519-dalek, stellar-xdr, hmac/sha2,
+# ...) on purpose, so they are deliberately left OUT of `default-members`:
+# plain `cargo build`/`cargo test` at the workspace root never pulls them in,
+# only `cargo build -p patala-solana` / `-p patala-stellar` / `-p
+# patala-hyperswitch` does. This is what keeps the *default* build offline
+# even though all three are real members (PATALA.md §8, §9).
+default-members = ["patala-core", "patala-py", "patala-sidecar"]
 
-# Rails (patala-solana, patala-stellar, patala-hyperswitch, ...), bindings
-# (patala-py), and the sidecar join this workspace as their own waves land —
-# see PATALA.md §4, §5, §9. Nothing here forces the default build to pull in
-# any of them: `patala-core` alone stays offline and dependency-light.
+# `patala-py` (Python binding, §5) and `patala-sidecar` (local HTTP server,
+# §5) landed in an earlier wave; both depend only on `patala-core`'s public
+# trait and its `MockRail`, never on a real rail, so they build and test
+# fully offline and stay in `default-members`.

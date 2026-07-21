@@ -28,18 +28,35 @@ checkoutcom = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
 # -- so this feature needs no HMAC/hex deps, only reqwest.
 mollie = ["dep:reqwest"]
 mercadopago = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+flutterwave = ["dep:reqwest"]
+iyzico = ["dep:reqwest", "dep:sha1", "dep:base64"]
+midtrans = ["dep:reqwest", "dep:sha2", "dep:hex"]
+yoco = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64"]
+payfast = ["dep:reqwest", "dep:md5"]
+payu = ["dep:reqwest", "dep:sha2", "dep:hex", "dep:url"]
+razorpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+square = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64"]
+xendit = ["dep:reqwest"]
+btcpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+lnbits = ["dep:reqwest"]
+opennode = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+coinbasecommerce = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+paypal = ["dep:reqwest"]
 
 [dependencies]
 patala-core = { path = "../patala-core" }
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", features = ["raw_value"] }
 thiserror = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"], optional = true }
 hmac = { version = "0.12", optional = true }
 sha2 = { version = "0.10", optional = true }
 hex = { version = "0.4", optional = true }
 base64 = { version = "0.22", optional = true }
+sha1 = { version = "0.10", optional = true }
+md5 = { version = "0.7", optional = true }
+url = { version = "2", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }

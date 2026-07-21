@@ -64,28 +64,70 @@
 
 #[cfg(feature = "adyen")]
 pub mod adyen;
+#[cfg(feature = "btcpay")]
+pub mod btcpay;
 #[cfg(feature = "checkoutcom")]
 pub mod checkoutcom;
+#[cfg(feature = "coinbasecommerce")]
+pub mod coinbasecommerce;
 pub mod currency;
+#[cfg(feature = "flutterwave")]
+pub mod flutterwave;
 #[cfg(any(
     feature = "stripe",
     feature = "paystack",
     feature = "adyen",
     feature = "checkoutcom",
     feature = "mollie",
-    feature = "mercadopago"
+    feature = "mercadopago",
+    feature = "btcpay",
+    feature = "coinbasecommerce",
+    feature = "flutterwave",
+    feature = "iyzico",
+    feature = "lnbits",
+    feature = "midtrans",
+    feature = "opennode",
+    feature = "payfast",
+    feature = "paypal",
+    feature = "payu",
+    feature = "razorpay",
+    feature = "square",
+    feature = "xendit",
+    feature = "yoco"
 ))]
 pub mod httpshared;
+#[cfg(feature = "iyzico")]
+pub mod iyzico;
+#[cfg(feature = "lnbits")]
+pub mod lnbits;
 pub mod manual;
 #[cfg(feature = "mercadopago")]
 pub mod mercadopago;
+#[cfg(feature = "midtrans")]
+pub mod midtrans;
 #[cfg(feature = "mollie")]
 pub mod mollie;
+#[cfg(feature = "opennode")]
+pub mod opennode;
+#[cfg(feature = "payfast")]
+pub mod payfast;
+#[cfg(feature = "paypal")]
+pub mod paypal;
 #[cfg(feature = "paystack")]
 pub mod paystack;
+#[cfg(feature = "payu")]
+pub mod payu;
+#[cfg(feature = "razorpay")]
+pub mod razorpay;
 pub mod registry;
+#[cfg(feature = "square")]
+pub mod square;
 #[cfg(feature = "stripe")]
 pub mod stripe;
+#[cfg(feature = "xendit")]
+pub mod xendit;
+#[cfg(feature = "yoco")]
+pub mod yoco;
 
 pub use currency::CurrencyError;
 pub use manual::{ManualRail, ManualRecord, ManualStatus, RAIL_ID_MANUAL};
@@ -93,13 +135,41 @@ pub use registry::{CapabilityFilter, Registry, RegistryError, ENV_PATALA_FIAT_RA
 
 #[cfg(feature = "adyen")]
 pub use adyen::{AdyenConfig, AdyenRail};
+#[cfg(feature = "btcpay")]
+pub use btcpay::{BTCPayConfig, BTCPayRail};
 #[cfg(feature = "checkoutcom")]
 pub use checkoutcom::{CheckoutComConfig, CheckoutComRail};
+#[cfg(feature = "coinbasecommerce")]
+pub use coinbasecommerce::{CoinbaseCommerceConfig, CoinbaseCommerceRail};
+#[cfg(feature = "flutterwave")]
+pub use flutterwave::{FlutterwaveConfig, FlutterwaveRail};
+#[cfg(feature = "iyzico")]
+pub use iyzico::{IyzicoConfig, IyzicoRail};
+#[cfg(feature = "lnbits")]
+pub use lnbits::{LNbitsConfig, LNbitsRail};
 #[cfg(feature = "mercadopago")]
 pub use mercadopago::{MercadoPagoConfig, MercadoPagoRail};
+#[cfg(feature = "midtrans")]
+pub use midtrans::{MidtransConfig, MidtransRail};
 #[cfg(feature = "mollie")]
 pub use mollie::{MollieConfig, MollieRail};
+#[cfg(feature = "opennode")]
+pub use opennode::{OpenNodeConfig, OpenNodeRail};
+#[cfg(feature = "payfast")]
+pub use payfast::{PayFastConfig, PayFastRail};
+#[cfg(feature = "paypal")]
+pub use paypal::{PayPalConfig, PayPalRail};
 #[cfg(feature = "paystack")]
 pub use paystack::{PaystackConfig, PaystackRail};
+#[cfg(feature = "payu")]
+pub use payu::{PayUConfig, PayURail};
+#[cfg(feature = "razorpay")]
+pub use razorpay::{RazorpayConfig, RazorpayRail};
+#[cfg(feature = "square")]
+pub use square::{SquareConfig, SquareRail};
 #[cfg(feature = "stripe")]
 pub use stripe::{StripeConfig, StripeRail};
+#[cfg(feature = "xendit")]
+pub use xendit::{XenditConfig, XenditRail};
+#[cfg(feature = "yoco")]
+pub use yoco::{YocoConfig, YocoRail};

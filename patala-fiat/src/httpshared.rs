@@ -138,6 +138,19 @@ where
     mac.verify_slice(&expected_bytes).is_ok()
 }
 
+/// Constant-time byte comparison — for verifying static webhook tokens/secrets
+/// (e.g. Xendit, Flutterwave) without leaking length-independent timing.
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 #[cfg(test)]
 #[cfg(any(
     feature = "stripe",

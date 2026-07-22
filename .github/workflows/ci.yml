@@ -1,0 +1,42 @@
+name: ci
+
+# The full quality gate on every push to main and every PR. Runs exactly what
+# `make check` runs locally — formatting, clippy-as-error, the whole test suite
+# (unit + integration + doctests), and a warning-free doc build — so the bar in
+# CI and the bar on a contributor's machine are the same command.
+#
+# The workspace is pure Rust: the Python and Go bindings are UniFFI (a cdylib +
+# generated wrapper), never pyo3, so nothing here needs a Python interpreter or
+# native headers. A stable toolchain with rustfmt + clippy is the whole
+# toolchain requirement.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same ref supersedes an in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: fmt · clippy · test · doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable, with rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      - name: make check
+        run: make check

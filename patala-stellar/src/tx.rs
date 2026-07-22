@@ -104,6 +104,24 @@ pub fn usdc_asset(code: &str, issuer_pk: [u8; 32]) -> Result<Asset, StellarError
 /// the transaction's [`Memo::Hash`] — a receipt's claimed binding must match
 /// both what is re-derived from its own fields *and* what the chain actually
 /// carries (`src/lib.rs`'s `verify`).
+///
+/// ```
+/// use patala_stellar::tx::memo_hash;
+///
+/// // Deterministic in (rail_id, source, destination, reference)...
+/// let a = memo_hash("stellar", "GSOURCE", "GDEST", "order-42");
+/// assert_eq!(a, memo_hash("stellar", "GSOURCE", "GDEST", "order-42"));
+///
+/// // ...a different reference never collides (anti-replay)...
+/// assert_ne!(a, memo_hash("stellar", "GSOURCE", "GDEST", "order-43"));
+///
+/// // ...and length-prefixing keeps fields from bleeding into each other:
+/// // ("ab","c") and ("a","bc") are distinct bindings, never the same "abc".
+/// assert_ne!(
+///     memo_hash("stellar", "ab", "c", "r"),
+///     memo_hash("stellar", "a", "bc", "r"),
+/// );
+/// ```
 pub fn memo_hash(rail_id: &str, source: &str, destination: &str, reference: &str) -> [u8; 32] {
     let mut h = Sha256::new();
     h.update(b"patala-stellar-pay-v1");

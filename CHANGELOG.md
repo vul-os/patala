@@ -12,6 +12,7 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - `patala-core`: crate-level doctest showing the offline `MockRail` charge → verify round-trip — executable documentation that runs under `cargo test --doc`.
 - `patala-solana`: runnable doctest on `binding_memo` demonstrating the deterministic, domain-separated payer+reference binding (anti-replay).
+- `patala-stellar`: runnable doctest on `tx::memo_hash` demonstrating the deterministic 32-byte `Memo::Hash` binding and its length-prefixed anti-ambiguity (sibling parity with `patala-solana`).
 - Root `Makefile` codifying the workspace quality gates: `make check` runs `fmt --check`, `clippy -D warnings`, `cargo test --workspace`, and a warning-free doc build.
 - GitHub Actions CI (`.github/workflows/ci.yml`) running `make check` on every push to `main` and every PR — the same gate, enforced. Pure-Rust (UniFFI bindings, no pyo3), so it needs no Python toolchain.
 

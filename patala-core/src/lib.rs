@@ -37,6 +37,36 @@
 //!
 //! **Money is integer minor units plus a currency string, never a float** —
 //! see [`PayRequest`], [`Quote`], [`Receipt`].
+//!
+//! # Example — the offline default, end to end
+//!
+//! [`MockRail`] needs no network and no chain SDK, so this charge → verify
+//! round-trip is what every consumer and CI run gets for free before a single
+//! real rail exists:
+//!
+//! ```
+//! use patala_core::{MockRail, PayRequest, PaymentRail, RailClass};
+//!
+//! # tokio::runtime::Runtime::new().unwrap().block_on(async {
+//! let rail = MockRail::new("mock", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+//!
+//! let req = PayRequest {
+//!     amount_minor: 500, // 5.00 USDC — integer minor units, never a float
+//!     currency: "USDC".into(),
+//!     destination: "wallet-or-processor-token".into(),
+//!     reference: "order-1".into(),
+//! };
+//!
+//! // `charge` returns the Receipt — the entitlement.
+//! let receipt = rail.charge(&req).await.unwrap();
+//! assert_eq!(receipt.reference, "order-1");
+//!
+//! // Gate on `verify` returning `Ok(true)`, never on `charge` merely having
+//! // returned `Ok`: a receipt can be stored and re-checked later, and only
+//! // `verify` re-derives whether it still holds.
+//! assert!(rail.verify(&receipt).await.unwrap());
+//! # });
+//! ```
 
 mod capabilities;
 mod error;

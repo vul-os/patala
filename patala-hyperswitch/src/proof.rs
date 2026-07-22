@@ -6,7 +6,7 @@
 //! construct client-side -- the *processor* is the source of truth. So this
 //! rail's "proof" is simply enough of the processor's own record locator
 //! (its `payment_id`, and the status snapshot at the time `charge()` or
-//! `refund()` returned) for [`crate::HyperswitchRail::verify`] to go back and
+//! `refund()` returned) for `HyperswitchRail::verify` to go back and
 //! ask Hyperswitch "is this still true?" -- exactly how a real Stripe/
 //! Paystack/etc. integration works today, just fronted by Hyperswitch.
 //!
@@ -16,7 +16,7 @@
 //! no other option; see `patala-core/src/rail.rs`'s own doc on `Receipt`:
 //! "gate on `verify` ... never on `charge` merely having returned `Ok`"), but
 //! the embedded status says `requires_customer_action`, and
-//! [`crate::HyperswitchRail::verify`] re-fetches fresh from Hyperswitch and
+//! `HyperswitchRail::verify` re-fetches fresh from Hyperswitch and
 //! returns `Ok(false)` for anything other than `succeeded` -- so a caller
 //! that (correctly) gates on `verify` per the seam's own contract can never
 //! be fooled into treating a pending payment as settled.

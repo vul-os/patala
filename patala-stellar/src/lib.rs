@@ -3,9 +3,9 @@
 //! Rail #3 (`PATALA.md` §4, §6): native Circle USDC on Stellar,
 //! `NonCustodialFinal`. Real Ed25519 signing + XDR transaction construction +
 //! Horizon submission/verification, built new for `patala` (there is no
-//! magnetite precursor to port, unlike [`patala_solana`]).
+//! magnetite precursor to port, unlike `patala_solana`).
 //!
-//! # Shape (mirrors [`patala_solana`]/`patala_core::PaymentRail`)
+//! # Shape (mirrors `patala_solana`/`patala_core::PaymentRail`)
 //!
 //! * [`tx`] — StrKey-independent XDR construction: the payment operation, the
 //!   `TransactionSignaturePayload` signing base, the transaction hash, and
@@ -48,7 +48,7 @@
 //! # What `verify` actually checks
 //!
 //! 1. The receipt names this rail and currency (`"USDC"`).
-//! 2. Its `proof` parses as a [`StellarBinding`] at all.
+//! 2. Its `proof` parses as a `StellarBinding` at all.
 //! 3. The claimed asset (code + issuer) matches this rail's *configured*
 //!    issuer — never the receipt's own say-so.
 //! 4. `binding.amount_stroops == receipt.amount_minor` (the outer `Receipt`
@@ -74,7 +74,7 @@
 //! # Honesty (`PATALA.md` §8) — READ THIS
 //!
 //! **This crate has not been run against a live Stellar network (testnet or
-//! mainnet) from this environment.** Every offline test in [`tests`] runs
+//! mainnet) from this environment.** Every offline test in the `tests` module runs
 //! with no network — Horizon is a scripted fake — and a known-answer
 //! transaction (fixed seed, fixed inputs) is round-tripped through
 //! `stellar-xdr`'s own spec-generated decoder to catch wire-format bugs. That

@@ -30,7 +30,7 @@
 //! code, [`PatalaRail`]'s exported methods are **synchronous**: each one
 //! blocks on the underlying async call using a single lazily-created
 //! multi-thread [`tokio::runtime::Runtime`] owned by this crate (see
-//! [`runtime`]). This is the same trade patala-sidecar makes in the other
+//! `runtime`). This is the same trade patala-sidecar makes in the other
 //! direction (it stays async because its whole existence *is* an async HTTP
 //! server) — here the goal is a plain blocking call, so `block_on` inside a
 //! dedicated runtime is the right shape, not a leaked requirement that the
@@ -58,7 +58,7 @@
 //! Unlike the one-constructor-per-rail pattern above, `patala-fiat`'s 20
 //! feature-gated processor adapters (Stripe, Paystack, Adyen, ...) are
 //! exposed through a single by-name registry constructor,
-//! [`PatalaRail::new_fiat`], defined in `fiat.rs` (gated behind
+//! `PatalaRail::new_fiat`, defined in `fiat.rs` (gated behind
 //! `--features fiat`, with each adapter behind its own additional
 //! `fiat-<name>` feature). See that file's module docs for the full
 //! justification of why by-name+config was chosen over 20 more typed

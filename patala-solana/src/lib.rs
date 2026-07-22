@@ -76,7 +76,7 @@
 //!
 //! # Honesty (`PATALA.md` §8)
 //!
-//! Every offline test in [`tests`] runs with **no network** — the RPC is a
+//! Every offline test in the `tests` module runs with **no network** — the RPC is a
 //! scripted fake. The one test that touches a live cluster is
 //! `#[ignore]`d and gated on `PATALA_SOLANA_LIVE_RPC`, exactly as magnetite
 //! gated its analogous test on `MAGNETITE_SOLANA_LIVE_RPC`. **This crate has
@@ -265,6 +265,26 @@ pub fn binding_reference(payer: &PubKey, reference: &str) -> [u8; 32] {
 }
 
 /// The exact memo string a bound transaction must carry.
+///
+/// The binding is deterministic in `(payer, reference)` and domain-separated,
+/// so the same order always maps to the same memo and a different reference
+/// never collides — this is what lets [`SolanaRail::verify`] fail closed on a
+/// transaction whose on-chain memo does not match the receipt it is handed.
+///
+/// ```
+/// use patala_solana::{binding_memo, binding_reference};
+/// use patala_solana::keys::PubKey;
+///
+/// let payer = PubKey([7u8; 32]);
+///
+/// // Every bound memo is domain-tagged and hex-encoded.
+/// assert!(binding_memo(&payer, "order-42").starts_with("patala:v1:"));
+///
+/// // Deterministic in (payer, reference)...
+/// assert_eq!(binding_reference(&payer, "order-42"), binding_reference(&payer, "order-42"));
+/// // ...and a different reference never collides (anti-replay).
+/// assert_ne!(binding_reference(&payer, "order-42"), binding_reference(&payer, "order-43"));
+/// ```
 pub fn binding_memo(payer: &PubKey, reference: &str) -> String {
     format!(
         "patala:v1:{}",

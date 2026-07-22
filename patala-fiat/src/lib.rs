@@ -11,7 +11,7 @@
 //! | Module | What it is | Ported from |
 //! |---|---|---|
 //! | [`currency`] | ISO-4217 exponent table + minor/major conversions | `internal/money/currency.go` + `internal/payments/currency.go` |
-//! | [`httpshared`] | Bounded reads + shared webhook-HMAC verify | `internal/payments/httpshared.go` |
+//! | `httpshared` | Bounded reads + shared webhook-HMAC verify | `internal/payments/httpshared.go` |
 //! | [`registry`] | Provider-registry pattern (`manual` always-on) | `internal/payments/registry.go` |
 //! | [`manual`] | The offline, always-available default rail | `internal/payments/manual.go` |
 //! | `stripe` (feature `stripe`) | Pilot 1: Checkout Sessions | `internal/payments/stripe.go` |

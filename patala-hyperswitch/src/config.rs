@@ -50,7 +50,7 @@ pub struct HyperswitchConfig {
     /// header on incoming outgoing-webhooks from Hyperswitch. See
     /// [`crate::webhook::verify_webhook_signature`]. Optional because a
     /// deployment may choose not to consume Hyperswitch webhooks and instead
-    /// poll [`crate::HyperswitchRail::verify`].
+    /// poll `HyperswitchRail::verify`.
     pub webhook_secret: Option<String>,
 
     /// Whether this rail reports `requires_kyc: true` in its capabilities.

@@ -11,7 +11,7 @@ this README describes what is actually built, honestly, as it lands.
 ## Status: foundational — built and unit-tested, rails unverified against live networks
 
 The core, four rails, and the polyglot layer are all in this repo and pass a
-combined **110 offline tests** (clippy-clean, fmt-clean; the default build
+combined **150 offline tests** (clippy-clean, fmt-clean; the default build
 pulls no chain or processor). What that does *not* mean: the crypto and fiat
 rails have **not** been run against a live network from here — each says so
 plainly in its own README and names the exact step to validate (fund a

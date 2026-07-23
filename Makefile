@@ -10,10 +10,10 @@
 # (patala-go has its own Makefile for the UniFFI binding generation — this one
 # is the Rust workspace.)
 
-.PHONY: check fmt fmt-check lint test doc clean
+.PHONY: check fmt fmt-check lint test doc features clean
 
 # The full gate. Run before pushing.
-check: fmt-check lint test doc
+check: fmt-check lint test doc features
 
 # Rewrite formatting in place.
 fmt:
@@ -35,6 +35,12 @@ test:
 # Docs must build clean — a broken intra-doc link fails the build.
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
+
+# Keep the fiat processor set in lock-step with the Cargo feature flags that
+# expose it — a new patala-fiat processor left out of patala-py's `fiat-all`
+# would silently vanish from the Go binding's cdylib. Pure bash + coreutils.
+features:
+	./scripts/check-features.sh
 
 clean:
 	cargo clean

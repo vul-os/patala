@@ -1,5 +1,9 @@
 # patala
 
+<!-- Plain-text badge on purpose: rendering this README triggers no external
+     image fetches — the same no-default-network-calls ethos as the rails. -->
+<sub><a href="LICENSE-MIT">MIT</a> OR <a href="LICENSE-APACHE">Apache-2.0</a> · Rust · non-custodial · no token</sub>
+
 A sovereign, centerless payment-rail substrate. One interface to move value —
 fiat or crypto — that any product can vendor and self-host. The platform
 holds no funds, takes no cut, and no one owns the network.

@@ -169,9 +169,24 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:500}
 }
 .ledger tbody tr:last-child td{border-bottom:none}
 .ledger td.mono,.ledger th.mono{font-family:var(--mono)}
-.ledger-wrap{overflow-x:auto;border:1px solid var(--hair);border-radius:2px}
+.ledger-wrap{overflow-x:auto;overscroll-behavior-x:contain;border:1px solid var(--hair);border-radius:2px}
 
-@media(max-width:600px){
-  .ledger{font-size:13px}
-  .ledger th,.ledger td{padding:10px 10px}
+/* A ledger that has to be squinted at defeats the point of the aesthetic.
+   Below 600px these tables were shrinking to fit rather than scrolling — the
+   rails table had 36px of overflow, i.e. three columns crushed into 352px with
+   the prose column reduced to a ribbon. Give each one a real minimum so the
+   columns keep working layout and the wrapper genuinely scrolls, and do NOT
+   drop the type: the fix for a cramped table is more width, not smaller text. */
+@media(max-width:760px){
+  .ledger{min-width:600px}
+  .ledger.ledger--wide{min-width:680px}
+  .ledger th,.ledger td{padding:12px 12px}
+  /* Scroll affordance: without it a clipped table reads as a complete one.
+     Pinned to the wrapper, so it sits at the clipped edge. */
+  .ledger-wrap{position:relative}
+  .ledger-wrap::after{
+    content:"";position:sticky;top:0;right:0;float:right;
+    width:26px;height:100%;pointer-events:none;
+    background:linear-gradient(90deg,transparent,var(--surface))
+  }
 }

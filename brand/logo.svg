@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" shape-rendering="geometricPrecision">
+  <title>patala</title>
+  <rect width="40" height="40" rx="8" fill="#0b0c0e"/>
+  <!-- two rails the value moves over — the substrate holds neither end -->
+  <rect x="7" y="13" width="26" height="2.4" rx="1.2" fill="#37b98a"/>
+  <rect x="7" y="24.6" width="26" height="2.4" rx="1.2" fill="#37b98a"/>
+  <!-- the value node, bridging the rails, owned by no one -->
+  <path d="M20 12 L26 20 L20 28 L14 20 Z" fill="#0b0c0e" stroke="#37b98a" stroke-width="2.2" stroke-linejoin="round"/>
+  <circle cx="20" cy="20" r="2.2" fill="#37b98a"/>
+</svg>

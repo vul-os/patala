@@ -1,0 +1,177 @@
+/* patala — shared design system for the landing page and the docs viewer.
+   Self-contained: no @import, no remote url(), fonts vendored in ../fonts/. */
+
+@font-face{
+  font-family:'Familjen Grotesk';font-style:normal;font-weight:500;font-display:swap;
+  src:url('../fonts/familjen-grotesk-latin-500-normal.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Familjen Grotesk';font-style:normal;font-weight:400;font-display:swap;
+  src:url('../fonts/familjen-grotesk-latin-400-normal.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;
+  src:url('../fonts/inter-latin-400-normal.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;
+  src:url('../fonts/inter-latin-500-normal.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;
+  src:url('../fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+}
+@font-face{
+  font-family:'IBM Plex Mono';font-style:normal;font-weight:500;font-display:swap;
+  src:url('../fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+}
+
+:root{
+  color-scheme:dark;
+  --canvas:#0d1220;--indigo:#151c33;--overlay:#273052;
+  --overlay-2:#323d63;
+  --ink:#eef1f8;--ink-dim:#a9b1cf;--ink-faint:#6b7396;
+  --hair:rgba(238,241,248,.10);--hair-strong:rgba(238,241,248,.18);
+  --vermilion:#f06b3d;--vermilion-bright:#ff8a5f;--vermilion-deep:#c74a20;
+  --vermilion-ink:#151c33; /* label colour on a filled vermilion button */
+  --settled:#34b87a;--pending:#6c8ff5;--failed:#f2506f;
+  --rule-color:var(--vermilion);
+  --surface:var(--indigo);--surface-raised:var(--overlay);
+  --shadow:0 20px 60px -20px rgba(0,0,0,.55);
+  --disp:'Familjen Grotesk',system-ui,-apple-system,sans-serif;
+  --body:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+:root[data-theme="light"]{
+  color-scheme:light;
+  --canvas:#f6f2e9;--indigo:#fffdf8;--overlay:#efe8d8;
+  --overlay-2:#e3dac4;
+  --ink:#1c2138;--ink-dim:#4d5372;--ink-faint:#7b8099;
+  --hair:rgba(28,33,56,.12);--hair-strong:rgba(28,33,56,.22);
+  --vermilion:#c74a20;--vermilion-bright:#ff8a5f;--vermilion-deep:#c74a20;
+  --vermilion-ink:#151c33;
+  --settled:#1f8a5a;--pending:#3457d5;--failed:#c62c4c;
+  --rule-color:var(--vermilion-deep);
+  --surface:#fffdf8;--surface-raised:#efe8d8;
+  --shadow:0 20px 50px -24px rgba(28,33,56,.25);
+}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{
+  background:var(--canvas);color:var(--ink);font-family:var(--body);
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;overflow-x:hidden;
+}
+::selection{background:var(--vermilion);color:var(--vermilion-ink)}
+a{color:inherit;text-decoration:none}
+img{max-width:100%;display:block}
+:focus-visible{outline:2px solid var(--vermilion-deep);outline-offset:3px;border-radius:2px}
+
+.tabular,.num,td.num,.tests,.stat-num{font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
+
+.wrap{max-width:1160px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+@media(max-width:480px){.wrap{padding:0 18px}}
+
+.disp{font-family:var(--disp);font-weight:500}
+.kick{
+  font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--ink-faint);
+}
+
+/* ---- toothed rule: the cowrie aperture, stretched into a divider ---- */
+.tooth-rule{
+  height:14px;width:100%;background-color:var(--rule-color);
+  -webkit-mask-repeat:repeat-x;mask-repeat:repeat-x;
+  -webkit-mask-size:34px 14px;mask-size:34px 14px;
+  -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 14'%3E%3Crect x='0' y='11' width='34' height='2.4' rx='1.2'/%3E%3Cpath d='M5 11L11 11L8 1Z'/%3E%3Cpath d='M20 11L26 11L23 1Z'/%3E%3C/svg%3E");
+  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 14'%3E%3Crect x='0' y='11' width='34' height='2.4' rx='1.2'/%3E%3Cpath d='M5 11L11 11L8 1Z'/%3E%3Cpath d='M20 11L26 11L23 1Z'/%3E%3C/svg%3E");
+  opacity:.9;
+}
+.tooth-rule.dim{opacity:.35}
+
+/* cowrie mark */
+.cowrie{display:block}
+.mark-vermilion{color:var(--vermilion)}
+
+/* texture: repeated cowrie glyph, very low opacity, decorative only */
+.shell-texture{
+  position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-color:var(--ink);
+  opacity:.05;
+  -webkit-mask-repeat:repeat;mask-repeat:repeat;
+  -webkit-mask-size:64px 64px;mask-size:64px 64px;
+  -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath fill-rule='evenodd' d='M64 12C83 12 100 33 100 62C100 93 83 116 64 116C45 116 28 93 28 62C28 33 45 12 64 12Z M64 26L70 32L65.5 38L70 45L65.5 51L70 58L65.5 64L70 71L65.5 77L70 84L65.5 90L70 97L64 104L58 97L62.5 90L58 84L62.5 77L58 71L62.5 64L58 58L62.5 51L58 45L62.5 38L58 32Z'/%3E%3C/svg%3E");
+  mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath fill-rule='evenodd' d='M64 12C83 12 100 33 100 62C100 93 83 116 64 116C45 116 28 93 28 62C28 33 45 12 64 12Z M64 26L70 32L65.5 38L70 45L65.5 51L70 58L65.5 64L70 71L65.5 77L70 84L65.5 90L70 97L64 104L58 97L62.5 90L58 84L62.5 77L58 71L62.5 64L58 58L62.5 51L58 45L62.5 38L58 32Z'/%3E%3C/svg%3E");
+}
+
+/* ---- nav ---- */
+nav.top{
+  position:sticky;top:0;z-index:30;background:color-mix(in srgb, var(--canvas) 86%, transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--hair);
+}
+nav.top .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand .cowrie{width:24px;height:24px}
+.brand b{font-family:var(--disp);font-weight:500;font-size:19px;letter-spacing:-.03em;color:var(--ink)}
+.nlinks{display:flex;gap:8px;align-items:center}
+.nlinks a.nl{
+  font-family:var(--body);font-size:13.5px;color:var(--ink-dim);padding:8px 12px;border-radius:6px;
+  transition:color .15s;
+}
+.nlinks a.nl:hover{color:var(--ink)}
+@media(max-width:760px){.nlinks a.nl.hidem{display:none}}
+
+.iconbtn{
+  display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;
+  border:1px solid var(--hair-strong);border-radius:8px;background:transparent;color:var(--ink-dim);
+  cursor:pointer;transition:.15s;
+}
+.iconbtn:hover{color:var(--ink);border-color:var(--ink-faint)}
+.iconbtn svg{width:17px;height:17px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;font-family:var(--body);font-weight:500;
+  font-size:13.5px;padding:10px 18px;border-radius:8px;border:1px solid var(--hair-strong);
+  color:var(--ink);transition:.15s;white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink-faint);background:var(--surface-raised)}
+.btn.pri{background:var(--vermilion);border-color:var(--vermilion);color:var(--vermilion-ink);font-weight:500}
+.btn.pri:hover{background:var(--vermilion-bright);border-color:var(--vermilion-bright)}
+.btn.sm{padding:7px 13px;font-size:12.5px}
+
+footer.site{border-top:1px solid var(--hair);padding:44px 0;color:var(--ink-faint);font-size:13px}
+footer.site .fwrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;align-items:center}
+footer.site .flinks{display:flex;gap:20px;flex-wrap:wrap}
+footer.site a:hover{color:var(--ink-dim)}
+footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:500}
+
+/* ---- generic status word (rule 4: word, not just colour) ---- */
+.status{
+  display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;
+  font-weight:500;letter-spacing:.02em;white-space:nowrap;
+}
+.status::before{content:'';width:7px;height:7px;border-radius:50%;flex:none}
+.status.settled{color:var(--settled)}
+.status.settled::before{background:var(--settled)}
+.status.pending{color:var(--pending)}
+.status.pending::before{background:var(--pending)}
+.status.failed{color:var(--failed)}
+.status.failed::before{background:var(--failed)}
+
+/* ---- ledger table (rule 5: hairline rows, toothed rule only between sections; rule 6 tabular nums; rule 3 no vermilion in data) ---- */
+.ledger{width:100%;border-collapse:collapse;font-size:14px}
+.ledger th,.ledger td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--hair);vertical-align:top}
+.ledger thead th{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--ink-faint);font-weight:500;border-bottom:1px solid var(--hair-strong);
+}
+.ledger tbody tr:last-child td{border-bottom:none}
+.ledger td.mono,.ledger th.mono{font-family:var(--mono)}
+.ledger-wrap{overflow-x:auto;border:1px solid var(--hair);border-radius:2px}
+
+@media(max-width:600px){
+  .ledger{font-size:13px}
+  .ledger th,.ledger td{padding:10px 10px}
+}

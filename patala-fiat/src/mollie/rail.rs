@@ -48,7 +48,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::mollie::config::{MollieConfig, MOLLIE_API_BASE};
@@ -382,6 +383,29 @@ impl PaymentRail for MollieRail {
             .to_bytes(),
             settled_at_unix: now_unix(),
         })
+    }
+
+    /// Handle a Mollie webhook delivery — delegates to
+    /// [`Self::handle_webhook`], which performs the authenticated re-fetch
+    /// Mollie's design requires.
+    ///
+    /// Mollie's callback carries no signature and no payload beyond a
+    /// payment id (by design — Mollie's own docs say so), so "verification"
+    /// here IS the re-fetch: nothing in the delivery is trusted except which
+    /// payment to ask Mollie about, and the settlement reported is Mollie's
+    /// own answer to that authenticated query.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = self.handle_webhook(&delivery.raw_body).await?;
+        let payment_id = event.event_id.clone();
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        )
+        .with_object_id(payment_id))
     }
 }
 

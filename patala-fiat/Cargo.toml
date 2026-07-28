@@ -2,10 +2,11 @@
 name = "patala-fiat"
 version = "0.1.0"
 edition = "2021"
-description = "patala fiat foundation: the ISO-4217 minor-unit currency table, the provider-registry pattern (manual always-on/never-disableable), the offline `manual` PaymentRail, and two pilot CustodialReversible adapters (Stripe, Paystack) -- ported from cackle's internal/money + internal/payments (Go). Money-critical logic (currency exponents, amount conversions, fail-closed verify, webhook HMAC) is preserved faithfully; only the seam differs (patala-core's PaymentRail trait vs cackle's Provider interface). See PORTING.md."
+description = "patala fiat foundation: the ISO-4217 minor-unit currency table (147 currencies, checksum-pinned), the provider-registry pattern (manual always-on/never-disableable), the offline `manual` PaymentRail, and 20 feature-gated CustodialReversible processor adapters (Stripe, Paystack, Adyen, PayPal, Square, Razorpay, ...) -- ported from cackle's internal/money + internal/payments (Go). Money-critical logic (currency exponents, amount conversions, fail-closed verify, webhook signature verification) is preserved faithfully; only the seam differs (patala-core's PaymentRail trait vs cackle's Provider interface). Default feature set is empty and links no HTTP client. See README.md and PORTING.md."
 license = "MIT"
+readme = "README.md"
 repository = "https://github.com/vul-os/patala"
-keywords = ["payments", "fiat", "stripe", "paystack", "custodial"]
+keywords = ["payments", "fiat", "iso4217", "currency", "custodial"]
 categories = ["cryptography", "network-programming"]
 
 # This crate stays IN the workspace `default-members` (see the root
@@ -17,31 +18,54 @@ categories = ["cryptography", "network-programming"]
 # them (PATALA.md §8, §9).
 [features]
 default = []
-stripe = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
-paystack = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+# Private marker feature: every processor feature below enables it, and nothing
+# else does. Two jobs, both of which need ONE feature name rather than a
+# twenty-way `any(...)`:
+#   * `src/httpshared.rs` is compiled exactly when at least one adapter is —
+#     `#[cfg(feature = "_adapter")]` instead of a 20-arm `cfg(any(...))` that
+#     had to be edited by hand for every new adapter.
+#   * `tests/webhook_coverage.rs` declares `required-features = ["_adapter"]`,
+#     so it is simply absent from a no-adapter build (the crate's default
+#     feature set compiles no adapter, by design) instead of running and
+#     verifying nothing. With one or more adapters on it runs and names every
+#     adapter it did NOT verify.
+# `scripts/check-features.sh` fails the build if an adapter feature forgets it.
+_adapter = []
+stripe = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+paystack = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
 # Adyen's webhook HMAC signature is base64-encoded (not hex, unlike every
 # other adapter in this crate) -- see adyen/webhook.rs -- hence the extra
 # dep:base64, gated to this feature only.
-adyen = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "dep:base64"]
-checkoutcom = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
+adyen = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "dep:base64", "_adapter"]
+checkoutcom = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
 # Mollie's classic webhook carries NO signature at all -- see mollie/webhook.rs
 # -- so this feature needs no HMAC/hex deps, only reqwest.
-mollie = ["dep:reqwest"]
-mercadopago = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
-flutterwave = ["dep:reqwest"]
-iyzico = ["dep:reqwest", "dep:sha1", "dep:base64"]
-midtrans = ["dep:reqwest", "dep:sha2", "dep:hex"]
-yoco = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64"]
-payfast = ["dep:reqwest", "dep:md5"]
-payu = ["dep:reqwest", "dep:sha2", "dep:hex", "dep:url"]
-razorpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
-square = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64"]
-xendit = ["dep:reqwest"]
-btcpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
-lnbits = ["dep:reqwest"]
-opennode = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
-coinbasecommerce = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex"]
-paypal = ["dep:reqwest"]
+mollie = ["dep:reqwest", "_adapter"]
+mercadopago = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+flutterwave = ["dep:reqwest", "_adapter"]
+iyzico = ["dep:reqwest", "dep:sha1", "dep:base64", "_adapter"]
+midtrans = ["dep:reqwest", "dep:sha2", "dep:hex", "_adapter"]
+yoco = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64", "_adapter"]
+payfast = ["dep:reqwest", "dep:md5", "_adapter"]
+payu = ["dep:reqwest", "dep:sha2", "dep:hex", "dep:url", "_adapter"]
+razorpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+square = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64", "_adapter"]
+xendit = ["dep:reqwest", "_adapter"]
+btcpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+lnbits = ["dep:reqwest", "_adapter"]
+opennode = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+coinbasecommerce = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+paypal = ["dep:reqwest", "_adapter"]
+
+# `tests/webhook_coverage.rs` asserts every COMPILED-IN adapter implements
+# `PaymentRail::verify_webhook`. In a build with no adapter at all it would
+# have nothing to assert, so it is not built there — a harness that passes by
+# doing nothing is worse than no harness. `make check` runs
+# `cargo test -p patala-fiat --all-features` as a separate required gate, which
+# is where this actually executes.
+[[test]]
+name = "webhook_coverage"
+required-features = ["_adapter"]
 
 [dependencies]
 patala-core = { path = "../patala-core" }
@@ -61,3 +85,11 @@ url = { version = "2", optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 wiremock = "0.6"
+# `tests/webhook_coverage.rs` builds genuine signatures for the round-trip
+# half of its assertions, so it needs the same primitives the adapters do.
+# These are dev-only: they never reach a consumer's dependency graph, and the
+# default `cargo build -p patala-fiat` still links none of them.
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"

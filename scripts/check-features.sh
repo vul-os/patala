@@ -18,6 +18,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fiat_toml="$root/patala-fiat/Cargo.toml"
 py_toml="$root/patala-py/Cargo.toml"
 fiat_src="$root/patala-fiat/src"
+webhook_cov="$root/patala-fiat/tests/webhook_coverage.rs"
 
 fail=0
 note() { echo "check-features: $*" >&2; fail=1; }
@@ -50,6 +51,21 @@ for p in $processors; do
   # 3. fiat-all includes fiat-<p>.
   printf '%s\n' "$fiat_all_members" | grep -qx "fiat-$p" \
     || note "patala-py fiat-all is missing fiat-$p (patala-go's cdylib would omit it)"
+
+  # 4. tests/webhook_coverage.rs names the processor, so the webhook-surface
+  #    coverage test actually exercises it. That test is feature-gated, so a
+  #    count assertion INSIDE it cannot notice an adapter that was never
+  #    added to its list -- only this structural check can.
+  grep -q "feature = \"$p\"" "$webhook_cov" \
+    || note "patala-fiat/tests/webhook_coverage.rs has no #[cfg(feature = \"$p\")] entry \
+(src/$p/'s verify_webhook would never be exercised)"
+
+  # 5. The processor feature enables the private `_adapter` marker. That marker
+  #    is what compiles `httpshared` in and what gates the webhook-coverage
+  #    test's existence; an adapter that forgets it would build a cdylib whose
+  #    coverage test can be run without ever seeing that adapter.
+  grep -qE "^$p *= *\[.*\"_adapter\"" "$fiat_toml" \
+    || note "patala-fiat/Cargo.toml: feature [$p] does not enable \"_adapter\""
 done
 
 # Reverse direction: fiat-all must not list a processor that no longer exists.
@@ -65,4 +81,5 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 n="$(printf '%s\n' "$processors" | grep -c .)"
-echo "check-features: OK — $n fiat processors consistent across patala-fiat + patala-py (fiat-all complete)."
+echo "check-features: OK — $n fiat processors consistent across patala-fiat + patala-py \
+(fiat-all complete, all covered by tests/webhook_coverage.rs)."

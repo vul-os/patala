@@ -2,9 +2,14 @@
 //! `internal/payments/xendit.go`'s `Webhook` method
 //! (<https://developers.xendit.co/docs/webhooks/>).
 //!
-//! **Not part of [`patala_core::PaymentRail`]**: same reasoning as every
-//! other adapter's `webhook` module in this crate -- the trait has no
-//! webhook method at all.
+//! **Reached through the trait** by
+//! [`patala_core::PaymentRail::verify_webhook`] on this adapter's rail,
+//! which is a thin wrapper over the function below. That wrapper is what
+//! makes this verification usable from the UniFFI binding and the sidecar
+//! and not only from Rust — a free function alone is invisible to every
+//! consumer that dispatches through `dyn PaymentRail`. The function itself
+//! stays public and pure: it takes exactly what the scheme signs and no
+//! `&self`, which is what keeps it directly testable.
 //!
 //! **Intentionally the WEAKEST webhook scheme in this crate, faithfully
 //! preserved, not strengthened** -- port faithfully, do not redesign

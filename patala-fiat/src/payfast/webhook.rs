@@ -2,8 +2,13 @@
 //! ported from cackle's `internal/payments/payfast.go`'s `Webhook` method
 //! (<https://developers.payfast.co.za/docs#step_5_confirm_payment>).
 //!
-//! **Not part of [`patala_core::PaymentRail`]**: same reasoning as every
-//! other adapter's `webhook.rs` in this crate.
+//! **Reached through the trait** by
+//! [`patala_core::PaymentRail::verify_webhook`] on this adapter's rail —
+//! that wrapper is what makes this verification usable from the UniFFI
+//! binding and the sidecar, and not only from Rust. What the rail method
+//! delegates to is the rail's own inherent handler (this scheme needs an
+//! authenticated round trip, so it cannot be a free function), which in
+//! turn calls the pure half below.
 //!
 //! **A genuine, protocol-driven divergence from `stripe::webhook`/
 //! `paystack::webhook`/`midtrans::webhook`/`yoco::webhook`'s pure-function

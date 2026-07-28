@@ -3,8 +3,13 @@
 //! `internal/payments/mercadopago.go`'s `Webhook` method
 //! (<https://www.mercadopago.com/developers/en/docs/checkout-api/additional-content/security/signature>).
 //!
-//! **Not part of [`patala_core::PaymentRail`]**: the trait has no webhook
-//! method at all — same reasoning as every other adapter in this crate.
+//! **Reached through the trait** by
+//! [`patala_core::PaymentRail::verify_webhook`] on this adapter's rail —
+//! that wrapper is what makes this verification usable from the UniFFI
+//! binding and the sidecar, and not only from Rust. What the rail method
+//! delegates to is the rail's own inherent handler (this scheme needs an
+//! authenticated round trip, so it cannot be a free function), which in
+//! turn calls the pure half below.
 //!
 //! **Structural divergence from `stripe::webhook`/`paystack::webhook`,
 //! flagged per `PORTING.md`, same reasoning as `mollie::webhook`**: Mercado

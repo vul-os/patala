@@ -1,14 +1,25 @@
 name: ci
 
-# The full quality gate on every push to main and every PR. Runs exactly what
-# `make check` runs locally — formatting, clippy-as-error, the whole test suite
-# (unit + integration + doctests), and a warning-free doc build — so the bar in
-# CI and the bar on a contributor's machine are the same command.
+# The full quality gate on every push to main and every PR.
 #
-# The workspace is pure Rust: the Python and Go bindings are UniFFI (a cdylib +
-# generated wrapper), never pyo3, so nothing here needs a Python interpreter or
-# native headers. A stable toolchain with rustfmt + clippy is the whole
-# toolchain requirement.
+# Job 1 (`check`) runs exactly what `make check` runs locally — formatting,
+# clippy-as-error, the whole test suite in BOTH passes (the default workspace
+# build, and the feature-gated build where patala-fiat's twenty processor
+# adapters actually exist), and a warning-free doc build. The bar in CI and the
+# bar on a contributor's machine are the same command.
+#
+# Job 2 (`python-binding`) executes the UniFFI surface for real: it builds the
+# cdylib with a fiat adapter compiled in, generates the Python wrapper with this
+# workspace's own bindgen, and runs the smoke test under a real interpreter.
+# Without it, "the Python binding executed end-to-end" would be a claim nothing
+# enforces. It needs only python3 — the bindings are UniFFI (a cdylib plus a
+# generated ctypes wrapper), never pyo3, so there are no native headers and no
+# build backend to install.
+#
+# `patala-go`'s equivalent is NOT in CI: it needs `uniffi-bindgen-go` installed
+# from git at a pinned tag plus a C toolchain. It is run by hand — see
+# patala-go/README.md — so the Go binding's status is "executed by hand", not
+# "enforced by CI".
 
 on:
   push:
@@ -40,3 +51,22 @@ jobs:
 
       - name: make check
         run: make check
+
+  python-binding:
+    name: python binding (executed, not just compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: make smoke-python
+        run: make smoke-python

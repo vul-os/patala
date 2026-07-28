@@ -66,15 +66,64 @@ support) could be added alongside the synchronous one without redesigning
   contract.
 - `PatalaRail` — the one object type Python ever touches. It wraps
   `Arc<dyn patala_core::PaymentRail>` and exports `id()`, `capabilities()`,
-  `quote()`, `charge()`, `verify()`. `PatalaRail.new_mock(...)`, built on
-  `patala_core::MockRail`, is always available — no feature flag needed, and
-  this is what CI and a bare `pip install patala-py` get by default.
+  `quote()`, `charge()`, `verify()`, `verify_webhook()`.
+  `PatalaRail.new_mock(...)`, built on `patala_core::MockRail`, is always
+  available — no feature flag needed, and this is what CI and a bare
+  `pip install patala-py` get by default.
+- `WebhookDelivery` / `WebhookEvent` / `WebhookStatus` — the push side.
+
+## Webhooks
+
+`verify_webhook(delivery)` is the push counterpart to `verify(receipt)`.
+Without it a consumer on this side of the FFI can only ever *poll* a
+processor, because webhook signature verification is provider-specific Rust
+that lives beside each adapter — and anything not on the `PaymentRail` trait
+is invisible to UniFFI.
+
+```python
+import hashlib, hmac
+from patala_py import PatalaRail, WebhookDelivery, WebhookStatus, PatalaError
+
+rail = PatalaRail.new_fiat("stripe", {"secret_key": ..., "webhook_secret": secret, ...})
+
+# Forward the processor's request VERBATIM: same bytes, same headers, same
+# query string. Every scheme signs exactly what was sent, so a body that has
+# been through a JSON round-trip on your side will not verify.
+delivery = WebhookDelivery(
+    raw_body=request.get_data(),          # bytes, not str, not a parsed dict
+    headers=dict(request.headers),        # matched case-insensitively
+    query=None,                           # only LNbits reads this (?secret=)
+    now_unix=int(time.time()),            # replay windows are checked against this
+)
+
+try:
+    event = rail.verify_webhook(delivery)  # raises if not authentic
+except PatalaError.InvalidRequest:
+    return "", 400
+except PatalaError.Unsupported:
+    return "", 501                         # this rail has no push delivery
+
+if event.status == WebhookStatus.SETTLED:
+    # Reconcile event.amount_minor / event.currency against your own stored
+    # order before trusting them, and dedupe on (event.rail_id, event.event_id).
+    ...
+```
+
+`WebhookStatus` has three values, not two. `UNCONFIRMED` means the delivery
+is genuine but carries no settlement claim — BTCPay, Coinbase Commerce,
+OpenNode, LNbits and Mollie all authenticate a notification that names an
+object and nothing else. Look up your stored `Receipt` for `event.object_id`
+and call `verify()` on it; never treat `UNCONFIRMED` as payment.
+
+`patala-py/examples/smoke_test.py` drives this end to end from Python
+(against a genuinely signed Stripe delivery, offline) when the cdylib is
+built with `--features fiat-stripe`, and says so loudly when it is not.
 
 ## Real rails (TASK 1: not just MockRail anymore)
 
 `PatalaRail` wraps the trait object, not a concrete type, so adding a real
 rail never changes the shape of `id()`/`capabilities()`/`quote()`/`charge()`/
-`verify()` — only the constructor list grows. Three more constructors exist
+`verify()`/`verify_webhook()` — only the constructor list grows. Three more constructors exist
 today, each gated behind its own Cargo feature so the **default build stays
 exactly as offline as before** (`PATALA.md` §8) — `patala-solana`/
 `patala-stellar`/`patala-hyperswitch` are `optional = true` dependencies of

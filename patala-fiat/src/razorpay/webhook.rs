@@ -2,8 +2,14 @@
 //! `internal/payments/razorpay.go`'s `Webhook` method
 //! (<https://razorpay.com/docs/webhooks/validate-test/>).
 //!
-//! **Not part of [`patala_core::PaymentRail`]**: the trait has no webhook
-//! method at all -- same reasoning as every other adapter in this crate.
+//! **Reached through the trait** by
+//! [`patala_core::PaymentRail::verify_webhook`] on this adapter's rail,
+//! which is a thin wrapper over the function below. That wrapper is what
+//! makes this verification usable from the UniFFI binding and the sidecar
+//! and not only from Rust — a free function alone is invisible to every
+//! consumer that dispatches through `dyn PaymentRail`. The function itself
+//! stays public and pure: it takes exactly what the scheme signs and no
+//! `&self`, which is what keeps it directly testable.
 //!
 //! Verification, exactly as cackle's `Webhook`: HMAC-SHA256, hex-encoded,
 //! computed over the exact RAW request body (no timestamp prefix, no

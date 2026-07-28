@@ -42,6 +42,18 @@ the `u64` minor-units integers `patala-core` defines; `serde_json` encodes a
 | `POST` | `/v1/rails/:rail_id/quote` | `PayRequest` | `Quote` |
 | `POST` | `/v1/rails/:rail_id/charge` | `PayRequest` | `Receipt` |
 | `POST` | `/v1/rails/:rail_id/verify` | `Receipt` | `{"valid": bool}` |
+| `POST` | `/v1/rails/:rail_id/webhook` | the processor's **raw request** | `WebhookEvent` |
+
+`/webhook` is the push counterpart to `/verify`: forward the processor's
+webhook request to it **verbatim** — same body bytes, same headers, same
+query string — and the rail says whether the delivery is genuine. It is the
+one endpoint whose body is not parsed JSON, deliberately: every webhook
+scheme signs the exact bytes the processor sent, so re-encoding the body
+here would invalidate the signature of every genuine delivery. A `200` means
+the rail authenticated it; read `status` (`"Settled"` / `"NotSettled"` /
+`"Unconfirmed"`) for what it claims, and gate entitlement on `"Settled"`
+only, after reconciling `amount_minor`/`currency` against your own stored
+order. A rail with no push delivery — the offline `"mock"` — answers `501`.
 
 A `Receipt`'s `verify` result is `{"valid": false}` with HTTP `200` for an
 unverifiable receipt — the fail-closed answer is data, never an HTTP error

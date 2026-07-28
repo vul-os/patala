@@ -39,6 +39,10 @@
 package main
 
 import (
+	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"sort"
@@ -132,9 +136,73 @@ func main() {
 		assert(stripeCaps.Class == patala.RailClassCustodialReversible, "stripe must be CustodialReversible")
 		assert(stripeCaps.HoldsFunds, "stripe (the PROCESSOR) custodies funds in flight -- never patala's")
 		fmt.Printf("stripe construction-only OK: class=%v holds_funds=%v (never charged/verified -- no live network)\n", stripeCaps.Class, stripeCaps.HoldsFunds)
+
+		// ---- webhook verification, from Go, offline -------------------
+		// This is the surface a Go consumer previously could not reach at
+		// all: webhook verification lived in Rust free functions outside
+		// the PaymentRail trait, so it was invisible to UniFFI, and a Go
+		// caller could only ever confirm a payment by polling Verify.
+		// `VerifyWebhook` puts it on the trait, and everything below runs
+		// over cgo into the compiled Rust -- nothing is mocked, and no
+		// network call is made (a webhook signature check is local).
+		verifyStripeWebhook(stripeRail)
 	}
 
 	fmt.Println("\nALL GO FIAT ROUNDTRIP ASSERTIONS PASSED")
+}
+
+// verifyStripeWebhook drives PatalaRail.VerifyWebhook against a genuinely
+// signed Stripe delivery, then against a tampered one.
+func verifyStripeWebhook(rail *patala.PatalaRail) {
+	const (
+		secret = "whsec_go_example"
+		now    = uint64(1_700_000_000)
+	)
+	body := []byte(`{"id":"evt_go_1","type":"checkout.session.completed",` +
+		`"data":{"object":{"id":"cs_go_1","payment_status":"paid","amount_total":5000,` +
+		`"currency":"usd","client_reference_id":"go-fiat-order-webhook"}}}`)
+
+	// Stripe signs "{timestamp}.{raw body}" with HMAC-SHA256, hex-encoded,
+	// under the endpoint's whsec_ secret.
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(fmt.Sprintf("%d.", now)))
+	mac.Write(body)
+	signature := hex.EncodeToString(mac.Sum(nil))
+
+	delivery := patala.WebhookDelivery{
+		RawBody: body,
+		Headers: map[string]string{
+			"Stripe-Signature": fmt.Sprintf("t=%d,v1=%s", now, signature),
+		},
+		Query:   nil,
+		NowUnix: now,
+	}
+
+	event := must(rail.VerifyWebhook(delivery))
+	assert(event.RailId == "stripe", fmt.Sprintf("unexpected rail_id: %q", event.RailId))
+	assert(event.EventId == "evt_go_1", "event_id is the caller's replay-dedup key")
+	assert(event.Reference == "go-fiat-order-webhook", fmt.Sprintf("unexpected reference: %q", event.Reference))
+	assert(event.Status == patala.WebhookStatusSettled, fmt.Sprintf("unexpected status: %v", event.Status))
+	assert(event.AmountMinor == 5000, fmt.Sprintf("unexpected amount_minor: %d", event.AmountMinor))
+	assert(event.Currency == "USD", fmt.Sprintf("unexpected currency: %q", event.Currency))
+	fmt.Printf("stripe webhook OK: authenticated from Go, status=%v amount_minor=%d reference=%q\n",
+		event.Status, event.AmountMinor, event.Reference)
+
+	// The same signature over different bytes must fail closed.
+	tampered := delivery
+	tampered.RawBody = bytes.Replace(body, []byte("5000"), []byte("1"), 1)
+	if _, err := rail.VerifyWebhook(tampered); err == nil {
+		fmt.Fprintln(os.Stderr, "FAILED: a tampered webhook delivery must never verify")
+		os.Exit(1)
+	}
+
+	// A rail with no processor reports unsupported rather than inventing an
+	// event -- the honest answer, and the one `manual` gives.
+	manualRail := must(patala.PatalaRailNewFiat("manual", map[string]string{}))
+	_, err := manualRail.VerifyWebhook(delivery)
+	assert(err != nil, "manual has no processor and must report unsupported")
+	assert(strings.Contains(err.Error(), "Unsupported"), fmt.Sprintf("expected Unsupported, got: %v", err))
+	fmt.Printf("stripe webhook OK: tampered delivery rejected; manual reports unsupported (%v)\n", err)
 }
 
 func contains(haystack []string, needle string) bool {

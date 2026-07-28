@@ -62,6 +62,7 @@ pub fn app(registry: RailRegistry, token: SidecarToken) -> Router {
         .route("/v1/rails/:rail_id/quote", post(api::quote))
         .route("/v1/rails/:rail_id/charge", post(api::charge))
         .route("/v1/rails/:rail_id/verify", post(api::verify))
+        .route("/v1/rails/:rail_id/webhook", post(api::webhook))
         .with_state(state)
         .route_layer(middleware::from_fn_with_state(token, auth::require_token));
 

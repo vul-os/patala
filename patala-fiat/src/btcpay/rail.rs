@@ -75,11 +75,12 @@
 //!   plain unpaid invoice gets would lose real information a caller needs to
 //!   act on. `Ok(false)` is used only for the ordinary "not (yet) settled"
 //!   states (`New`/`Processing`/`Expired`/`Invalid`/anything unrecognised).
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::btcpay::webhook::verify_and_extract`] — see that module's docs
-//!   for why, unlike `stripe`/`paystack`'s webhook modules, it does NOT
-//!   itself refetch from BTCPay (preserving, not weakening, cackle's own
-//!   "never trust the webhook body" security property).
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::btcpay::webhook::verify_and_extract`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **left as the trait default (`Error::Unsupported`), NOT new
 //!   code** — a deliberate divergence from `paystack`/`stripe`'s rails in
 //!   this crate, which DO implement new refund code. `patala_core::PaymentRail`'s
@@ -101,7 +102,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::btcpay::config::BTCPayConfig;
@@ -379,6 +381,30 @@ impl PaymentRail for BTCPayRail {
 
     // refund(): left as the trait default (Error::Unsupported). See module
     // docs for why this is honest rather than a shortcut.
+
+    /// Verify a BTCPay webhook delivery (HMAC-SHA256 over the raw body,
+    /// header `BTCPay-Sig`) — see
+    /// [`crate::btcpay::webhook::verify_and_extract`].
+    ///
+    /// Reports [`patala_core::WebhookStatus::Unconfirmed`], never a
+    /// settlement: BTCPay's webhook body is not trusted for settlement data,
+    /// only for WHICH invoice to ask about. Take
+    /// [`WebhookEvent::object_id`], find your stored [`Receipt`] for that
+    /// invoice, and call [`Self::verify`] — that is what polls BTCPay's
+    /// authoritative status.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::btcpay::webhook::verify_and_extract(
+            &self.config.webhook_secret,
+            &delivery.raw_body,
+            delivery.header_or_empty("BTCPay-Sig"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::unconfirmed(
+            &self.id,
+            event.event_id,
+            event.invoice_id,
+        ))
+    }
 }
 
 #[cfg(test)]

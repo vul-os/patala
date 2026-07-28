@@ -73,7 +73,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::mercadopago::config::{MercadoPagoConfig, MERCADOPAGO_API_BASE};
@@ -379,6 +380,32 @@ impl PaymentRail for MercadoPagoRail {
             return Ok(true);
         }
         Ok(false)
+    }
+
+    /// Verify a Mercado Pago webhook delivery — delegates to
+    /// [`Self::handle_webhook`] (signature check over the `x-signature`
+    /// manifest, then the mandatory authenticated re-fetch of the payment
+    /// the manifest names).
+    ///
+    /// Headers: `x-signature`, `x-request-id`.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = self
+            .handle_webhook(
+                &delivery.raw_body,
+                delivery.header_or_empty("x-signature"),
+                delivery.header_or_empty("x-request-id"),
+            )
+            .await?;
+        let payment_id = event.event_id.clone();
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        )
+        .with_object_id(payment_id))
     }
 }
 

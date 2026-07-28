@@ -55,10 +55,12 @@
 //!   state, there is nothing that can be "unknown" — a garbage/foreign
 //!   `proof` simply fails `Ok(false)` the same way every other adapter's
 //!   `verify()` does for an undecodable proof.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::lnbits::webhook::verify_and_extract`] — see that module's
-//!   docs for why it does not itself refetch (same pattern as `btcpay`/
-//!   `opennode`/`coinbasecommerce`).
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::lnbits::webhook::verify_and_extract`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **left as the trait default (`Error::Unsupported`)** — same
 //!   reasoning as `btcpay::rail`'s: cackle's `Capabilities.Refunds: false`
 //!   has no "supports it, not implemented" comment for LNbits (unlike
@@ -75,7 +77,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::lnbits::config::LNbitsConfig;
@@ -321,6 +324,33 @@ impl PaymentRail for LNbitsRail {
 
     // refund(): left as the trait default (Error::Unsupported). See module
     // docs for why this is honest rather than a shortcut.
+
+    /// Verify an LNbits webhook delivery — see
+    /// [`crate::lnbits::webhook::verify_and_extract`].
+    ///
+    /// LNbits has no signing scheme at all, so the compensating control (as
+    /// designed upstream, not invented here) is an operator-chosen secret
+    /// embedded in the registered webhook URL. It is therefore read from
+    /// [`WebhookDelivery::query`]'s `secret` parameter, not a header — a
+    /// caller forwarding a delivery MUST populate the query map or this
+    /// fails closed with a missing-secret error.
+    ///
+    /// Reports [`patala_core::WebhookStatus::Unconfirmed`], never a
+    /// settlement: take [`WebhookEvent::object_id`] (the payment hash), find
+    /// your stored [`Receipt`], and call [`Self::verify`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::lnbits::webhook::verify_and_extract(
+            &self.config.webhook_secret,
+            delivery.query_param("secret"),
+            &delivery.raw_body,
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::unconfirmed(
+            &self.id,
+            event.event_id,
+            event.payment_hash,
+        ))
+    }
 }
 
 /// Mirrors cackle's `verifyAgainstRecord` switch EXACTLY, including its own

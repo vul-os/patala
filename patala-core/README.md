@@ -11,7 +11,18 @@ README describes what is actually built.
 ## What's here
 
 - **`PaymentRail`** — the trait every rail implements: `id`, `capabilities`,
-  `quote`, `charge`, `verify`, `refund` (default `Unsupported`).
+  `quote`, `charge`, `verify`, `refund` (default `Unsupported`),
+  `verify_webhook` (default `Unsupported`).
+- **`WebhookDelivery` / `WebhookEvent` / `WebhookStatus`** — the push side of
+  the seam. A rail's *pull* path is `verify` (you hold a `Receipt` and ask the
+  rail to re-derive it); its *push* path is `verify_webhook` (the processor
+  calls you, and the rail says whether that delivery is genuine and what it
+  claims). Both are on the trait deliberately: anything beside the trait is
+  invisible to every consumer that dispatches through `dyn PaymentRail` — the
+  UniFFI binding, the sidecar — which can then only ever poll.
+  `WebhookStatus` is three states, not a bool, because several real schemes
+  authenticate a notification without asserting anything about money;
+  `Unconfirmed` says so rather than claiming the payment did not settle.
 - **`RailClass`** — `CustodialReversible` | `NonCustodialFinal`. The
   settlement class lives in the type, not a bool, because it changes what you
   owe the payer: a refundable "pending" state with a card form, or a wallet

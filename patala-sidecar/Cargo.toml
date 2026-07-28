@@ -31,3 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# `tests/webhook.rs` implements a `PaymentRail` of its own to observe what
+# the webhook route forwards; the trait is `#[async_trait]`, so the test needs
+# the same macro. Dev-only — the sidecar binary links none of it.
+async-trait = "0.1"

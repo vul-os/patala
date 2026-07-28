@@ -266,6 +266,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn verify_webhook_is_unsupported_by_default() {
+        // MockRail has no processor and therefore no push delivery. The
+        // required answer is `Unsupported` — never an `Ok` event, which a
+        // caller could mistake for "this delivery was authenticated".
+        let rail = MockRail::new("mock", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+        let delivery = crate::WebhookDelivery::new(b"{}".to_vec(), 1_700_000_000)
+            .with_header("X-Anything", "whatever");
+        let err = rail
+            .verify_webhook(&delivery)
+            .await
+            .expect_err("mock never overrides verify_webhook");
+        assert!(matches!(err, Error::Unsupported("verify_webhook")));
+    }
+
+    #[tokio::test]
     async fn unsupported_currency_and_zero_amount_are_rejected() {
         let rail = MockRail::new("mock", RailClass::NonCustodialFinal, vec!["USDC".into()]);
         assert!(rail.charge(&req(100, "EUR", "order-6")).await.is_err());

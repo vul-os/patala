@@ -62,10 +62,12 @@
 //!   `PORTING.md` §6 — `>=`, never `==`) is what would surface a caller-side
 //!   discrepancy, exactly as cackle's own `Reconcile`/`ErrAmountMismatch`
 //!   would at the layer above `Verify`.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::opennode::webhook::verify_and_extract`] — see that module's
-//!   docs for why it does not itself refetch (same pattern as `btcpay`/
-//!   `lnbits`/`coinbasecommerce`).
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::opennode::webhook::verify_and_extract`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **left as the trait default (`Error::Unsupported`)**.
 //!   cackle's `Capabilities.Refunds: false` has no "supports it, not
 //!   implemented here" comment the way Paystack's does (contrast
@@ -79,7 +81,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::opennode::config::OpenNodeConfig;
@@ -306,6 +309,30 @@ impl PaymentRail for OpenNodeRail {
 
     // refund(): left as the trait default (Error::Unsupported). See module
     // docs for why this is honest rather than a fabricated implementation.
+
+    /// Verify an OpenNode callback — see
+    /// [`crate::opennode::webhook::verify_and_extract`]. The body is
+    /// `application/x-www-form-urlencoded` and the signature
+    /// (`hashed_order`) covers ONLY the charge id, so this rail decodes the
+    /// form here rather than reading a header.
+    ///
+    /// Reports [`patala_core::WebhookStatus::Unconfirmed`], never a
+    /// settlement — a signature over one field cannot vouch for an amount.
+    /// Take [`WebhookEvent::object_id`], find your stored [`Receipt`] for
+    /// that charge, and call [`Self::verify`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let body = std::str::from_utf8(&delivery.raw_body).map_err(|_| {
+            Error::InvalidRequest("opennode: webhook body is not valid UTF-8".to_string())
+        })?;
+        let form = crate::opennode::webhook::parse_form_body(body);
+        let event = crate::opennode::webhook::verify_and_extract(&self.config.api_key, &form)
+            .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::unconfirmed(
+            &self.id,
+            event.event_id,
+            event.charge_id,
+        ))
+    }
 }
 
 #[cfg(test)]

@@ -36,9 +36,12 @@
 //!   reference (no separate provider-assigned id the way a Stripe session
 //!   id is), so `verify()`/`refund()` use `Receipt::reference` directly
 //!   rather than anything decoded from `proof`.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::paystack::webhook::verify_and_parse`], not a trait method —
-//!   same reasoning as `stripe::webhook` and `manual.rs`.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::paystack::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **NOT a cackle port**, same as `stripe::rail::StripeRail`'s
 //!   `refund()` — cackle's `PaystackProvider.Capabilities().Refunds` is
 //!   `false` with an explicit comment ("Paystack supports it; not
@@ -54,7 +57,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::paystack::config::PaystackConfig;
@@ -359,6 +363,30 @@ impl PaymentRail for PaystackRail {
             proof: Vec::new(),
             settled_at_unix: now_unix(),
         })
+    }
+
+    /// Verify a Paystack webhook delivery (HMAC-SHA512 over the raw body,
+    /// header `X-Paystack-Signature`) — see
+    /// [`crate::paystack::webhook::verify_and_parse`].
+    ///
+    /// Paystack only produces an event for `charge.success` with a `success`
+    /// status; anything else is rejected there as an unhandled event, so a
+    /// delivery that reaches this point is settled.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::paystack::webhook::verify_and_parse(
+            &self.config.secret_key,
+            &delivery.raw_body,
+            delivery.header_or_empty("X-Paystack-Signature"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            true,
+            event.amount_minor,
+            event.currency,
+        ))
     }
 }
 

@@ -14,15 +14,24 @@ this README describes what is actually built, honestly, as it lands.
 
 ## Status: foundational — built and unit-tested, rails unverified against live networks
 
-The core, four rails, and the polyglot layer are all in this repo and pass a
-combined **150 offline tests** (clippy-clean, fmt-clean; the default build
-pulls no chain or processor). What that does *not* mean: the crypto and fiat
-rails have **not** been run against a live network from here — each says so
-plainly in its own README and names the exact step to validate (fund a
-testnet account, run the `#[ignore]`d, env-gated live test). Treat the rails
-as a tested foundation to validate against testnet, not as production-proven.
-The two things that genuinely executed end-to-end are the Python binding and
-the sidecar (real round-trips over a real interpreter and a real socket).
+The core, the rails and the polyglot layer are all in this repo. `make check`
+runs two passes and both are gates: **167 offline tests** in the default
+workspace build, and **547 more** once every processor feature is compiled in
+(`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
+--features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
+chain and no processor.
+
+What that does *not* mean: no rail here has been run against a live network or
+a live merchant account from this repo — each says so plainly in its own
+README, and the crypto rails name the exact step to validate (fund a testnet
+account, run the `#[ignore]`d, env-gated live test). Treat the rails as a
+tested foundation to validate against testnet/sandbox, not as
+production-proven. The things that genuinely executed end-to-end are the
+Python binding, the Go binding and the sidecar — real round-trips over a real
+interpreter, real cgo, and a real socket. CI enforces the two Rust passes and
+the Python one; the Go binding is run by hand (it needs `uniffi-bindgen-go` at
+a pinned tag plus a C toolchain), so "executed" there means executed, not
+enforced.
 
 ## The idea
 
@@ -45,7 +54,7 @@ the full reasoning.
 ## The seam
 
 ```
-patala-core/   trait + capability model + FailoverRail + MockRail + errors + receipt
+patala-core/   trait + capability model + FailoverRail + MockRail + errors + receipt + webhook
 ```
 
 Every consumer of patala programs against one trait — `PaymentRail` — and one
@@ -67,27 +76,48 @@ never does. There is no balance table, no payout queue, no ledger.
 
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
-| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` | — | 13 | offline by design |
-| `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 41 (+1 gated) | **no — testnet step in its README** |
-| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) | **no — testnet step in its README** |
-| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 18 | **no — needs a live instance** |
-| `patala-py` | one UniFFI surface → Python now, Swift/Kotlin/wasm later | — | ✓ ran under Python 3.13 | executed |
-| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | ✓ HTTP round-trip | executed |
+| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam | — | 19 + 1 doctest | offline by design |
+| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 533 (all features) | **no — no live merchant account** |
+| `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 41 (+1 gated) + 1 doctest | **no — testnet step in its README** |
+| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) + 1 doctest | **no — testnet step in its README** |
+| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 20 | **no — needs a live instance** |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 + ✓ ran under Python 3.13 and Go 1.25 | executed |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 8 (HTTP round-trips) | executed |
 
-**Fiat coverage is Hyperswitch's coverage, plus a direct-adapter escape
-hatch.** Any processor Hyperswitch supports is a config value — **Paystack is
-supported** (confirmed in Hyperswitch's connector list), so it's free through
-the adapter. A processor Hyperswitch lacks — **PayFast**, for example
-(confirmed absent) — gets its own thin `patala-<processor>` rail against the
-same `PaymentRail` trait. Nothing is ever locked out.
+One honest caveat on that table: **the sidecar's rail registry is still
+mock-only.** The server, its auth, its error mapping and all five endpoints
+are real and exercised over a real socket, but `default_registry()` registers
+exactly one rail — `"mock"`. Reaching a Solana, Stellar, Hyperswitch or fiat
+rail *through the sidecar* needs the per-rail registration its
+`src/registry.rs` documents and does not yet have. Everything else in the
+table is built code with tests behind it.
+
+**Fiat coverage is Hyperswitch's coverage, plus twenty direct adapters.** Any
+processor Hyperswitch supports is a config value — **Paystack is supported**
+(confirmed in Hyperswitch's connector list), so it's free through the adapter.
+A processor Hyperswitch lacks — **PayFast**, for example (confirmed absent) —
+gets a direct adapter in `patala-fiat` against the same `PaymentRail` trait;
+PayFast is one of the twenty that exist today. Nothing is ever locked out.
 
 Every rail beyond the mock is feature-gated and optional; the default build of
 this repo stays fully offline no matter how many rails exist here.
 
+## One trait, both directions
+
+Every consumer — Rust, Python, Go, or an HTTP client talking to the sidecar —
+gets the same six methods on `PaymentRail`: `id`, `capabilities`, `quote`,
+`charge`, `verify`, and `verify_webhook`. The last one is the *push* path:
+`verify` is for when you hold a receipt and want it re-derived; `verify_webhook`
+is for when the processor calls you and you need to know the delivery is
+genuine. Both live on the trait deliberately — anything beside it is invisible
+to every consumer that dispatches through `dyn PaymentRail`, which leaves them
+able only to poll.
+
 ## Deferred (designed for, not built)
 
-Any-stablecoin mint generalization, an Algorand rail, gateway-discovery
-phonebook, and a direct `patala-payfast` rail. See `PATALA.md` §4.
+Any-stablecoin mint generalization, an Algorand rail, and a gateway-discovery
+phonebook. See `PATALA.md` §4. (A direct PayFast rail was on this list; it now
+exists, as `patala-fiat`'s `payfast` adapter.)
 
 ## License
 

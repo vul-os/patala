@@ -43,7 +43,7 @@ Create `src/<provider>/` with the same five files as `stripe`/`paystack`:
 | `models.rs` | Wire DTOs (request/response shapes) + amount conversion helpers + error classification | private (`mod models;`) |
 | `proof.rs` | What goes in `Receipt::proof` | private (`mod proof;`) |
 | `rail.rs` | `<Provider>Rail`, the actual `PaymentRail` impl | `pub` |
-| `webhook.rs` | Free function(s) to verify+parse a webhook (NOT a trait method) | `pub` |
+| `webhook.rs` | Free function(s) to verify+parse a webhook; `rail.rs`'s `verify_webhook` wraps them | `pub` |
 
 Then:
 
@@ -87,7 +87,7 @@ pub trait PaymentRail: Send + Sync {
 | — (no cackle equivalent) | `PaymentRail::quote(&self, req) -> Result<Quote>` | Cackle has NO pre-charge fee-quote concept anywhere in this package. Every existing rail (`manual`, `stripe`, `paystack`, and `patala-hyperswitch`) returns an honest `fee_minor: 0` quote rather than fabricating a number it cannot obtain. Do the same unless the specific provider's docs actually expose a quote/estimate endpoint — if so, use it and say so. |
 | `Begin(ctx, Order) (Charge, error)` | `PaymentRail::charge(&self, req: &PayRequest) -> Result<Receipt>` | See §3 (the `Order`/`PayRequest` field gap) and §5 (honest pending lifecycle). |
 | `Verify(ctx, reference string) (Result, error)` | `PaymentRail::verify(&self, receipt: &Receipt) -> Result<bool>` | Cackle's `Verify` takes a bare string and returns a rich `Result` (status/amount/currency/paid-at/event-id). `patala_core::verify` takes the WHOLE `Receipt` you issued and returns only `bool`. See §6. |
-| `Webhook(ctx, *http.Request) (Result, error)` | **NOT a trait method** — a free function in your `webhook.rs`, e.g. `pub fn verify_and_parse(secret: &str, raw_body: &[u8], signature_header: &str, ...) -> Result<YourWebhookEvent, YourWebhookError>`. | `PaymentRail` has no webhook concept at all. Every existing adapter (`patala-hyperswitch::webhook::verify_webhook_signature`, this crate's `stripe::webhook`/`paystack::webhook`) exposes webhook verification as a plain function outside the trait, for callers who want push delivery instead of polling `verify()`. |
+| `Webhook(ctx, *http.Request) (Result, error)` | `PaymentRail::verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent>`, wrapping a free function in your `webhook.rs`, e.g. `pub fn verify_and_parse(secret: &str, raw_body: &[u8], signature_header: &str, ...) -> Result<YourWebhookEvent, YourWebhookError>`. | **Both, in that order.** The free function stays pure (it takes exactly what the scheme signs, no `&self`) so it is directly testable; the trait method is what makes it reachable — a consumer dispatching through `dyn PaymentRail` (the UniFFI binding, the sidecar) cannot see a free function at all. Pull the signature header off `delivery` by name, map your event onto `WebhookEvent::settlement(..)`, and use `WebhookEvent::unconfirmed(..)` if your scheme authenticates a notification without asserting settlement. See §6b. |
 | (no cackle `Refund` method exists — `Provider` interface has none) | `PaymentRail::refund(&self, receipt: &Receipt) -> Result<Receipt>` | See §7 — this is new code for almost every provider, not a port. |
 
 ## 3. `Order`/`Charge`/`Result` vs `PayRequest`/`Quote`/`Receipt`
@@ -264,6 +264,67 @@ own event struct (see `stripe::webhook::StripeWebhookEvent`/
 CALLER's job (keyed on `(rail_id, event_id)`), same as cackle's own
 `HandleWebhook` orchestration is a layer above `Provider.Webhook` itself.
 
+## 6b. `verify_webhook()` — the push path, on the trait
+
+`verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent>`
+is the trait's push counterpart to `verify()`. Implement it on your rail as
+a thin wrapper over the pure function in your `webhook.rs`:
+
+```rust
+async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+    let event = crate::<provider>::webhook::verify_and_parse(
+        &self.config.webhook_secret,
+        &delivery.raw_body,
+        delivery.header_or_empty("X-Your-Signature"),
+    )
+    .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+    Ok(WebhookEvent::settlement(
+        &self.id,
+        event.event_id,
+        event.reference,
+        event.settled,
+        event.amount_minor,
+        event.currency,
+    ))
+}
+```
+
+Rules:
+
+1. **Fail closed as `Err`, never as a negative status.** A missing,
+   malformed, stale or mismatched signature is `Err(Error::InvalidRequest)`.
+   Returning `Ok` means "this delivery genuinely came from my processor".
+   Reserve `Err(Error::Rail)` for a rail that could not perform the check at
+   all (PayPal's verification is a live API call, so it has both).
+2. **Never claim settlement you did not establish.** If your scheme
+   authenticates a notification that names an object and nothing else
+   (`btcpay`, `coinbasecommerce`, `opennode`, `lnbits`), return
+   `WebhookEvent::unconfirmed(&self.id, event_id, object_id)` —
+   `WebhookStatus::Unconfirmed`, not `settled: false`. `NotSettled` means
+   "the rail established this has NOT settled"; `Unconfirmed` means "the
+   rail cannot say". Collapsing them is the exact dishonesty
+   `WebhookStatus` exists to prevent.
+3. **Read headers off `delivery` by name**, case-insensitively
+   (`delivery.header_or_empty("Cko-Signature")`). Timestamp tolerances read
+   `delivery.now_unix`, never the system clock, so a delivery is
+   reproducible in a test. A scheme whose secret is in the URL rather than a
+   header (`lnbits`) reads `delivery.query_param("secret")`.
+4. **`event_id` must be non-empty and stable** across redelivery of the same
+   event — a caller cannot suppress a duplicate it cannot name. Replay-dedup
+   itself stays the CALLER's job, keyed on `(rail_id, event_id)`, exactly as
+   cackle's `HandleWebhook`/`SeenStore` sits above `Provider.Webhook`.
+5. If your processor has no push delivery at all, **leave the trait default**
+   (`Err(Error::Unsupported("verify_webhook"))`) — see `manual.rs`. Do not
+   write a stub that appears to work.
+
+Add your adapter to `tests/webhook_coverage.rs`'s `adapters()` list, naming
+the headers your scheme documents. That file asserts, for every compiled-in
+adapter, that `verify_webhook` is implemented (not the trait default), that a
+forged delivery is rejected, and that the header names you listed are the ones
+your rail actually reads. `./scripts/check-features.sh` fails the build if a
+`src/<provider>/` directory exists with no entry there, so a new adapter
+cannot silently under-run the harness.
+
 ## 7. `refund()` — almost always NEW code, not a port
 
 Check cackle's `Provider` interface (`provider.go`): **it has no `Refund`
@@ -436,3 +497,7 @@ Rules:
 - [ ] `src/lib.rs` updated: `#[cfg(feature = "<provider>")] pub mod
       <provider>;` + re-exports, matching the `stripe`/`paystack` pattern.
 - [ ] `Cargo.toml`: new feature added, new deps `optional = true` under it.
+- [ ] `rail.rs` implements `verify_webhook` (or documents why the trait
+      default is correct), and `tests/webhook_coverage.rs` has a
+      `#[cfg(feature = "<provider>")]` entry constructing your rail.
+      `./scripts/check-features.sh` fails the build if it does not.

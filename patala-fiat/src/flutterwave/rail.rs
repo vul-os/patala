@@ -40,9 +40,12 @@
 //!   didn't even parse as JSON". This port follows that same convention for
 //!   consistency with the rest of the crate; it does not change WHAT is
 //!   trusted, only how the "don't trust it" verdict is spelled.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::flutterwave::webhook::verify_and_parse`], not a trait method —
-//!   same reasoning as every other adapter in this crate.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::flutterwave::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - **Not ported**: cackle's tests that exercise `HandleWebhook`'s replay
 //!   protection and reconciliation (`TestFlutterwaveWebhook_ReplayedThroughHandleWebhook`,
 //!   `..._AmountMismatchFailsClosed`, `..._CurrencyMismatchFailsClosed`).
@@ -65,7 +68,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::flutterwave::config::FlutterwaveConfig;
@@ -349,6 +353,28 @@ impl PaymentRail for FlutterwaveRail {
             return Ok(false);
         }
         Ok(true)
+    }
+
+    /// Verify a Flutterwave webhook delivery — see
+    /// [`crate::flutterwave::webhook::verify_and_parse`]. The `verif-hash`
+    /// header is a STATIC shared secret, not a keyed MAC over the body:
+    /// that weakness is Flutterwave's, preserved faithfully rather than
+    /// silently "improved" into a scheme Flutterwave does not send.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::flutterwave::webhook::verify_and_parse(
+            &self.config.webhook_hash,
+            &delivery.raw_body,
+            delivery.header_or_empty("verif-hash"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        ))
     }
 }
 

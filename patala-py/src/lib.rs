@@ -278,6 +278,87 @@ impl From<Receipt> for CoreReceipt {
     }
 }
 
+/// Mirrors [`patala_core::WebhookDelivery`] — one inbound webhook delivery,
+/// as received.
+///
+/// `raw_body` is bytes, not a string, and must be the **literal** request
+/// body: every scheme signs what was actually sent, so a body that has been
+/// through a JSON round-trip on the caller's side is no longer the thing the
+/// processor signed. Header names are matched case-insensitively, so a caller
+/// can forward whatever casing its own HTTP stack produced.
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct WebhookDelivery {
+    pub raw_body: Vec<u8>,
+    pub headers: std::collections::HashMap<String, String>,
+    /// Query-string parameters. Only schemes that put their secret in the
+    /// URL rather than a header (LNbits) read this; pass an empty map
+    /// otherwise.
+    #[uniffi(default = None)]
+    pub query: Option<std::collections::HashMap<String, String>>,
+    /// Unix seconds to check replay windows against. Pass the current time;
+    /// it is an explicit parameter, not a system-clock read, so a caller can
+    /// reproduce a delivery exactly.
+    pub now_unix: u64,
+}
+
+impl From<WebhookDelivery> for patala_core::WebhookDelivery {
+    fn from(d: WebhookDelivery) -> Self {
+        let core =
+            patala_core::WebhookDelivery::new(d.raw_body, d.now_unix).with_headers(d.headers);
+        match d.query {
+            Some(q) => core.with_query(q),
+            None => core,
+        }
+    }
+}
+
+/// Mirrors [`patala_core::WebhookStatus`]. Three states, never a bool — see
+/// the core type's docs for why "the rail says this did not settle" and "the
+/// rail cannot say" must not collapse.
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebhookStatus {
+    Settled,
+    NotSettled,
+    Unconfirmed,
+}
+
+impl From<patala_core::WebhookStatus> for WebhookStatus {
+    fn from(s: patala_core::WebhookStatus) -> Self {
+        match s {
+            patala_core::WebhookStatus::Settled => WebhookStatus::Settled,
+            patala_core::WebhookStatus::NotSettled => WebhookStatus::NotSettled,
+            patala_core::WebhookStatus::Unconfirmed => WebhookStatus::Unconfirmed,
+        }
+    }
+}
+
+/// Mirrors [`patala_core::WebhookEvent`]. Receiving one at all means the rail
+/// authenticated the delivery; `status` is what the delivery then claims.
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct WebhookEvent {
+    pub rail_id: String,
+    pub event_id: String,
+    pub reference: String,
+    pub object_id: String,
+    pub status: WebhookStatus,
+    pub amount_minor: u64,
+    pub currency: String,
+}
+
+impl From<patala_core::WebhookEvent> for WebhookEvent {
+    fn from(e: patala_core::WebhookEvent) -> Self {
+        Self {
+            rail_id: e.rail_id,
+            event_id: e.event_id,
+            reference: e.reference,
+            object_id: e.object_id,
+            status: e.status.into(),
+            amount_minor: e.amount_minor,
+            currency: e.currency,
+        }
+    }
+}
+
 /// Mirrors [`patala_core::Error`]. `verify` failing closed is expressed the
 /// same way it is in the core crate: as `Ok(false)`, never as a variant
 /// here — see `patala_core::error` module docs.
@@ -384,6 +465,27 @@ impl PatalaRail {
         let core_receipt: CoreReceipt = receipt.into();
         runtime()
             .block_on(self.inner.verify(&core_receipt))
+            .map_err(PatalaError::from)
+    }
+
+    /// Authenticate an inbound webhook delivery from this rail's processor —
+    /// the push counterpart to [`Self::verify`], and the reason this method
+    /// exists at all: webhook verification used to live only in
+    /// provider-specific free functions, which a binding cannot reach, so a
+    /// consumer on this side of the FFI could confirm a payment **only** by
+    /// polling `verify`.
+    ///
+    /// Fails closed: a missing, malformed, stale or mismatched signature
+    /// raises, and a rail whose processor has no push delivery (the mock,
+    /// `manual`) raises `Unsupported`. A returned [`WebhookEvent`] means the
+    /// rail is satisfied the delivery genuinely came from its processor;
+    /// gate entitlement on `status == Settled`, and reconcile
+    /// `amount_minor`/`currency` against your own stored order first.
+    pub fn verify_webhook(&self, delivery: WebhookDelivery) -> Result<WebhookEvent, PatalaError> {
+        let core_delivery: patala_core::WebhookDelivery = delivery.into();
+        runtime()
+            .block_on(self.inner.verify_webhook(&core_delivery))
+            .map(WebhookEvent::from)
             .map_err(PatalaError::from)
     }
 }
@@ -596,6 +698,29 @@ mod tests {
             !rail.verify(receipt).expect("verify"),
             "a tampered receipt must never verify, even through FFI"
         );
+    }
+
+    #[test]
+    fn verify_webhook_on_a_rail_without_push_delivery_is_unsupported_not_ok() {
+        // The mock has no processor and so no push delivery. It must raise
+        // Unsupported across the FFI boundary -- never return an event a
+        // caller could mistake for an authenticated delivery.
+        let rail = PatalaRail::new_mock(
+            "mock".into(),
+            RailClass::NonCustodialFinal,
+            vec!["USDC".into()],
+            0,
+            false,
+        );
+        let err = rail
+            .verify_webhook(WebhookDelivery {
+                raw_body: b"{}".to_vec(),
+                headers: std::collections::HashMap::new(),
+                query: None,
+                now_unix: 1_700_000_000,
+            })
+            .expect_err("mock has no webhook surface");
+        assert!(matches!(err, PatalaError::Unsupported { .. }));
     }
 
     #[test]

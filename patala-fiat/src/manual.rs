@@ -39,12 +39,12 @@
 //!   methods in cackle too (not part of the `Provider` interface there
 //!   either).
 //! - cackle's `Webhook` (unconditionally `ErrManualNoWebhook`) has nothing to
-//!   port: `PaymentRail` has no webhook method at all — webhook handling is
-//!   adapter-specific plumbing OUTSIDE the trait (see `patala-hyperswitch`'s
-//!   free-standing `webhook::verify_webhook_signature`, and this crate's own
-//!   `stripe`/`paystack` webhook modules). `manual` simply has no such
-//!   function, which is the same "unconditionally unsupported" fact
-//!   expressed by absence rather than by an error return.
+//!   port: an operator marking an order paid by hand has no processor and so
+//!   no push delivery to verify. This rail therefore leaves
+//!   [`patala_core::PaymentRail::verify_webhook`] at its trait default,
+//!   `Err(Error::Unsupported("verify_webhook"))` — the same
+//!   "unconditionally unsupported" fact cackle spells with a sentinel
+//!   error, spelled here with the trait's own one.
 //! - `refund()` uses the trait's default `Err(Error::Unsupported(...))` —
 //!   cackle's manual provider has no processor to call a refund against
 //!   (`Capabilities.Refunds` defaults to `false`, unset in

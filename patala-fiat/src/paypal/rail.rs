@@ -80,7 +80,8 @@ use serde::Deserialize;
 use serde_json::json;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::paypal::config::PayPalConfig;
@@ -617,6 +618,49 @@ impl PaymentRail for PayPalRail {
             .to_bytes(),
             settled_at_unix: now_unix(),
         })
+    }
+
+    /// Verify a PayPal webhook delivery — delegates to
+    /// [`Self::handle_webhook`], which calls PayPal's own
+    /// `/v1/notifications/verify-webhook-signature` endpoint (PayPal signs
+    /// with a rotating certificate chain, so unlike every other adapter here
+    /// verification is a network call, not a shared-secret HMAC).
+    ///
+    /// Headers: the five `PAYPAL-TRANSMISSION-ID`,
+    /// `PAYPAL-TRANSMISSION-TIME`, `PAYPAL-TRANSMISSION-SIG`,
+    /// `PAYPAL-CERT-URL`, `PAYPAL-AUTH-ALGO`. The parser only produces an
+    /// event for `PAYMENT.CAPTURE.COMPLETED`, so a delivery that reaches
+    /// this point is settled.
+    ///
+    /// A transport/endpoint failure surfaces as [`Error::Rail`] (this rail
+    /// could not perform the check) and a rejected or malformed delivery as
+    /// [`Error::InvalidRequest`] — the same split the trait draws between an
+    /// operational failure and a bad request.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let headers = crate::paypal::webhook::PayPalWebhookHeaders {
+            transmission_id: delivery.header_or_empty("PAYPAL-TRANSMISSION-ID"),
+            transmission_time: delivery.header_or_empty("PAYPAL-TRANSMISSION-TIME"),
+            cert_url: delivery.header_or_empty("PAYPAL-CERT-URL"),
+            auth_algo: delivery.header_or_empty("PAYPAL-AUTH-ALGO"),
+            transmission_sig: delivery.header_or_empty("PAYPAL-TRANSMISSION-SIG"),
+        };
+        let event = self
+            .handle_webhook(&delivery.raw_body, headers)
+            .await
+            .map_err(|e| match e {
+                crate::paypal::PayPalWebhookError::UnexpectedStatus(_) => {
+                    Error::Rail(e.to_string())
+                }
+                other => Error::InvalidRequest(other.to_string()),
+            })?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            true,
+            event.amount_minor,
+            event.currency,
+        ))
     }
 }
 

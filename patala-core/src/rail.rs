@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::capabilities::{RailCapabilities, Settlement};
 use crate::error::{Error, Result};
+use crate::webhook::{WebhookDelivery, WebhookEvent};
 
 /// A request to move money on some rail.
 ///
@@ -135,5 +136,30 @@ pub trait PaymentRail: Send + Sync {
     /// the default, so a rail only needs to override it if it genuinely can.
     async fn refund(&self, _receipt: &Receipt) -> Result<Receipt> {
         Err(Error::Unsupported("refund"))
+    }
+
+    /// Authenticate an inbound webhook delivery from this rail's processor
+    /// and report what it says — the *push* counterpart to [`Self::verify`].
+    ///
+    /// **Must fail closed**: a missing, malformed, stale or mismatched
+    /// signature is an `Err`, never an `Ok` with a negative status. Reaching
+    /// `Ok` means this rail is satisfied the delivery genuinely came from its
+    /// own processor; what that delivery then *claims* is
+    /// [`WebhookEvent::status`], and a scheme that authenticates a
+    /// notification without asserting anything about money must report
+    /// [`crate::WebhookStatus::Unconfirmed`] rather than pretending to know.
+    ///
+    /// Rails whose processor has no push delivery at all — and the offline
+    /// [`crate::MockRail`] — return [`Error::Unsupported`] rather than a stub
+    /// that appears to work. That is the default, so a rail only overrides
+    /// this if it genuinely verifies something.
+    ///
+    /// This lives on the trait, and not beside each rail as a free function,
+    /// because a free function is unreachable from every non-Rust consumer:
+    /// the UniFFI surface and the sidecar both dispatch through
+    /// `dyn PaymentRail`, so anything not on the trait cannot be exposed to
+    /// Python, Go, Swift or an HTTP client at all.
+    async fn verify_webhook(&self, _delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        Err(Error::Unsupported("verify_webhook"))
     }
 }

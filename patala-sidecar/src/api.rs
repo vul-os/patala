@@ -9,14 +9,15 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
+    body::Bytes,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use serde::Serialize;
 
-use patala_core::{Error as CoreError, PayRequest, Receipt};
+use patala_core::{Error as CoreError, PayRequest, Receipt, WebhookDelivery, WebhookEvent};
 
 use crate::registry::RailRegistry;
 
@@ -169,4 +170,58 @@ pub async fn verify(
     let rail = lookup(&state, &rail_id)?;
     let valid = rail.verify(&receipt).await?;
     Ok(Json(VerifyResponse { valid }))
+}
+
+/// `POST /v1/rails/:rail_id/webhook` — authenticate an inbound webhook
+/// delivery from a rail's processor. **The push counterpart to
+/// `verify_receipt`**, and the reason any of this is reachable at all: a rail's
+/// webhook verification used to live in provider-specific free functions,
+/// which nothing dispatching through `dyn PaymentRail` could see, so a
+/// non-Rust consumer could confirm a payment only by polling.
+///
+/// This handler is deliberately **not** `Json<...>`: it takes the request
+/// body as raw [`Bytes`] and forwards them untouched. Every webhook scheme
+/// signs the exact bytes the processor sent, so decoding and re-encoding the
+/// body here would break the signature of every genuine delivery. Forward the
+/// processor's request to this endpoint verbatim — same body, same headers,
+/// same query string — and this rail sees what the processor signed.
+///
+/// A rail with no push delivery (the offline `"mock"`, `patala-fiat`'s
+/// `manual`) answers `501` via [`CoreError::Unsupported`]; a delivery that
+/// fails to authenticate is a `400`. A `200` means the rail is satisfied the
+/// delivery genuinely came from its processor — read `status` to learn what
+/// it claims, and gate entitlement on `"Settled"` only.
+pub async fn webhook(
+    State(state): State<AppState>,
+    Path(rail_id): Path<String>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<WebhookEvent>, ApiError> {
+    let rail = lookup(&state, &rail_id)?;
+
+    // A header whose value is not valid UTF-8 is dropped rather than
+    // lossily transcoded: a mangled signature that still *looks* present
+    // would turn a clear "missing header" rejection into a confusing
+    // "invalid signature" one. No signature scheme in this workspace uses a
+    // non-ASCII header value.
+    let forwarded = headers
+        .iter()
+        .filter_map(|(name, value)| value.to_str().ok().map(|v| (name.as_str(), v.to_string())));
+
+    let delivery = WebhookDelivery::new(body.to_vec(), now_unix())
+        .with_headers(forwarded)
+        .with_query(query);
+
+    Ok(Json(rail.verify_webhook(&delivery).await?))
+}
+
+/// Current unix time in whole seconds — the `now` a rail checks its replay
+/// window against. Read once, here, so a delivery's tolerance check does not
+/// depend on how long a handler took.
+fn now_unix() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }

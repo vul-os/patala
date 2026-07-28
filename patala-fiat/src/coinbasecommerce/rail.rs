@@ -45,10 +45,12 @@
 //!   `opennode`'s equivalent branch, which maps an unrecognised status to
 //!   the ordinary "not paid" `Failed` case — this genuine per-adapter
 //!   difference in cackle is preserved, not smoothed over).
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::coinbasecommerce::webhook::verify_and_extract`] — see that
-//!   module's docs for why it does not itself refetch (same pattern as
-//!   `btcpay`/`lnbits`/`opennode`).
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::coinbasecommerce::webhook::verify_and_extract`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **left as the trait default (`Error::Unsupported`)**, same
 //!   reasoning as `opennode::rail`'s — cackle's `Capabilities.Refunds:
 //!   false` has no "supports it, not implemented" signal here either.
@@ -56,7 +58,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::coinbasecommerce::config::CoinbaseCommerceConfig;
@@ -310,6 +313,28 @@ impl PaymentRail for CoinbaseCommerceRail {
 
     // refund(): left as the trait default (Error::Unsupported). See module
     // docs for why this is honest rather than a fabricated implementation.
+
+    /// Verify a Coinbase Commerce webhook delivery (HMAC-SHA256 over the raw
+    /// body, header `X-CC-Webhook-Signature`) — see
+    /// [`crate::coinbasecommerce::webhook::verify_and_extract`].
+    ///
+    /// Reports [`patala_core::WebhookStatus::Unconfirmed`], never a
+    /// settlement: the webhook names WHICH charge to re-check and nothing
+    /// more. Take [`WebhookEvent::object_id`], find your stored [`Receipt`]
+    /// for that charge, and call [`Self::verify`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::coinbasecommerce::webhook::verify_and_extract(
+            &self.config.webhook_secret,
+            &delivery.raw_body,
+            delivery.header_or_empty("X-CC-Webhook-Signature"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::unconfirmed(
+            &self.id,
+            event.event_id,
+            event.charge_id,
+        ))
+    }
 }
 
 #[cfg(test)]

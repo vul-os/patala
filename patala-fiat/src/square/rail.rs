@@ -43,9 +43,12 @@
 //!   NOT Cackle's own order reference, same caveat cackle documents for
 //!   `stripe.go`/`checkoutcom.go`'s `Verify`) maps to [`PaymentRail::verify`]
 //!   once `proof.payment_id` is resolved, as described above.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::square::webhook::verify_and_parse`], NOT a trait method —
-//!   same reasoning as every other adapter here.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::square::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **THIS adapter gets a real implementation**, unlike
 //!   payu/razorpay/xendit in this crate — cackle's
 //!   `SquareProvider.Capabilities().Refunds: true` is a genuine
@@ -62,7 +65,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::square::config::SquareConfig;
@@ -449,6 +453,37 @@ impl PaymentRail for SquareRail {
             proof: Vec::new(),
             settled_at_unix: now_unix(),
         })
+    }
+
+    /// Verify a Square webhook delivery (HMAC-SHA256 over
+    /// `notification_url + raw_body`, header
+    /// `x-square-hmacsha256-signature`) — see
+    /// [`crate::square::webhook::verify_and_parse`]. The parser only
+    /// produces an event for a `payment.updated` whose payment is
+    /// `COMPLETED`, so a delivery that reaches this point is settled.
+    ///
+    /// The resolved `payment_id` is carried on
+    /// [`WebhookEvent::object_id`] — feed it into
+    /// [`crate::square::proof::ChargeProof::with_resolved_payment_id`] so a
+    /// later [`Self::verify`] can confirm this payment directly.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::square::webhook::verify_and_parse(
+            &self.config.webhook_signature_key,
+            &self.config.notification_url,
+            &delivery.raw_body,
+            delivery.header_or_empty("x-square-hmacsha256-signature"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        let payment_id = event.payment_id.clone();
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            true,
+            event.amount_minor,
+            event.currency,
+        )
+        .with_object_id(payment_id))
     }
 }
 

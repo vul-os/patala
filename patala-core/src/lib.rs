@@ -6,11 +6,12 @@
 //!
 //! | Piece | What it is |
 //! |---|---|
-//! | [`PaymentRail`] | The trait — `id`, `capabilities`, `quote`, `charge`, `verify`, `refund`. |
+//! | [`PaymentRail`] | The trait — `id`, `capabilities`, `quote`, `charge`, `verify`, `refund`, `verify_webhook`. |
 //! | [`RailClass`] | `CustodialReversible` \| `NonCustodialFinal` — the settlement class, in the type. |
 //! | [`RailCapabilities`] | class, reversible, requires_kyc, holds_funds, currencies, settlement. |
 //! | [`FailoverRail`] | Tries wrapped rails in order; never crosses [`RailClass`] silently. |
 //! | [`MockRail`] | The offline default — deterministic, dependency-free. |
+//! | [`WebhookDelivery`] / [`WebhookEvent`] | The push side: raw bytes + headers in, an authenticated [`WebhookStatus`] out. |
 //!
 //! Nothing outside a rail's own implementation names a provider-specific
 //! type. Every consumer of this crate programs against [`PaymentRail`] and
@@ -73,12 +74,14 @@ mod error;
 mod failover;
 mod mock;
 mod rail;
+mod webhook;
 
 pub use capabilities::{RailCapabilities, RailClass, Settlement};
 pub use error::{Error, Result};
 pub use failover::{FailoverRail, InOrderPolicy, RoutingPolicy};
 pub use mock::MockRail;
 pub use rail::{PayRequest, PaymentRail, Quote, Receipt};
+pub use webhook::{WebhookDelivery, WebhookEvent, WebhookStatus};
 
 /// Current unix time in whole seconds. Used for quote expiry / receipt
 /// timestamps in [`MockRail`]; real rails derive their own from chain/processor

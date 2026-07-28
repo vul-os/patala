@@ -51,7 +51,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::payfast::config::PayFastConfig;
@@ -287,6 +288,27 @@ impl PaymentRail for PayFastRail {
     async fn verify(&self, _receipt: &Receipt) -> Result<bool> {
         Err(Error::Unsupported(
             "verify (payfast has no polling endpoint; use handle_itn instead)",
+        ))
+    }
+
+    /// Verify a PayFast ITN — delegates to [`Self::handle_itn`], which
+    /// performs the signature check AND PayFast's mandatory
+    /// server-to-server `validate` round trip. A signature-only verdict is
+    /// never returned: if the confirmation call does not come back `VALID`,
+    /// this is an `Err`.
+    ///
+    /// PayFast signs form fields in the body (MD5 over the ordered,
+    /// url-encoded set plus the optional passphrase) — there is no signature
+    /// header. This rail is ZAR-only, so a settled ITN is reported in ZAR.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = self.handle_itn(&delivery.raw_body).await?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            "ZAR",
         ))
     }
 }

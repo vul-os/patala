@@ -35,8 +35,21 @@ pub trait PaymentRail {
     async fn verify(&self, receipt: &Receipt) -> Result<bool>;     // fail-closed
     // Optional — a rail that can't do it returns Unsupported, never fakes it:
     async fn refund(&self, receipt: &Receipt) -> Result<Receipt> { Err(Error::Unsupported) }
+    // The push path: the processor calls YOU. Fail-closed — an unauthentic
+    // delivery is an Err, never an Ok with a negative status.
+    async fn verify_webhook(&self, d: &WebhookDelivery) -> Result<WebhookEvent> { Err(Error::Unsupported) }
 }
 ```
+
+`verify` and `verify_webhook` are the pull and push halves of the same
+question. Both are on the trait on purpose: webhook signature verification is
+provider-specific code, and if it sits *beside* a rail rather than on the
+trait, every consumer that dispatches through `dyn PaymentRail` — the UniFFI
+binding, the sidecar, anything not written in Rust — cannot reach it and is
+left able only to poll. `WebhookEvent::status` is three-valued, not a bool:
+several real schemes authenticate a notification without asserting anything
+about money, and `Unconfirmed` says exactly that instead of claiming the
+payment did not settle.
 
 Money is always an integer `amount_minor: u64` plus a currency string. Never
 a float, anywhere in this crate.
@@ -83,27 +96,31 @@ that's the point of the seam.
 | **Solana** (`patala-solana`) | `NonCustodialFinal` | SPL-USDC on Solana. Ed25519 — the app's identity key doubles as the wallet key, no mapping table. |
 | **Stellar** (`patala-stellar`) | `NonCustodialFinal` | Native USDC (Stellar Asset), Ed25519 (StrKey). Cheapest measured fees of the two crypto rails. |
 | **Hyperswitch** (`patala-hyperswitch`) | `CustodialReversible` | A thin HTTP client to a **self-hosted Hyperswitch** instance, presenting its whole fiat processor set (Stripe/Paystack/Xendit/… — 100+ connectors) as one rail. Adopts Hyperswitch; does not vendor a single processor SDK. |
+| **Direct fiat adapters** (`patala-fiat`) | `CustodialReversible` | Twenty processors talked to directly, one Cargo feature each: Adyen, BTCPay, Checkout.com, Coinbase Commerce, Flutterwave, iyzico, LNbits, Mercado Pago, Midtrans, Mollie, OpenNode, PayFast, PayPal, Paystack, PayU, Razorpay, Square, Stripe, Xendit, Yoco. Ships the ISO-4217 minor-unit currency table and an always-on offline `manual` rail. |
 
-**Fiat coverage is Hyperswitch's coverage, plus a direct-adapter escape
-hatch.** Any processor Hyperswitch supports is a config value — Paystack is
-confirmed supported, so it's free through the adapter. A processor
-Hyperswitch lacks gets its own thin `patala-<processor>` rail against the
-same `PaymentRail` trait. Nothing is ever locked out.
+**Fiat coverage is Hyperswitch's coverage, plus twenty direct adapters.** Any
+processor Hyperswitch supports is a config value — Paystack is confirmed
+supported, so it's free through the adapter. A processor Hyperswitch lacks
+gets a direct adapter in `patala-fiat` against the same `PaymentRail` trait;
+PayFast, confirmed absent from Hyperswitch, is one of the twenty. Nothing is
+ever locked out.
 
 Every rail beyond the mock is feature-gated and optional; the default build
 of the repo stays fully offline no matter how many rails exist in the tree.
 
 ## The polyglot layer
 
-One Rust core, three ways to consume it, written once:
+One Rust core, four ways to consume it, written once:
 
 - **Rust crate** — direct, for a Rust consumer.
 - **`patala-py`** — a Python binding over UniFFI (not PyO3, so Swift/Kotlin
   and wasm/napi bindings can follow from the same IDL rather than a new
   binding crate per language).
+- **`patala-go`** — the same UniFFI surface, generated for Go (cgo; see that
+  package's README for the honest trade-offs of leaving pure-static Go).
 - **`patala-sidecar`** — a thin local HTTP server over the core (`quote` /
-  `charge` / `verify` as JSON over a loopback socket), for any language with
-  an HTTP client and zero FFI. Binds to `127.0.0.1` only, unconditionally,
+  `charge` / `verify` / `webhook` as JSON over a loopback socket), for any
+  language with an HTTP client and zero FFI. Binds to `127.0.0.1` only, unconditionally,
   and refuses to start without `PATALA_SIDECAR_TOKEN` set — there is no
   auto-generated fallback and no unauthenticated payment route besides
   `/healthz`.

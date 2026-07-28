@@ -35,11 +35,12 @@
 //!   Core API) maps to [`PaymentRail::verify`], keyed on `Receipt::reference`
 //!   directly — Midtrans's own tracking key IS `order_id`, which cackle's
 //!   `Begin` always sets to the caller's own reference (see `proof.rs`).
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::midtrans::webhook::verify_and_parse`] — see that module's
-//!   docs on why, unlike `iyzico`/`payfast`, this one CAN stay a pure
-//!   function (the signature is a plain digest over fields already present
-//!   in the notification body, no network round trip needed).
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::midtrans::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **not implemented.** Cackle's `Capabilities().Refunds` is
 //!   `false` for Midtrans with no "supports it, not implemented here"
 //!   comment — same reasoning as `flutterwave::rail`/`iyzico::rail`.
@@ -49,7 +50,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::midtrans::config::{MidtransConfig, CORE_API_BASE, SNAP_API_BASE};
@@ -297,6 +299,26 @@ impl PaymentRail for MidtransRail {
             return Ok(false);
         }
         Ok(true)
+    }
+
+    /// Verify a Midtrans notification — see
+    /// [`crate::midtrans::webhook::verify_and_parse`]. Midtrans's
+    /// `signature_key` is an unkeyed SHA-512 over
+    /// `order_id + status_code + gross_amount + server_key`, carried in the
+    /// JSON body rather than a header, so this method reads no header at
+    /// all.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event =
+            crate::midtrans::webhook::verify_and_parse(&self.config.server_key, &delivery.raw_body)
+                .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        ))
     }
 }
 

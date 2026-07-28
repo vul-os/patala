@@ -67,7 +67,8 @@ use serde::{Deserialize, Serialize};
 use sha1::Digest;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::iyzico::config::IyzicoConfig;
@@ -424,6 +425,34 @@ impl PaymentRail for IyzicoRail {
             return Ok(false);
         }
         Ok(true)
+    }
+
+    /// Verify an iyzico Checkout Form callback — delegates to
+    /// [`Self::handle_webhook`].
+    ///
+    /// iyzico's callback carries **no signature at all**; the only real
+    /// verification is the same authenticated `retrieveCheckoutForm` round
+    /// trip [`Self::verify`] uses, so this method is honest about being a
+    /// re-fetch rather than a signature check. Header read: `Content-Type`
+    /// (the callback may be form-encoded or JSON).
+    ///
+    /// The callback names a checkout token, not a caller reference, so
+    /// [`WebhookEvent::reference`] is empty and the token is on
+    /// [`WebhookEvent::object_id`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let outcome = self
+            .handle_webhook(delivery.header_or_empty("Content-Type"), &delivery.raw_body)
+            .await?;
+        let token = outcome.token.clone();
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            outcome.token,
+            "",
+            outcome.settled,
+            outcome.amount_minor,
+            outcome.currency,
+        )
+        .with_object_id(token))
     }
 }
 

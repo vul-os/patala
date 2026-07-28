@@ -19,9 +19,121 @@ Run (from the workspace root, after generating bindings — see the README):
 
     PYTHONPATH=patala-py/bindings/python python3 patala-py/examples/smoke_test.py
 """
+import hashlib
+import hmac
+import json
 import sys
 
-from patala_py import PatalaRail, PayRequest, RailClass, PatalaError
+from patala_py import (
+    PatalaError,
+    PatalaRail,
+    PayRequest,
+    RailClass,
+    WebhookDelivery,
+    WebhookStatus,
+)
+
+
+def check_webhook_surface() -> bool:
+    """Verify a real, signed Stripe webhook delivery from Python.
+
+    Skipped unless the cdylib was built with a fiat feature that compiles the
+    Stripe adapter in (`--features fiat-stripe`, or `fiat-all`). Returns
+    whether it ran, so the caller can say so out loud rather than passing
+    silently.
+
+    This is the check that matters most for this surface: webhook
+    verification used to live in Rust free functions outside the trait, which
+    a binding cannot reach at all, so a Python (or Go, or Swift) consumer
+    could only ever confirm a payment by polling `verify`. Everything below
+    runs over ctypes into the compiled Rust — nothing here is mocked.
+    """
+    secret = "whsec_fake_secret_for_unit_tests"
+    now = 1_700_000_000
+
+    if not hasattr(PatalaRail, "new_fiat"):
+        # The whole `fiat` feature is off: `new_fiat` is not in this cdylib.
+        return False
+    try:
+        rail = PatalaRail.new_fiat(
+            "stripe",
+            {
+                "secret_key": "sk_test_from_python_smoke",
+                "webhook_secret": secret,
+                "requires_kyc": "false",
+                "currencies": "USD",
+                "settlement_days": "2",
+                "timeout_secs": "5",
+            },
+        )
+    except PatalaError.InvalidRequest:
+        # `fiat` is on but the Stripe adapter itself was not compiled in;
+        # `new_fiat` reports an unknown provider name that way.
+        return False
+
+    body = json.dumps(
+        {
+            "id": "evt_py_smoke_1",
+            "type": "checkout.session.completed",
+            "data": {
+                "object": {
+                    "id": "cs_py_smoke_1",
+                    "payment_status": "paid",
+                    "amount_total": 5_000,
+                    "currency": "usd",
+                    "client_reference_id": "py-smoke-order-webhook",
+                }
+            },
+        },
+        separators=(",", ":"),
+    ).encode()
+
+    signature = hmac.new(
+        secret.encode(), f"{now}.".encode() + body, hashlib.sha256
+    ).hexdigest()
+    delivery = WebhookDelivery(
+        raw_body=body,
+        headers={"Stripe-Signature": f"t={now},v1={signature}"},
+        query=None,
+        now_unix=now,
+    )
+
+    event = rail.verify_webhook(delivery)
+    assert event.rail_id == "stripe", f"unexpected rail_id: {event.rail_id!r}"
+    assert event.event_id == "evt_py_smoke_1", "event_id is the replay-dedup key"
+    assert event.reference == "py-smoke-order-webhook"
+    assert event.status == WebhookStatus.SETTLED, f"unexpected status: {event.status!r}"
+    assert isinstance(event.amount_minor, int), "amount_minor must be an int, never a float"
+    assert event.amount_minor == 5_000
+    assert event.currency == "USD"
+    print(
+        f"webhook OK: authenticated from Python, status={event.status}, "
+        f"amount_minor={event.amount_minor} (int), reference={event.reference}"
+    )
+
+    # A tampered body must fail closed — the same bytes no longer match.
+    tampered = WebhookDelivery(
+        raw_body=body.replace(b"5000", b"1"),
+        headers={"Stripe-Signature": f"t={now},v1={signature}"},
+        query=None,
+        now_unix=now,
+    )
+    try:
+        rail.verify_webhook(tampered)
+        raise AssertionError("a tampered webhook delivery must never verify")
+    except PatalaError.InvalidRequest:
+        pass
+
+    # A rail with no push delivery raises rather than inventing an event.
+    manual = PatalaRail.new_fiat("manual", {})
+    try:
+        manual.verify_webhook(delivery)
+        raise AssertionError("manual has no processor and must report unsupported")
+    except PatalaError.Unsupported:
+        pass
+
+    print("webhook OK: tampered delivery rejected; `manual` reports unsupported")
+    return True
 
 
 def main() -> None:
@@ -173,6 +285,24 @@ def main() -> None:
             "\n(no real-rail features were compiled into this build — only MockRail "
             "was exercised; rebuild with --features solana,stellar,hyperswitch to "
             "cover the real rails too)"
+        )
+
+    # MockRail has no processor, so its webhook answer must be "unsupported"
+    # — never a fabricated event. This part is never skipped.
+    try:
+        rail.verify_webhook(
+            WebhookDelivery(raw_body=b"{}", headers={}, query=None, now_unix=1_700_000_000)
+        )
+        raise AssertionError("MockRail has no webhook surface and must say so")
+    except PatalaError.Unsupported:
+        print("webhook OK: MockRail reports unsupported rather than faking an event")
+
+    if not check_webhook_surface():
+        print(
+            "\nWEBHOOK VERIFICATION NOT VERIFIED against a real adapter: this cdylib "
+            "was built without a fiat feature, so only MockRail's `unsupported` answer "
+            "was checked. Rebuild with `--features fiat-stripe` (or `fiat-all`) to "
+            "exercise a genuine signed delivery end to end."
         )
 
     print("\nALL PYTHON SMOKE ASSERTIONS PASSED")

@@ -21,7 +21,8 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::config::HyperswitchConfig;
@@ -349,6 +350,56 @@ impl PaymentRail for HyperswitchRail {
             settled_at_unix: now_unix(),
         })
     }
+
+    /// Authenticate a Hyperswitch outgoing webhook — the HMAC-SHA512 check in
+    /// [`crate::webhook::verify_webhook_signature`], reached through the
+    /// trait so a consumer on the far side of the UniFFI binding or the
+    /// sidecar can use it at all.
+    ///
+    /// Header: `X-Webhook-Signature-512`. Requires
+    /// [`crate::HyperswitchConfig::webhook_secret`] to be configured — with
+    /// no secret there is nothing to verify against, and this returns
+    /// [`Error::Unsupported`] rather than accepting an unauthenticated
+    /// delivery.
+    ///
+    /// **Always [`patala_core::WebhookStatus::Unconfirmed`], deliberately.**
+    /// This crate has never seen a live Hyperswitch instance's outgoing
+    /// webhook body (see the crate docs' UNVERIFIED AGAINST LIVE section), so
+    /// it authenticates the delivery and parses **nothing** out of it. Doing
+    /// otherwise would mean shipping a payload parser derived from a shape
+    /// no test here has ever observed, and reporting settlement from it.
+    /// Take the delivery as a signal to poll: load your stored [`Receipt`]
+    /// and call [`Self::verify`], which is the path this crate does exercise.
+    ///
+    /// [`WebhookEvent::event_id`] is the signature itself. It is an
+    /// HMAC-SHA512 over the exact body, so a redelivery of the same event
+    /// yields the same key (which is what replay suppression needs) and two
+    /// different events cannot collide on it — and unlike a field read out
+    /// of the body, it does not depend on a payload shape this crate has not
+    /// confirmed.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let Some(secret) = self
+            .config
+            .webhook_secret
+            .as_deref()
+            .filter(|s| !s.is_empty())
+        else {
+            return Err(Error::Unsupported(
+                "verify_webhook (no HYPERSWITCH_WEBHOOK_SECRET configured)",
+            ));
+        };
+        let signature = delivery.header_or_empty("X-Webhook-Signature-512").trim();
+        if !crate::webhook::verify_webhook_signature(
+            secret.as_bytes(),
+            &delivery.raw_body,
+            signature,
+        ) {
+            return Err(Error::InvalidRequest(
+                "hyperswitch: webhook signature did not verify".to_string(),
+            ));
+        }
+        Ok(WebhookEvent::unconfirmed(&self.id, signature, ""))
+    }
 }
 
 #[cfg(test)]
@@ -378,6 +429,78 @@ mod tests {
             settlement_days: 2,
             timeout_secs: 5,
         }
+    }
+
+    fn sign_512(secret: &[u8], body: &[u8]) -> String {
+        use hmac::Mac;
+        let mut mac = hmac::Hmac::<sha2::Sha512>::new_from_slice(secret).unwrap();
+        mac.update(body);
+        hex::encode(mac.finalize().into_bytes())
+    }
+
+    #[tokio::test]
+    async fn verify_webhook_authenticates_through_the_trait() {
+        let mut cfg = config_for("http://127.0.0.1:1".into());
+        cfg.webhook_secret = Some("payment_response_hash_key_example".to_string());
+        let rail = HyperswitchRail::new(cfg).unwrap();
+
+        let body = br#"{"event_type":"payment_succeeded","payment_id":"pay_abc"}"#.to_vec();
+        let sig = sign_512(b"payment_response_hash_key_example", &body);
+
+        let delivery = patala_core::WebhookDelivery::new(body.clone(), 1_700_000_000)
+            .with_header("X-Webhook-Signature-512", &sig);
+        let event = rail.verify_webhook(&delivery).await.unwrap();
+
+        assert_eq!(event.rail_id, "hyperswitch");
+        assert_eq!(
+            event.status,
+            patala_core::WebhookStatus::Unconfirmed,
+            "this crate has never observed a live outgoing-webhook body, so it \
+             authenticates the delivery and claims nothing about settlement"
+        );
+        assert!(!event.is_settled());
+        assert_eq!(event.amount_minor, 0);
+        assert!(!event.event_id.is_empty(), "dedup needs a stable key");
+
+        // Redelivery of the identical event yields the identical dedup key.
+        let again = patala_core::WebhookDelivery::new(body.clone(), 1_700_009_999)
+            .with_header("X-Webhook-Signature-512", &sig);
+        assert_eq!(
+            rail.verify_webhook(&again).await.unwrap().event_id,
+            event.event_id
+        );
+
+        // A tampered body no longer matches the signature.
+        let tampered = patala_core::WebhookDelivery::new(
+            br#"{"event_type":"payment_succeeded","payment_id":"pay_XXX"}"#.to_vec(),
+            1_700_000_000,
+        )
+        .with_header("X-Webhook-Signature-512", &sig);
+        assert!(matches!(
+            rail.verify_webhook(&tampered).await,
+            Err(Error::InvalidRequest(_))
+        ));
+
+        // A missing header is a rejection, never a skipped check.
+        let unsigned = patala_core::WebhookDelivery::new(body, 1_700_000_000);
+        assert!(matches!(
+            rail.verify_webhook(&unsigned).await,
+            Err(Error::InvalidRequest(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn verify_webhook_without_a_configured_secret_is_unsupported_not_accepted() {
+        // `webhook_secret` is optional config. With nothing to verify
+        // against, the only honest answers are "unsupported" -- never
+        // "verified".
+        let rail = HyperswitchRail::new(config_for("http://127.0.0.1:1".into())).unwrap();
+        let delivery = patala_core::WebhookDelivery::new(b"{}".to_vec(), 1_700_000_000)
+            .with_header("X-Webhook-Signature-512", "aabb");
+        assert!(matches!(
+            rail.verify_webhook(&delivery).await,
+            Err(Error::Unsupported(_))
+        ));
     }
 
     #[test]

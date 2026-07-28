@@ -2,9 +2,16 @@
 //! `internal/payments/flutterwave.go`'s `Webhook` method
 //! (<https://developer.flutterwave.com/docs/integration-guides/webhooks>).
 //!
-//! **Not part of [`patala_core::PaymentRail`]**: same reasoning as
-//! `stripe/webhook.rs`/`paystack/webhook.rs` — the trait has no webhook
-//! method at all. Unlike those two, however, Flutterwave's webhook
+//! **Reached through the trait** by
+//! [`patala_core::PaymentRail::verify_webhook`] on this adapter's rail,
+//! which is a thin wrapper over the function below. That wrapper is what
+//! makes this verification usable from the UniFFI binding and the sidecar
+//! and not only from Rust — a free function alone is invisible to every
+//! consumer that dispatches through `dyn PaymentRail`. The function itself
+//! stays public and pure: it takes exactly what the scheme signs and no
+//! `&self`, which is what keeps it directly testable.
+//!
+//! Unlike most adapters here, Flutterwave's webhook
 //! signature is NOT a keyed MAC: it is a STATIC shared secret (the `hash`
 //! configured in the Flutterwave dashboard) echoed back verbatim in the
 //! `verif-hash` header on every delivery. Cackle's own file header

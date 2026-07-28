@@ -44,9 +44,12 @@
 //!   even perform the check"): here the incapacity is structural, not
 //!   transient, and returning a fabricated `Ok(false)` would be less honest
 //!   than surfacing the same "not supported" signal cackle itself chose.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::adyen::webhook::verify_and_parse`], NOT a trait method — same
-//!   reasoning as every other adapter in this crate.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::adyen::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **NOT a cackle port** (cackle's `Provider` interface has no
 //!   `Refund` method at all; `Capabilities.Refunds: true` is descriptive
 //!   metadata only). New code grounded in Adyen's own public Refunds API
@@ -72,7 +75,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::adyen::config::AdyenConfig;
@@ -363,6 +367,30 @@ impl PaymentRail for AdyenRail {
             .to_bytes(),
             settled_at_unix: 0,
         })
+    }
+
+    /// Verify an Adyen notification (HMAC-SHA256 over the colon-joined
+    /// signing string, signature carried in
+    /// `additionalData.hmacSignature` — **no HTTP header**) — see
+    /// [`crate::adyen::webhook::verify_and_parse`].
+    ///
+    /// This is Adyen's authoritative settlement signal: [`Self::verify`]
+    /// returns [`Error::Unsupported`] because a Pay by Link resource cannot
+    /// be looked up by merchant reference, so for this rail the push path is
+    /// the *only* path.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::adyen::webhook::verify_and_parse(&self.hmac_key, &delivery.raw_body)
+            .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        let psp_reference = event.psp_reference.clone();
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        )
+        .with_object_id(psp_reference))
     }
 }
 

@@ -33,9 +33,12 @@
 //!   endpoint. This port sidesteps the ambiguity the same way `stripe::rail`
 //!   does: the real Checkout.com payment id lives in `proof`, and `verify()`
 //!   always looks it up from there.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::checkoutcom::webhook::verify_and_parse`], not a trait method
-//!   — same reasoning as every other adapter in this crate.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::checkoutcom::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **NOT a cackle port** (cackle's `Provider` interface has no
 //!   `Refund` method at all; `Capabilities.Refunds: true` is descriptive
 //!   metadata only). New code grounded in Checkout.com's own public Refund
@@ -55,7 +58,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::checkoutcom::config::CheckoutComConfig;
@@ -364,6 +368,26 @@ impl PaymentRail for CheckoutComRail {
             .to_bytes(),
             settled_at_unix: 0,
         })
+    }
+
+    /// Verify a Checkout.com webhook delivery (HMAC-SHA256 over the raw
+    /// body, header `Cko-Signature`) — see
+    /// [`crate::checkoutcom::webhook::verify_and_parse`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::checkoutcom::webhook::verify_and_parse(
+            &self.config.webhook_secret,
+            &delivery.raw_body,
+            delivery.header_or_empty("Cko-Signature"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        ))
     }
 }
 

@@ -32,10 +32,12 @@
 //!   The Stripe API call, JSON parsing, and settlement-status mapping
 //!   (`models::evaluate_session`) are otherwise byte-for-byte the same as
 //!   cackle's `parseStripeSession`.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::stripe::webhook::verify_and_parse`], NOT a trait method —
-//!   `PaymentRail` has no webhook method at all (see `manual.rs`'s module
-//!   docs on the same point, and `patala-hyperswitch`'s identical pattern).
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::stripe::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **NOT a cackle port.** Cackle's `Provider` interface never
 //!   had a `Refund` method at all — `Capabilities.Refunds: true` on
 //!   cackle's `StripeProvider` is descriptive metadata only ("Stripe
@@ -53,7 +55,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::stripe::config::StripeConfig;
@@ -409,6 +412,33 @@ impl PaymentRail for StripeRail {
             .to_bytes(),
             settled_at_unix: now_unix(),
         })
+    }
+
+    /// Verify a Stripe webhook delivery — the push counterpart to
+    /// [`Self::verify`]. The scheme (HMAC-SHA256 over `"{t}.{body}"`, `v1`
+    /// only, 5-minute replay window) lives in
+    /// [`crate::stripe::webhook::verify_and_parse`]; this method is what
+    /// makes it reachable through `dyn PaymentRail`, and therefore through
+    /// the UniFFI binding and the sidecar.
+    ///
+    /// Header: `Stripe-Signature`. Replay window is checked against
+    /// [`WebhookDelivery::now_unix`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::stripe::webhook::verify_and_parse(
+            &self.config.webhook_secret,
+            &delivery.raw_body,
+            delivery.header_or_empty("Stripe-Signature"),
+            delivery.now_unix,
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        ))
     }
 }
 

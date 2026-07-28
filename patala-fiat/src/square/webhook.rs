@@ -3,9 +3,14 @@
 //! (<https://developer.squareup.com/docs/webhooks/step3validate>,
 //! <https://developer.squareup.com/docs/webhooks/v2webhook-events-tech-ref>).
 //!
-//! **Not part of [`patala_core::PaymentRail`]**: the trait has no webhook
-//! method at all (see `stripe::webhook`/`paystack::webhook`'s identical
-//! point).
+//! **Reached through the trait** by
+//! [`patala_core::PaymentRail::verify_webhook`] on this adapter's rail,
+//! which is a thin wrapper over the function below. That wrapper is what
+//! makes this verification usable from the UniFFI binding and the sidecar
+//! and not only from Rust — a free function alone is invisible to every
+//! consumer that dispatches through `dyn PaymentRail`. The function itself
+//! stays public and pure: it takes exactly what the scheme signs and no
+//! `&self`, which is what keeps it directly testable.
 //!
 //! **HONESTY note (mirrors cackle's file-header HONESTY note 1 verbatim):**
 //! Square's webhook signature IS confirmed to be an HMAC-SHA256 over "the

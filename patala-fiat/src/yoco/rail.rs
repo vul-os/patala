@@ -24,10 +24,12 @@
 //!   `stripe::proof`/`iyzico::proof`.
 //! - cackle's `Verify(reference)` maps to [`PaymentRail::verify`], keyed by
 //!   the checkout id embedded in `proof`.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::yoco::webhook::verify_and_parse`] — see that module's docs;
-//!   unlike `iyzico`/`payfast`, Yoco's Svix signature needs no network
-//!   round trip, so this stays a pure function like `stripe`/`paystack`.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::yoco::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: **not implemented.** Cackle's `Capabilities().Refunds` is
 //!   `false` for Yoco with no "supports it, not implemented here" comment
 //!   — same reasoning as the other regional adapters in this batch.
@@ -37,7 +39,8 @@ use async_trait::async_trait;
 use serde::Deserialize;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::yoco::config::YocoConfig;
@@ -283,6 +286,36 @@ impl PaymentRail for YocoRail {
             return Ok(false);
         }
         Ok(true)
+    }
+
+    /// Verify a Yoco (Svix) webhook delivery — see
+    /// [`crate::yoco::webhook::verify_and_parse`]. Headers: `webhook-id`,
+    /// `webhook-timestamp`, `webhook-signature`; the 5-minute replay window
+    /// is checked against [`WebhookDelivery::now_unix`].
+    ///
+    /// Yoco's payload names a checkout, not a caller reference, so
+    /// [`WebhookEvent::reference`] is empty and the checkout id is on
+    /// [`WebhookEvent::object_id`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::yoco::webhook::verify_and_parse(
+            &self.webhook_secret,
+            &delivery.raw_body,
+            delivery.header_or_empty("webhook-id"),
+            delivery.header_or_empty("webhook-timestamp"),
+            delivery.header_or_empty("webhook-signature"),
+            delivery.now_unix,
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        let checkout_id = event.checkout_id.clone();
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            "",
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        )
+        .with_object_id(checkout_id))
     }
 }
 

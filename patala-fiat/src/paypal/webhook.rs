@@ -3,7 +3,8 @@
 //! (<https://developer.paypal.com/api/rest/webhooks/rest/>).
 //!
 //! **A deliberate, disclosed deviation from this crate's usual `webhook.rs`
-//! shape ("a free function... NOT a trait method" — `PORTING.md` §1) —
+//! shape (a pure free function the rail's
+//! [`patala_core::PaymentRail::verify_webhook`] wraps — `PORTING.md` §1) —
 //! unique to PayPal among this crate's adapters, not an oversight.** Every
 //! other webhook module in this crate (`stripe`/`paystack`'s local HMAC,
 //! `btcpay`/`lnbits`/`opennode`/`coinbasecommerce`'s local HMAC/
@@ -16,10 +17,12 @@
 //! in this module cannot perform that round trip without either
 //! duplicating [`crate::paypal::rail::PayPalRail`]'s private HTTP/token
 //! machinery or exposing it as `pub(crate)` — neither is worth the
-//! indirection for one adapter. So the actual verification entrypoint is
-//! [`crate::paypal::rail::PayPalRail::handle_webhook`] (an inherent method,
-//! not a trait method — `PaymentRail` still has no webhook concept at all,
-//! satisfying the SAME underlying rule `PORTING.md` §1 exists to enforce).
+//! indirection for one adapter. So the actual verification work happens in
+//! [`crate::paypal::rail::PayPalRail::handle_webhook`], an inherent method
+//! that needs `&self`; the rail's
+//! [`patala_core::PaymentRail::verify_webhook`] is a thin wrapper over it,
+//! so a consumer still reaches PayPal webhook verification through the trait
+//! exactly as it reaches every other adapter's.
 //! This module holds everything that CAN stay pure: the header/event wire
 //! shapes and [`parse_capture_completed`], which every unit test here
 //! exercises directly without a network call.

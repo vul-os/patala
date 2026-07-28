@@ -79,6 +79,13 @@ pub trait PaymentRail {
     async fn verify(&self, receipt: &Receipt) -> Result<bool>;     // fail-closed
     // Optional (a rail that can't do it returns Unsupported, does NOT fake it):
     async fn refund(&self, receipt: &Receipt) -> Result<Receipt> { Err(Error::Unsupported) }
+    // The push path (added after the pull-only shape above shipped): the
+    // processor calls the consumer, and only the rail can say whether the
+    // delivery is genuine. It belongs on the trait because a free function
+    // beside a rail is unreachable through `dyn PaymentRail`, i.e. from every
+    // binding and from the sidecar — which leaves those consumers able only to
+    // poll `verify`. Same Unsupported-not-faked rule as `refund`.
+    async fn verify_webhook(&self, d: &WebhookDelivery) -> Result<WebhookEvent> { Err(Error::Unsupported) }
 }
 ```
 

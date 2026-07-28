@@ -172,7 +172,7 @@ binding over the sidecar means:
 (`/Users/pc/code/vulos/cackle`) is the concrete example in this suite — do
 not reach for `patala-go`.** Use **[`patala-sidecar`](../patala-sidecar/)**
 instead: a loopback-only HTTP server over the exact same `patala-core`
-surface (`quote`/`charge`/`verify` as JSON, token-authenticated,
+surface (`quote`/`charge`/`verify`/`webhook` as JSON, token-authenticated,
 `127.0.0.1`-only — see its README's threat model). A Go program talks to it
 with `net/http` and `encoding/json` from the standard library, zero cgo, zero
 FFI, and the calling binary stays pure Go and fully static. The trade is
@@ -448,8 +448,24 @@ charges/verifies `manual` (which never touches the network at all).
   `ManualRail`'s `mark_paid`/`mark_failed` directly in Rust (outside this
   FFI boundary) if it wants the manual/bank-transfer flow to actually
   settle.
+- **Webhook verification is reachable.** `PatalaRail.VerifyWebhook(delivery)`
+  is on the trait and therefore in these bindings, alongside
+  `Quote`/`Charge`/`Verify`. Forward the processor's request verbatim —
+  `RawBody` as the raw `[]byte` you read off `*http.Request` (before any JSON
+  decode), `Headers` as the request's headers, `Query` only for schemes whose
+  secret rides in the URL (LNbits), `NowUnix` as the current time so replay
+  windows are checked against an explicit clock. A returned `WebhookEvent`
+  means the rail authenticated the delivery; a non-nil error means it did not,
+  and `WebhookStatusUnconfirmed` means genuine-but-says-nothing-about-money
+  (look up your own record for `ObjectId` and call `Verify`). This closes a
+  real gap: before the trait carried it, webhook verification existed only as
+  provider-specific Rust free functions, which UniFFI cannot see at all, so a
+  Go consumer could confirm a payment **only** by polling `Verify`.
+  `examples/fiatroundtrip` exercises it against a genuinely signed Stripe
+  delivery, offline.
 - This binding still carries the full cgo cost described above ("The cgo
   cost — read this first") — nothing about `patala-fiat` changes that
   trade-off. If cackle needs to stay `CGO_ENABLED=0`/pure-static,
   `patala-sidecar` (once it grows the same by-name fiat endpoint) remains
-  the alternative path, not this one.
+  the alternative path, not this one. The sidecar does already expose the
+  webhook surface — `POST /v1/rails/:rail_id/webhook`.

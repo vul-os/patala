@@ -43,7 +43,7 @@
 //! | [`rail`] | [`HyperswitchRail`] -- the `PaymentRail` implementation itself. |
 //! | `models` | Wire DTOs matching Hyperswitch's OpenAPI spec (private -- not part of the seam). |
 //! | `proof` | What this rail embeds in a [`patala_core::Receipt::proof`] (private). |
-//! | [`webhook`] | [`webhook::verify_webhook_signature`] -- fail-closed HMAC check for Hyperswitch's outgoing webhooks. |
+//! | [`webhook`] | [`webhook::verify_webhook_signature`] -- fail-closed HMAC check for Hyperswitch's outgoing webhooks, reached through [`patala_core::PaymentRail::verify_webhook`]. |
 
 pub mod config;
 mod models;

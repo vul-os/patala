@@ -48,9 +48,12 @@
 //!   §6): cackle returns `Err(ErrRazorpayNoCapturedPayment)` when no
 //!   captured payment is found; this port returns `Ok(false)` instead
 //!   (not-yet-settled is not an operational failure).
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::razorpay::webhook::verify_and_parse`], NOT a trait method —
-//!   same reasoning as every other adapter here.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::razorpay::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: trait default (`Err(Error::Unsupported("refund"))`).
 //!   Cackle's `RazorpayProvider.Capabilities().Refunds` is `false` with NO
 //!   revealing "supports it, not implemented here"-style comment (unlike
@@ -65,7 +68,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::razorpay::config::RazorpayConfig;
@@ -318,6 +322,26 @@ impl PaymentRail for RazorpayRail {
 
     // refund(): trait default `Err(Error::Unsupported("refund"))` -- see
     // module docs.
+
+    /// Verify a Razorpay webhook delivery (HMAC-SHA256 over the raw body,
+    /// header `X-Razorpay-Signature`) — see
+    /// [`crate::razorpay::webhook::verify_and_parse`].
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::razorpay::webhook::verify_and_parse(
+            &self.config.webhook_secret,
+            &delivery.raw_body,
+            delivery.header_or_empty("X-Razorpay-Signature"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            event.settled,
+            event.amount_minor,
+            event.currency,
+        ))
+    }
 }
 
 #[cfg(test)]

@@ -54,9 +54,12 @@
 //!     not an operational failure).
 //!   - Only a non-2xx HTTP status or a body that doesn't even parse as
 //!     the expected JSON shape is a genuine `Err(Error::Rail(...))`.
-//! - cackle's `Webhook` is ported as the free function
-//!   [`crate::xendit::webhook::verify_and_parse`], not a trait method —
-//!   same reasoning as every other adapter here.
+//! - cackle's `Webhook` maps to [`PaymentRail::verify_webhook`], which
+//!   delegates to the free function
+//!   [`crate::xendit::webhook::verify_and_parse`]. The function keeps the
+//!   pure, directly-testable shape; the trait method is what a consumer
+//!   dispatching through `dyn PaymentRail` — the UniFFI binding, the
+//!   sidecar — can actually reach.
 //! - `refund()`: leaves the trait default (`Err(Error::Unsupported(...))`).
 //!   Cackle's `XenditProvider.Capabilities().Refunds` is `false` with NO
 //!   revealing "supports it, not implemented here"-style comment (unlike
@@ -70,7 +73,8 @@
 use async_trait::async_trait;
 
 use patala_core::{
-    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result, Settlement,
+    Error, PayRequest, PaymentRail, Quote, RailCapabilities, RailClass, Receipt, Result,
+    Settlement, WebhookDelivery, WebhookEvent,
 };
 
 use crate::xendit::config::XenditConfig;
@@ -315,6 +319,29 @@ impl PaymentRail for XenditRail {
 
     // refund(): trait default `Err(Error::Unsupported("refund"))` -- see
     // module docs.
+
+    /// Verify a Xendit callback — see
+    /// [`crate::xendit::webhook::verify_and_parse`]. The `x-callback-token`
+    /// header is a STATIC per-account shared secret echoed back, not a body
+    /// signature (Xendit's design, preserved not strengthened); the parser
+    /// only produces an event for a `PAID` invoice, so a delivery that
+    /// reaches this point is settled.
+    async fn verify_webhook(&self, delivery: &WebhookDelivery) -> Result<WebhookEvent> {
+        let event = crate::xendit::webhook::verify_and_parse(
+            &self.config.webhook_token,
+            &delivery.raw_body,
+            delivery.header_or_empty("x-callback-token"),
+        )
+        .map_err(|e| Error::InvalidRequest(e.to_string()))?;
+        Ok(WebhookEvent::settlement(
+            &self.id,
+            event.event_id,
+            event.reference,
+            true,
+            event.amount_minor,
+            event.currency,
+        ))
+    }
 }
 
 #[cfg(test)]

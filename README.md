@@ -15,7 +15,7 @@ this README describes what is actually built, honestly, as it lands.
 ## Status: foundational — built and unit-tested, rails unverified against live networks
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
-runs two passes and both are gates: **167 offline tests** in the default
+runs two passes and both are gates: **168 offline tests** in the default
 workspace build, and **547 more** once every processor feature is compiled in
 (`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
 --features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
@@ -28,10 +28,11 @@ account, run the `#[ignore]`d, env-gated live test). Treat the rails as a
 tested foundation to validate against testnet/sandbox, not as
 production-proven. The things that genuinely executed end-to-end are the
 Python binding, the Go binding and the sidecar — real round-trips over a real
-interpreter, real cgo, and a real socket. CI enforces the two Rust passes and
-the Python one; the Go binding is run by hand (it needs `uniffi-bindgen-go` at
-a pinned tag plus a C toolchain), so "executed" there means executed, not
-enforced.
+interpreter, real cgo, and a real socket. All three are CI jobs now: the two
+Rust passes, the Python smoke run, and the Go binding's test suite (CI
+installs `uniffi-bindgen-go` at the pinned tag and uses the C toolchain the
+runner already has). The Go binding used to be the one that was executed but
+not enforced; it is enforced.
 
 ## The idea
 
@@ -81,8 +82,8 @@ never does. There is no balance table, no payout queue, no ledger.
 | `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 41 (+1 gated) + 1 doctest | **no — testnet step in its README** |
 | `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) + 1 doctest | **no — testnet step in its README** |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 20 | **no — needs a live instance** |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 + ✓ ran under Python 3.13 and Go 1.25 | executed |
-| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 8 (HTTP round-trips) | executed |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 Rust + 24 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 9 (6 HTTP round-trips + 3 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still
 mock-only.** The server, its auth, its error mapping and all five endpoints
@@ -122,6 +123,40 @@ exists, as `patala-fiat`'s `payfast` adapter.)
 ## License
 
 [MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE) — © VulOS. No token. No protocol tax.
+
+### ⚠️ Open owner decision: crate `license` metadata says `MIT`, the repo offers `MIT OR Apache-2.0`
+
+Recorded here rather than changed, because it is the owner's call and not a
+maintenance detail.
+
+All seven crates declare `license = "MIT"` in their `Cargo.toml`
+(`patala-core`, `patala-fiat`, `patala-py`, `patala-sidecar`, `patala-solana`,
+`patala-stellar`, `patala-hyperswitch`). This repo ships both `LICENSE-MIT`
+and `LICENSE-APACHE`, and the line above offers the pair.
+
+**Nothing is over-claimed.** The metadata is *narrower* than what is offered,
+so a consumer reading only the crate metadata gets MIT — a licence they
+genuinely have. Nobody is misled into relying on a grant they were never
+given, which is why this is not filed as a bug and why it was not changed
+unilaterally.
+
+**But it is still a mismatch, with two concrete consequences.** Anyone
+resolving licences from crate metadata (`cargo deny`, `cargo about`, an SBOM
+generator, a corporate policy scanner) will see MIT alone and will not know
+the Apache-2.0 option exists — and Apache-2.0 is the one that carries an
+explicit patent grant, which is often exactly why a downstream user wants the
+dual offer. Second, the two sources disagree, and a reader who notices has to
+work out which one governs.
+
+The Rust-ecosystem convention for a dual-licensed crate is
+`license = "MIT OR Apache-2.0"` (a valid SPDX expression; this is what the
+Rust project itself and most of the ecosystem use). Adopting it would be a
+one-line change in each of the seven manifests and would broaden, never
+narrow, what is granted.
+
+**Not changed here.** Which licences are offered is the owner's decision, and
+a change that broadens a grant should be made deliberately by whoever holds
+the copyright, not as a drive-by consistency fix. Filed for that decision.
 
 ---
 

@@ -16,10 +16,16 @@ name: ci
 # generated ctypes wrapper), never pyo3, so there are no native headers and no
 # build backend to install.
 #
-# `patala-go`'s equivalent is NOT in CI: it needs `uniffi-bindgen-go` installed
-# from git at a pinned tag plus a C toolchain. It is run by hand — see
-# patala-go/README.md — so the Go binding's status is "executed by hand", not
-# "enforced by CI".
+# Job 3 (`go-binding`) is the Go equivalent, and it is new. It used to be
+# absent on the grounds that it needs `uniffi-bindgen-go` installed from git at
+# a pinned tag plus a C toolchain — both true, and both just a couple of steps
+# (see below), which was never a good enough reason for the Go binding cackle
+# consumes to be the one binding no gate covered. It builds the cdylib with
+# `--features fiat-all`, generates the Go bindings from it, and runs
+# `patala-go/bindingtest` — including the WebhookStatus pinning, where
+# `Unconfirmed` mapping to anything a consumer could read as payment is a
+# money-correctness bug in cackle. `make test-fiat` fails when zero tests run,
+# so this job cannot go green by doing nothing.
 
 on:
   push:
@@ -70,3 +76,54 @@ jobs:
 
       - name: make smoke-python
         run: make smoke-python
+
+  go-binding:
+    name: go binding (executed, not just compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      # Pinned to the tag matching this workspace's `uniffi = 0.29.5`, exactly
+      # as patala-go/README.md documents. uniffi-bindgen-go is versioned
+      # against a specific uniffi-rs release; an unpinned install currently
+      # builds v0.7.x (uniffi-rs 0.31) and cannot read this cdylib's metadata.
+      # Cached on the tag so it is compiled once, not on every run.
+      - name: Cache uniffi-bindgen-go
+        id: cache-bindgen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/uniffi-bindgen-go
+          key: uniffi-bindgen-go-v0.5.0+v0.29.5-${{ runner.os }}
+
+      - name: Install uniffi-bindgen-go (pinned)
+        if: steps.cache-bindgen.outputs.cache-hit != 'true'
+        run: |
+          cargo install --locked \
+            --git https://github.com/NordSecurity/uniffi-bindgen-go \
+            --tag v0.5.0+v0.29.5 uniffi-bindgen-go
+
+      # ubuntu-latest already ships gcc, which is all cgo needs here; this
+      # fails loudly rather than letting the link step produce a confusing
+      # Go-shaped error if that ever stops being true.
+      - name: Verify the toolchain cgo requires
+        run: |
+          cc --version
+          uniffi-bindgen-go --version
+
+      # Root `smoke-go` runs patala-go's `test-fiat` (cdylib built with
+      # --features fiat-all, bindings regenerated from it, bindingtest run
+      # through scripts/go-test-gate.sh) and then its `test` (the same suite
+      # against a MockRail-only cdylib, which also exercises the
+      # `//go:build fiat` exclusion actually working), plus gofmt.
+      - name: make smoke-go
+        run: make smoke-go

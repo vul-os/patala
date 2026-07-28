@@ -3,7 +3,7 @@
 ## Foundational — built and unit-tested, rails unverified against live networks
 
 The core, the rails and the polyglot layer are all in the repo. `make check`
-runs two passes and both are gates: **167 offline tests** in the default
+runs two passes and both are gates: **168 offline tests** in the default
 workspace build, and **547 more** once every processor feature is compiled in
 (`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
 --features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
@@ -28,8 +28,8 @@ and a real socket.
 | `patala-solana` | SPL-USDC on Solana, ported from an earlier in-house implementation | non-custodial, final | 41 (+1 gated) + 1 doctest | no — testnet step in its README |
 | `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) + 1 doctest | no — testnet step in its README |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 20 | no — needs a live instance |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 + ✓ ran under Python 3.13 and Go 1.25 | executed |
-| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 8 (HTTP round-trips) | executed |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 Rust + 24 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 9 (6 HTTP round-trips + 3 unit) | executed |
 
 One caveat that table would otherwise hide: **the sidecar's rail registry is
 still mock-only.** The server, its auth, its error mapping and all five
@@ -51,11 +51,13 @@ or fiat rail *through the sidecar* needs the per-rail registration its
 - The default build stays offline: no new mandatory dependencies, no
   network, and CI needs no chain or processor. `cargo tree -e normal` on the
   default workspace build resolves no HTTP client at all.
-- What CI enforces vs what was run by hand: the two Rust passes and the
-  Python binding's real end-to-end smoke run are CI jobs. The Go binding was
-  executed by hand (it needs `uniffi-bindgen-go` at a pinned tag plus a C
-  toolchain, which CI does not install) — so "Go: executed" means executed,
-  not enforced.
+- What CI enforces: the two Rust passes, the Python binding's real end-to-end
+  smoke run, and — new — the Go binding's own test suite
+  (`patala-go/bindingtest`, run by `make smoke-go`). CI installs
+  `uniffi-bindgen-go` at the pinned tag and uses the runner's C toolchain for
+  cgo. The Go binding used to be executed by hand and enforced by nothing;
+  that gap is closed, and its `make test`/`make test-fiat` targets now **fail**
+  when zero tests ran instead of reporting success.
 
 ## Deferred — designed for, not built
 

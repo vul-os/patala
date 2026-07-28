@@ -1,5 +1,13 @@
 /target
-Cargo.lock
+# Cargo.lock IS checked in, deliberately. Cargo's own guidance is: commit it
+# for anything that produces a binary, ignore it for a library. This workspace
+# ships `patala-sidecar`, a binary — and one whose whole reason to exist is
+# key isolation for a payment substrate. A clean clone that resolves its own
+# dependency versions is not the build anyone tested; for this crate that
+# means the exact bytes handling a signing key could differ between a
+# maintainer's machine and a deployment. Reproducibility wins over the
+# library-side argument (that a lockfile hides downstream version-range
+# breakage), which `cargo update` in CI would be the right answer to anyway.
 **/*.rs.bk
 .claude/
 __pycache__/

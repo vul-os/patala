@@ -10,7 +10,7 @@
 # (patala-go has its own Makefile for the UniFFI binding generation — this one
 # is the Rust workspace.)
 
-.PHONY: check fmt fmt-check lint test test-features doc features smoke-python clean
+.PHONY: check fmt fmt-check lint test test-features doc features smoke-python smoke-go clean
 
 # The full gate. Run before pushing.
 check: fmt-check lint test test-features doc features
@@ -64,10 +64,6 @@ features:
 # bindgen is this workspace's own `cargo run --bin uniffi-bindgen`, not an
 # separately installed CLI. Not part of `check` because `check` is the
 # pure-cargo gate; CI runs this as its own job.
-#
-# `patala-go`'s equivalent (`cd patala-go && make test-fiat`) is deliberately
-# NOT wired in here or in CI: it needs `uniffi-bindgen-go` installed from git
-# at a pinned tag plus a C toolchain. It is run by hand; see patala-go/README.
 LIB_EXT := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
 
 smoke-python:
@@ -78,6 +74,33 @@ smoke-python:
 		--out-dir patala-py/bindings/python
 	cp target/debug/libpatala_py.$(LIB_EXT) patala-py/bindings/python/
 	PYTHONPATH=patala-py/bindings/python python3 patala-py/examples/smoke_test.py
+
+# The Go binding, actually executed — `smoke-python`'s counterpart, and CI's
+# third job. Two passes, both through `patala-go/scripts/go-test-gate.sh`,
+# which FAILS when zero tests ran (that target used to exit 0 having run
+# none):
+#
+#   test-fiat: cdylib with `--features fiat-all`, so patala-fiat's adapters
+#              and `PatalaRail.VerifyWebhook` are reachable. This is where
+#              every `WebhookStatus` variant is pinned against a genuinely
+#              signed, offline delivery — cackle gates entitlement on that
+#              mapping.
+#   test:      the same suite against a MockRail-only cdylib (no features),
+#              which is also what proves the `//go:build fiat` exclusion
+#              works rather than being decorative.
+#
+# Needs `uniffi-bindgen-go` at the tag matching this workspace's uniffi
+# version, plus a C toolchain (cgo) — see patala-go/README.md. Not part of
+# `check` for the same reason `smoke-python` is not: `check` is the pure-cargo
+# gate, and these have toolchain prerequisites beyond cargo.
+smoke-go:
+	$(MAKE) -C patala-go test-fiat
+	$(MAKE) -C patala-go test
+	@unformatted="$$(gofmt -l patala-go/bindingtest patala-go/examples)"; \
+	if [ -n "$$unformatted" ]; then \
+		echo "gofmt: not formatted:" >&2; echo "$$unformatted" >&2; exit 1; \
+	fi; \
+	echo "gofmt: clean (patala-go/bindingtest, patala-go/examples)"
 
 clean:
 	cargo clean

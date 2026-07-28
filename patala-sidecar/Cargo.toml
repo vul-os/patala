@@ -17,11 +17,16 @@ path = "src/lib.rs"
 [dependencies]
 patala-core = { path = "../patala-core" }
 # Kept deliberately small: an HTTP framework, its async runtime, and JSON —
-# nothing chain- or processor-specific. Real rails join as optional
-# dependencies behind their own feature flags in a later wave (see
-# `src/registry.rs` doc comment) — never as a mandatory dependency of this
-# crate, so the sidecar's own default build stays exactly as offline as
-# `patala-core`'s.
+# nothing chain- or processor-specific. NO real rail is a dependency here,
+# optional or otherwise, so `default_registry()` is mock-only and this crate's
+# build is exactly as offline as `patala-core`'s. That is a statement of what
+# is *not* built, not a design goal met — see `src/registry.rs`'s "THIS
+# REGISTRY IS MOCK-ONLY" section for what per-rail registration still needs
+# (the rail crates themselves are workspace members and have been for a
+# while; what is missing is the optional-dependency wiring and a per-rail
+# config decision). When it is written, each rail joins as an OPTIONAL
+# dependency behind its own feature — never a mandatory one, or the offline
+# default build is gone.
 axum = "0.7"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
 serde = { version = "1", features = ["derive"] }

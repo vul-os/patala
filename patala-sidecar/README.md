@@ -118,21 +118,36 @@ attacker this design assumes.
   logging are reasonable additions for a production deployment; this wave
   built the fail-closed auth gate, not a full operational hardening pass.
 
-## Adding a real rail later (no redesign)
+## The rail registry is MOCK-ONLY (read this before wiring anything to it)
 
 `src/registry.rs`'s `default_registry()` returns a
-`HashMap<String, Arc<dyn PaymentRail>>` with one entry today: `"mock"`. Every
-handler in `src/api.rs` looks a rail up by `rail_id` in that map and calls
-the trait methods — no handler names a concrete rail type. When
-`patala-solana` / `patala-stellar` / `patala-hyperswitch` exist, they join
-`default_registry()` behind their own Cargo feature flags (see the doc
-comment in `registry.rs` for the exact shape), and **no HTTP route, handler,
-or wire format changes** — only the set of `rail_id`s a request can
-successfully target grows. This crate's `Cargo.toml` deliberately does not
-yet declare those crates as (optional) dependencies, since they don't exist
-in this tree — adding an optional path dependency that doesn't resolve would
-break `cargo build`/`cargo metadata` for the whole workspace even when the
-feature is off.
+`HashMap<String, Arc<dyn PaymentRail>>` with **exactly one** entry: `"mock"`.
+There is no Solana, Stellar, Hyperswitch or fiat rail reachable through this
+sidecar. A request naming any other `rail_id` gets a `404`, because this
+process has never heard of it. Per-rail registration is **unwritten** —
+described in `registry.rs`'s doc comment, not implemented.
+
+Everything *around* the registry is real and tested: the loopback bind, the
+fail-closed token gate, the error mapping, all five endpoints, and their
+round-trips over a real socket. So "the sidecar works" is true of the HTTP
+surface and false of the rail set behind it. `registry.rs`'s
+`registry_is_mock_only` test pins that claim so this section cannot rot.
+
+**Correcting an earlier note:** this used to say the rail crates "don't exist
+in this tree", which stopped being true when `patala-solana`,
+`patala-stellar`, `patala-hyperswitch` and `patala-fiat` landed — all four are
+workspace members now. The reason the registration is still unwritten is
+ordinary work nobody has done, not a blocker: optional dependencies behind
+per-rail features, a decision about where each rail's credentials come from
+and what happens when they are missing (the sidecar exists precisely so those
+credentials live in one process, so that decision matters), and extending the
+lint/test targets to cover the feature-on build. `registry.rs`'s doc comment
+spells all three out.
+
+**No redesign is needed when it happens.** Every handler in `src/api.rs` looks
+a rail up by `rail_id` and calls trait methods; none names a concrete rail
+type. Adding a rail changes **no HTTP route, handler, or wire format** — only
+the set of `rail_id`s a request can successfully target.
 
 ## Run it
 
@@ -172,8 +187,9 @@ localhost, no real rail required.
 
 ## Verified in this environment (2026-07-21)
 
-`cargo test -p patala-sidecar` was actually run here: 2 unit tests
-(`auth::tests`) plus all 3 integration tests in `tests/roundtrip.rs` pass,
+`cargo test -p patala-sidecar` was actually run here: 3 unit tests
+(`auth::tests`, plus `registry::tests::registry_is_mock_only`) and all 6
+integration tests in `tests/roundtrip.rs` + `tests/webhook.rs` pass,
 exercising the full charge → verify round trip over real HTTP against a
 really-bound loopback `TcpListener`. `cargo clippy -p patala-sidecar
 --all-targets -- -D warnings` and `cargo fmt -p patala-sidecar -- --check`

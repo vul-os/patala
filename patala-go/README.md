@@ -262,7 +262,7 @@ cd patala-go
 make run-example   # runs steps 1(check)-4 via `make generate` + `go run`
 # or:
 make build         # steps 1(check)-3, then `go build ./...`
-make test          # steps 1(check)-3, then `go test ./...`
+make test          # steps 1(check)-3, then the gated `go test ./...`
 ```
 
 All three targets above build a MockRail-only cdylib (`FEATURES` defaults to
@@ -271,7 +271,7 @@ the fiat surface too:
 
 ```bash
 make run-example-fiat   # FEATURES=fiat-all generate, then `go run -tags fiat ./examples/fiatroundtrip`
-make test-fiat          # FEATURES=fiat-all generate, then `go test -tags fiat ./...`
+make test-fiat          # FEATURES=fiat-all generate, then the gated `go test -tags fiat ./...`
 # or by hand, any combination:
 make FEATURES=fiat-stripe,fiat-paystack generate
 ```
@@ -279,6 +279,70 @@ make FEATURES=fiat-stripe,fiat-paystack generate
 `make check-uniffi-bindgen-go` only verifies the binary is on `PATH` and
 prints the install command above if it's missing — `make` does not install
 Rust/Go toolchain binaries on your behalf.
+
+## Real tests, and a target that fails when there are none
+
+`bindingtest/` is this module's test suite: real `testing.T` tests against the
+generated bindings, exercising exactly what a downstream Go consumer sees.
+
+Until it existed, `make test` and `make test-fiat` ran `go test ./...` over a
+module with **no `_test.go` files anywhere**. `go test` prints `[no test
+files]` and exits `0` in that situation, so both targets reported success
+having executed zero assertions — a target named `test` that passed by doing
+nothing. Adding tests alone would not have fixed that: tests can be deleted,
+excluded by a build tag, or filtered out by a stray `-run`, and the target
+would go quietly back to green.
+
+So every `go test` invocation in the `Makefile` runs through
+`scripts/go-test-gate.sh`, which fails when:
+
+- `go test` itself fails;
+- **zero tests ran** — always a failure, printing the packages that had none;
+- fewer than a floor of top-level tests passed (the floor moves only when
+  someone lowers it deliberately);
+- a **required** test did not run *and* pass. The required list is in the
+  `Makefile` and names the money-critical ones; a required test that was
+  skipped or excluded is a failure, printed by name.
+
+There is no skip path: an inconclusive run never exits `0`.
+
+**This runs in CI.** `.github/workflows/ci.yml`'s `go-binding` job installs
+`uniffi-bindgen-go` at the pinned tag (cached on that tag, so it compiles
+once), then runs the workspace's `make smoke-go`, which is `make test-fiat`
++ `make test` here plus a `gofmt` check. The two prerequisites that used to
+be the reason this was hand-run only — a pinned bindgen and a C toolchain —
+are a cached `cargo install` and a compiler `ubuntu-latest` already ships.
+Go is the language of the first real consumer (`cackle`), which made it a
+poor choice for the one binding no gate covered.
+
+**What the tests cover:**
+
+| File | Build tag | What it pins |
+|---|---|---|
+| `bindingtest/binding_test.go` | — | `PatalaRailNewMock`, `Id`, `Capabilities`, `Quote`/`Charge`/`Verify`, fail-closed verify against four kinds of tampering, `RailClass` discriminants, the typed error variants, and `VerifyWebhook` reporting `Unsupported` on a rail with no push delivery |
+| `bindingtest/webhook_status_test.go` | — | every `WebhookStatus` variant's wire value, that **only** `Settled` may be read as payment, that the zero value is not payment, and — by scanning the generated source — that the variant *set* is exactly the three known ones |
+| `bindingtest/fiat_webhook_test.go` | `fiat` | `PatalaRailNewFiat`, provider coverage against `patala-fiat/src/`, and `VerifyWebhook` driven against genuinely signed Stripe and BTCPay deliveries so each `WebhookStatus` variant is reached by a real delivery, plus five fail-closed cases per scheme |
+
+### Why the `WebhookStatus` pinning is the important part
+
+`WebhookStatus` crosses the FFI as a bare integer — UniFFI lowers enum
+variants to their ordinal position (`Settled`=1, `NotSettled`=2,
+`Unconfirmed`=3). Nothing at runtime names the Rust variant a value came
+from. So reordering `patala_core::WebhookStatus` and regenerating produces a
+Go file where every constant still compiles at every call site and means
+something different.
+
+`Unconfirmed` means *"this delivery is genuine and says nothing about
+money"* — PENDING-equivalent. Take `ObjectId`, find your own record, call
+`Verify`. It is **never** payment. If it ever arrived carrying `Settled`'s
+number, a consumer would mark unpaid orders paid — `cackle` consumes these
+bindings, so that is a real money bug, not a hypothetical one.
+
+The pinning is deliberately three-layered, because no single layer catches
+everything: the constant assertions catch renumbering; the generated-source
+scan catches an added or removed variant (which renumbering assertions cannot
+see); and the live round-trips catch a rail mapping its own outcome to the
+wrong variant on the Rust side (which neither static check can see).
 
 ## Example
 
@@ -410,12 +474,13 @@ toolchain as above:
   charge/verify — see "Example" above for why) of a feature-gated `stripe`
   rail from a Go `map[string]string`, confirming `RailClassCustodialReversible`
   and `HoldsFunds == true` come through the FFI boundary correctly.
-- **`make test-fiat`** — `go test -tags fiat ./...` reports `[no test
-  files]` for every package (there are no `_test.go` files in this
-  directory; `examples/fiatroundtrip` is exercised via `go run`, matching
-  `examples/roundtrip`'s own precedent) but this also proves the whole
-  package (including `examples/fiatroundtrip`, gated on `-tags fiat`)
-  still type-checks and links cleanly.
+- **`make test-fiat`** — at the time of that run, `go test -tags fiat ./...`
+  reported `[no test files]` for every package and **exited `0` anyway**.
+  There were no `_test.go` files here at all; the examples were exercised
+  via `go run`. That target proved the package type-checked and linked, and
+  nothing more, while calling itself `test`. **This has been fixed** — see
+  "Real tests" below. The claim is left here rather than deleted because it
+  is what that dated verification actually observed.
 - **The plain (non-fiat) targets were re-verified unaffected**: after the
   above, `make build`/`make test`/`make run-example` (no `FEATURES`, no
   `-tags fiat`) were re-run against a freshly regenerated MockRail-only

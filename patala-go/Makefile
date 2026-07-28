@@ -27,6 +27,36 @@ UNAME_S := $(shell uname -s)
 FEATURES ?=
 FEATURE_FLAG := $(if $(FEATURES),--features $(FEATURES))
 
+# `go test ./...` exits 0 when every package reports `[no test files]`, which
+# is what `test`/`test-fiat` used to do here: three "no test files" lines and
+# a green exit, having verified nothing. Every `go test` invocation below now
+# goes through this wrapper, which fails when zero tests ran, when fewer than
+# --min passed, or when a --require'd test did not run. See the script's own
+# header, and ./bindingtest for the tests themselves.
+GATE := $(CURDIR)/scripts/go-test-gate.sh
+
+# The floors below are floors, not exact counts: adding a test never breaks
+# them, removing or silently excluding one does. The --require names are the
+# money-critical ones — the WebhookStatus mapping cackle gates entitlement on
+# (patala-core/src/webhook.rs: Unconfirmed is PENDING-equivalent and must
+# NEVER be read as Settled), and the fail-closed verify contract.
+GATE_MIN := 12
+GATE_REQUIRE := \
+	--require TestWebhookStatusDiscriminantsArePinned \
+	--require TestOnlySettledMeansPaid \
+	--require TestGeneratedWebhookStatusVariantsAreExactlyThree \
+	--require TestVerifyFailsClosedOnTamperedReceipt \
+	--require TestMockRailReportsWebhookUnsupported
+
+GATE_MIN_FIAT := 24
+GATE_REQUIRE_FIAT := $(GATE_REQUIRE) \
+	--require TestBTCPayWebhookIsUnconfirmedNeverSettled \
+	--require TestStripeWebhookPaidSessionIsSettled \
+	--require TestStripeWebhookUnpaidSessionIsNotSettled \
+	--require TestEveryWebhookStatusVariantIsReachedByARealDelivery \
+	--require TestStripeWebhookFailsClosed \
+	--require TestFiatProviderCoverage
+
 ifeq ($(UNAME_S),Darwin)
 	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.dylib
 	LIB_EXT := dylib
@@ -78,12 +108,14 @@ run-example: generate
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		go run ./examples/roundtrip
 
+# Runs ./bindingtest against a MockRail-only cdylib, through the gate above:
+# a run where nothing executed is a FAILURE, not a pass.
 test: generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
 		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
-		go test ./...
+		$(GATE) --min $(GATE_MIN) $(GATE_REQUIRE) -- ./...
 
 # 5. Same as run-example/test above, but forces patala-py's cdylib to be
 #    rebuilt with every patala-fiat adapter compiled in (`fiat-all`, see
@@ -107,13 +139,17 @@ run-example-fiat:
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		go run -tags fiat ./examples/fiatroundtrip
 
+# The full Go gate: ./bindingtest's default tests PLUS the `-tags fiat` ones,
+# which drive genuinely signed Stripe and BTCPay deliveries through the real
+# cdylib and pin every WebhookStatus variant to the delivery that means it.
+# This is the target that used to exit 0 having run zero tests.
 test-fiat:
 	$(MAKE) FEATURES=fiat-all generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
 		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
-		go test -tags fiat ./...
+		$(GATE) --min $(GATE_MIN_FIAT) $(GATE_REQUIRE_FIAT) -- -tags fiat ./...
 
 clean:
 	rm -rf $(BINDINGS_DIR)

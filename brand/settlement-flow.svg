@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 340" width="860" height="340" role="img" aria-label="Diagram: patala sits beside the money path, never in it. It quotes, charges and verifies; value itself moves directly, either wallet-to-wallet on a crypto rail or payer-to-processor-to-payee on a fiat rail.">
+  <title>Value moves on the rail — patala is never in the money path</title>
+  <rect width="860" height="340" rx="18" fill="#0d1220"/>
+
+  <text x="430" y="32" fill="#a9b1cf" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-size="11" letter-spacing="1.5">VALUE NEVER TOUCHES PATALA</text>
+
+  <!-- patala, orchestrating, off the money path -->
+  <rect x="345" y="50" width="170" height="46" rx="12" fill="#f06b3d"/>
+  <text x="430" y="79" fill="#151c33" text-anchor="middle" font-family="'Familjen Grotesk',system-ui,sans-serif" font-size="15" font-weight="600">patala</text>
+  <text x="430" y="115" fill="#f06b3d" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-size="11">quote · charge · verify — never holds, never settles</text>
+
+  <!-- payer / payee endpoints, tall enough to span both lanes -->
+  <rect x="40" y="150" width="120" height="130" rx="10" fill="#1a2140" stroke="#3a4470"/>
+  <text x="100" y="220" fill="#eef1f8" text-anchor="middle" font-family="'Familjen Grotesk',system-ui,sans-serif" font-size="15">Payer</text>
+
+  <rect x="700" y="150" width="120" height="130" rx="10" fill="#1a2140" stroke="#3a4470"/>
+  <text x="760" y="220" fill="#eef1f8" text-anchor="middle" font-family="'Familjen Grotesk',system-ui,sans-serif" font-size="15">Payee</text>
+
+  <!-- lane 1: non-custodial, straight through -->
+  <line x1="160" y1="185" x2="700" y2="185" stroke="#34b87a" stroke-width="3"/>
+  <text x="430" y="172" fill="#34b87a" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-size="12">wallet → wallet, on-chain (Solana / Stellar) — final</text>
+
+  <!-- lane 2: custodial, via a processor that itself may hold funds -->
+  <line x1="160" y1="255" x2="335" y2="255" stroke="#6c8ff5" stroke-width="3"/>
+  <line x1="525" y1="255" x2="700" y2="255" stroke="#6c8ff5" stroke-width="3"/>
+  <rect x="335" y="231" width="190" height="48" rx="10" fill="#1a2140" stroke="#6c8ff5"/>
+  <text x="430" y="251" fill="#eef1f8" text-anchor="middle" font-family="'Familjen Grotesk',system-ui,sans-serif" font-size="13">processor</text>
+  <text x="430" y="267" fill="#6c8ff5" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-size="10">holds funds itself — Hyperswitch</text>
+  <text x="430" y="309" fill="#6c8ff5" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-size="12">card / bank rails, custodial, T+2, chargeback-reversible</text>
+</svg>

@@ -1,0 +1,20 @@
+$ curl -s http://127.0.0.1:8420/healthz
+ok
+
+$ curl -s http://127.0.0.1:8420/v1/rails/mock \
+    -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN"
+{"class":"NonCustodialFinal","reversible":false,"requires_kyc":false,"holds_funds":false,"currencies":["USDC","USD"],"settlement":"Instant"}
+
+$ RECEIPT=$(curl -s http://127.0.0.1:8420/v1/rails/mock/charge \
+    -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN" \
+    -d '{"amount_minor":1250,"currency":"USDC","destination":"dest-wallet-abc123","reference":"order-42"}')
+$ echo "$RECEIPT"
+{"rail_id":"mock","amount_minor":1250,"currency":"USDC","reference":"order-42","proof":[184,130,172,86,227,36,169,152,177,124,164,145,209,192,246,26,250,11,216,189,65,89,134,91,211,65,73,221,30,71,162,10],"settled_at_unix":1785282511}
+
+
+$ curl -s http://127.0.0.1:8420/v1/rails/mock/verify \
+    -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN" -d "$RECEIPT"
+{"valid":true}
+
+$ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8420/v1/rails/mock
+401  (no Authorization header — fail-closed)

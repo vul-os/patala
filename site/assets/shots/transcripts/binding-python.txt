@@ -1,0 +1,15 @@
+$ make smoke-python
+$ PYTHONPATH=patala-py/bindings/python python3 patala-py/examples/smoke_test.py
+capabilities OK: class=RailClass.NON_CUSTODIAL_FINAL, currencies=['USDC', 'USD']
+quote OK: total_minor=1250 (int, not float)
+charge OK: receipt rail_id='mock' amount_minor=1250
+verify OK: genuine receipt verified true
+verify OK: tampered receipt verified false (fail-closed)
+error mapping OK: unsupported currency raised PatalaError.InvalidRequest(message='rail mock does not support currency EUR')
+
+(no real-rail features were compiled into this build — only MockRail was exercised; rebuild with --features solana,stellar,hyperswitch to cover the real rails too)
+webhook OK: MockRail reports unsupported rather than faking an event
+webhook OK: authenticated from Python, status=WebhookStatus.SETTLED, amount_minor=5000 (int), reference=py-smoke-order-webhook
+webhook OK: tampered delivery rejected; `manual` reports unsupported
+
+ALL PYTHON SMOKE ASSERTIONS PASSED

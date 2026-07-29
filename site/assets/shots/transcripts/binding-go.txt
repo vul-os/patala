@@ -1,0 +1,36 @@
+$ cd patala-go && make test
+=== RUN   TestMockRailIdentityAndCapabilities
+--- PASS: TestMockRailIdentityAndCapabilities (0.00s)
+=== RUN   TestRailClassDiscriminantsArePinned
+--- PASS: TestRailClassDiscriminantsArePinned (0.00s)
+=== RUN   TestQuoteChargeVerifyRoundTrip
+--- PASS: TestQuoteChargeVerifyRoundTrip (0.00s)
+=== RUN   TestVerifyFailsClosedOnTamperedReceipt
+=== RUN   TestVerifyFailsClosedOnTamperedReceipt/amount_inflated
+=== RUN   TestVerifyFailsClosedOnTamperedReceipt/currency_swapped
+=== RUN   TestVerifyFailsClosedOnTamperedReceipt/reference_swapped
+=== RUN   TestVerifyFailsClosedOnTamperedReceipt/proof_truncated
+--- PASS: TestVerifyFailsClosedOnTamperedReceipt (0.00s)
+=== RUN   TestUnsupportedCurrencyIsATypedError
+--- PASS: TestUnsupportedCurrencyIsATypedError (0.00s)
+=== RUN   TestFailingRailSurfacesRailError
+--- PASS: TestFailingRailSurfacesRailError (0.00s)
+=== RUN   TestQuoteCarriesTheConfiguredFee
+--- PASS: TestQuoteCarriesTheConfiguredFee (0.00s)
+=== RUN   TestMockRailReportsWebhookUnsupported
+--- PASS: TestMockRailReportsWebhookUnsupported (0.00s)
+=== RUN   TestWebhookStatusDiscriminantsArePinned
+--- PASS: TestWebhookStatusDiscriminantsArePinned (0.00s)
+=== RUN   TestOnlySettledMeansPaid
+=== RUN   TestOnlySettledMeansPaid/Settled
+=== RUN   TestOnlySettledMeansPaid/NotSettled
+=== RUN   TestOnlySettledMeansPaid/Unconfirmed
+--- PASS: TestOnlySettledMeansPaid (0.00s)
+=== RUN   TestZeroValueWebhookStatusIsNotSettled
+--- PASS: TestZeroValueWebhookStatusIsNotSettled (0.00s)
+=== RUN   TestGeneratedWebhookStatusVariantsAreExactlyThree
+--- PASS: TestGeneratedWebhookStatusVariantsAreExactlyThree (0.00s)
+PASS
+ok  	github.com/vul-os/patala/patala-go/bindingtest	0.517s
+go-test-gate: go test exit=0 | top-level ran=12 passed=12 failed=0 skipped=0 | subtests passed=7
+go-test-gate: OK — 12 top-level tests passed (min 12), 5 required tests present.

@@ -73,18 +73,34 @@
 //!
 //! # Honesty (`PATALA.md` §8) — READ THIS
 //!
-//! **This crate has not been run against a live Stellar network (testnet or
-//! mainnet) from this environment.** Every offline test in the `tests` module runs
-//! with no network — Horizon is a scripted fake — and a known-answer
+//! **Testnet: one payment operation has settled.** On 2026-07-30, a
+//! throwaway keypair paid another throwaway keypair a single-leg
+//! USDC-shaped payment (self-issued `CreditAlphanum4` asset coded `"USDC"`,
+//! not Circle's own testnet issuer) on Stellar **testnet**, built and
+//! submitted through this crate's real public entry point,
+//! [`StellarRail::charge`], and independently re-confirmed by
+//! [`StellarRail::verify`] reading it back from Horizon: tx hash
+//! `32663937fe1407f9de3e781effa6ac9f4b1d29340ea63e72f6335a6c91effb89`,
+//! ledger `3882739`. Reproduce it: `PATALA_LIVE_TESTNET=1 cargo test -p
+//! patala-stellar live_testnet_round_trip -- --ignored --nocapture` (see
+//! `live_testnet_round_trip_settles_a_real_payment` in `src/tests.rs`, and
+//! `README.md` for the full evidence and caveats).
+//!
+//! **Read that narrowly.** It proves the wire encoding, signing base,
+//! Horizon submission, and online verification work end-to-end against real
+//! testnet infrastructure, through this crate's actual API. It does **not**
+//! prove: mainnet (untouched, a structurally different real-money network);
+//! multi-party/split payments (`charge` still builds exactly one `Payment`
+//! operation per call — `tx.rs` has N-leg primitives not yet wired in here);
+//! or that Circle's own USDC issuer behaves identically (only the wire shape
+//! was exercised). Every offline test in the `tests` module still runs with
+//! no network — Horizon is a scripted fake there — and a known-answer
 //! transaction (fixed seed, fixed inputs) is round-tripped through
-//! `stellar-xdr`'s own spec-generated decoder to catch wire-format bugs. That
-//! is real evidence the encoding is *internally* and *decoder* consistent —
-//! it is **not** confirmation that a transaction built here has ever actually
-//! settled on Stellar. The one test that touches a live Horizon instance is
-//! `#[ignore]`d and gated on `PATALA_STELLAR_LIVE`, exactly as
-//! `patala-solana` gates its analogous test on `PATALA_SOLANA_LIVE_RPC`.
-//! Treat the live path as **UNVERIFIED AGAINST LIVE** until someone runs that
-//! ignored test against testnet and confirms it passes. See `README.md`.
+//! `stellar-xdr`'s own spec-generated decoder to catch wire-format bugs.
+//! A second live test, gated on `PATALA_STELLAR_LIVE` exactly as
+//! `patala-solana` gates its analogous test on `PATALA_SOLANA_LIVE_RPC`,
+//! checks only Horizon connectivity (it predates the round trip above).
+//! Mainnet remains **UNVERIFIED AGAINST LIVE**. See `README.md`.
 
 pub mod destination;
 pub mod keys;

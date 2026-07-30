@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use patala_core::{Error, PayRequest, PaymentRail, Receipt};
 
 use super::keys::Keypair;
-use super::rpc::{AssetHolding, StellarRpc, SubmitResult, TxRecord};
+use super::rpc::{AssetHolding, HorizonRpc, StellarRpc, SubmitResult, TxRecord};
 use super::{tx, Network, StellarBinding, StellarConfig, StellarError, StellarRail};
 
 /// A scripted Horizon: `submit_transaction` decodes+re-hashes whatever
@@ -741,4 +741,299 @@ async fn live_horizon_reachable_and_unknown_hash_denies() {
     };
     let rail = StellarRail::new(cfg, horizon);
     assert!(!rail.verify(&receipt).await.unwrap());
+}
+
+// ── B7: real Stellar TESTNET round trip ─────────────────────────────────
+//
+// Everything above this line is offline. This is the ONE test in the whole
+// `patala` workspace that actually moves money on a real network. It is
+// deliberately expensive, deliberately network-dependent, and deliberately
+// NOT part of any default `cargo test` run — see the gate below.
+//
+// What it proves, precisely: throwaway Ed25519 keypairs generated at
+// runtime (never committed, never mainnet) are funded for free by Stellar's
+// testnet Friendbot; two of them establish a trustline in a throwaway
+// self-issued "USDC"-code `CreditAlphanum4` asset (the same wire shape
+// `PATALA.md` §6 describes — testnet has no durable free official Circle
+// USDC to acquire without first holding a trustline, which is exactly the
+// chicken-and-egg this fixture breaks by issuing its own); the issuer seeds
+// the payer; and then `StellarRail::charge` — the actual public API every
+// consumer calls, not a bypassed internal helper — builds, signs and
+// submits a real `PAYMENT` operation through `HorizonRpc`, and
+// `StellarRail::verify` reads it back from Horizon and re-checks it,
+// online, exactly as it would for any other receipt.
+//
+// What it does NOT prove: that Circle's real USDC issuer behaves
+// identically (only the wire shape is shared, not the issuer identity);
+// that mainnet works (a structurally different, real-money network); or
+// that any multi-party/split flow works (single leg only, `patala-stellar`
+// still builds one `Payment` per `StellarRail::charge` call).
+
+use stellar_xdr::curr::{
+    Memo as XdrMemo, MuxedAccount, Operation, OperationBody, Preconditions, SequenceNumber,
+    Transaction as XdrTransaction, TransactionExt, Uint256, VecM,
+};
+
+/// Poll `Horizon` for an account's sequence number, tolerating the brief
+/// propagation delay right after Friendbot funds it. Panics (loudly, with
+/// the address) rather than silently proceeding with a stale/zero sequence
+/// if the account never becomes visible.
+async fn wait_for_sequence(rpc: &HorizonRpc, addr: &str) -> i64 {
+    for attempt in 1..=10 {
+        match rpc.load_sequence(addr).await {
+            Ok(seq) => return seq,
+            Err(e) if attempt < 10 => {
+                eprintln!(
+                    "  (attempt {attempt}/10) {addr} not yet visible on Horizon: {e}; retrying"
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            Err(e) => panic!("account {addr} never became visible on Horizon: {e}"),
+        }
+    }
+    unreachable!()
+}
+
+/// Build one `ops`-operation transaction from `signer`, sign it, and submit
+/// it to `rpc`. Used only to set up the live fixture (trustlines + the
+/// issuer's seed payment) — the actual code under test is
+/// `StellarRail::charge`/`verify`, called separately, below.
+async fn submit_ops(
+    rpc: &HorizonRpc,
+    net_id: [u8; 32],
+    signer: &Keypair,
+    ops: Vec<Operation>,
+    seq: i64,
+    fee: u32,
+) -> SubmitResult {
+    let txn = XdrTransaction {
+        source_account: MuxedAccount::Ed25519(Uint256(signer.pubkey().0)),
+        fee,
+        seq_num: SequenceNumber(seq),
+        cond: Preconditions::None,
+        memo: XdrMemo::None,
+        operations: VecM::try_from(ops).expect("well under the 100-op limit"),
+        ext: TransactionExt::V0,
+    };
+    let hash = tx::tx_hash(net_id, &txn).expect("encode signature payload");
+    let sig = signer.sign(&hash);
+    let env = tx::envelope(txn, signer.pubkey().0, sig.0).expect("build envelope");
+    let b64 = tx::envelope_to_xdr_base64(&env).expect("encode envelope");
+    rpc.submit_transaction(&b64)
+        .await
+        .unwrap_or_else(|e| panic!("submit failed: {e}"))
+}
+
+/// The number of live-network tests this file is supposed to contain. If
+/// this constant and the test below ever disagree, something deleted or
+/// renamed the one test that has ever proven a `patala` rail settles
+/// anything on a real network — see the coverage-count assertion in
+/// `the_live_testnet_round_trip_test_exists_and_is_gated_correctly` below,
+/// which runs in every default `cargo test` and does NOT require network
+/// access, so its failure is never silent.
+const LIVE_TESTNET_TEST_COUNT: usize = 1;
+
+/// Real Stellar TESTNET round trip. **Opt-in AND network-gated**: skipped
+/// unless `PATALA_LIVE_TESTNET=1` is set, on top of `#[ignore]` — belt and
+/// braces, so this never runs by accident in a CI environment with no
+/// network, and running it always requires an explicit, deliberate choice.
+///
+/// ```sh
+/// PATALA_LIVE_TESTNET=1 cargo test -p patala-stellar live_testnet_round_trip \
+///   -- --ignored --nocapture
+/// ```
+#[tokio::test]
+#[ignore = "moves real (testnet) money over the real network; set PATALA_LIVE_TESTNET=1"]
+async fn live_testnet_round_trip_settles_a_real_payment() {
+    if std::env::var("PATALA_LIVE_TESTNET").as_deref() != Ok("1") {
+        eprintln!(
+            "SKIPPING live_testnet_round_trip_settles_a_real_payment: \
+             PATALA_LIVE_TESTNET is not \"1\". No network round trip was attempted — \
+             this is NOT evidence that anything settled. Run with:\n\
+             PATALA_LIVE_TESTNET=1 cargo test -p patala-stellar live_testnet_round_trip \
+             -- --ignored --nocapture"
+        );
+        return;
+    }
+
+    let horizon = HorizonRpc::new("https://horizon-testnet.stellar.org");
+    let net_id = tx::network_id(Network::Testnet.passphrase());
+
+    // 1. Three throwaway keypairs, generated fresh from the OS CSPRNG this
+    //    run. None is ever written to disk, logged, or reused.
+    let issuer = Keypair::generate();
+    let source = Keypair::generate();
+    let dest = Keypair::generate();
+    let issuer_addr = issuer.pubkey().to_strkey();
+    let source_addr = source.pubkey().to_strkey();
+    let dest_addr = dest.pubkey().to_strkey();
+    eprintln!("=== B7 live Stellar testnet round trip ===");
+    eprintln!("issuer (throwaway, testnet-only): {issuer_addr}");
+    eprintln!("source (throwaway, testnet-only): {source_addr}");
+    eprintln!("dest   (throwaway, testnet-only): {dest_addr}");
+
+    // 2. Fund all three via Friendbot (free testnet XLM; no secret ever
+    //    leaves this process).
+    let http = reqwest::Client::new();
+    for (name, addr) in [
+        ("issuer", &issuer_addr),
+        ("source", &source_addr),
+        ("dest", &dest_addr),
+    ] {
+        let url = format!("https://friendbot.stellar.org/?addr={addr}");
+        let resp = http
+            .get(&url)
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("friendbot request for {name} failed: {e}"));
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        assert!(
+            status.is_success(),
+            "friendbot did not fund {name} ({addr}): HTTP {status}: {body}"
+        );
+        eprintln!("friendbot funded {name}: HTTP {status}");
+    }
+
+    // 3. The throwaway USDC-shaped asset: code "USDC", issued by `issuer`.
+    //    Same CreditAlphanum4 wire shape `PATALA.md` §6 describes for real
+    //    Circle USDC — just not Circle's own issuer, because testnet has no
+    //    durable free official USDC to acquire without a trustline already
+    //    existing, which is exactly this chicken-and-egg problem.
+    let asset = tx::usdc_asset("USDC", issuer.pubkey().0).expect("valid asset code");
+    let stellar_xdr::curr::Asset::CreditAlphanum4(alpha) = asset.clone() else {
+        unreachable!("usdc_asset always returns CreditAlphanum4")
+    };
+    let change_trust_asset = stellar_xdr::curr::ChangeTrustAsset::CreditAlphanum4(alpha);
+
+    // 4. `source` and `dest` each establish a trustline — required before
+    //    either can hold a non-native asset at all (a PAYMENT of an asset
+    //    into an account with no trustline fails `op_no_trust`).
+    for (name, kp, addr) in [("source", &source, &source_addr), ("dest", &dest, &dest_addr)] {
+        let seq = wait_for_sequence(&horizon, addr).await;
+        let op = Operation {
+            source_account: None,
+            body: OperationBody::ChangeTrust(stellar_xdr::curr::ChangeTrustOp {
+                line: change_trust_asset.clone(),
+                limit: i64::MAX,
+            }),
+        };
+        let result = submit_ops(&horizon, net_id, kp, vec![op], seq + 1, 100).await;
+        assert!(
+            result.successful,
+            "{name} trustline transaction did not succeed: {result:?}"
+        );
+        eprintln!("{name} trustline established: tx {} (ledger {})", result.hash, result.ledger);
+    }
+
+    // 5. The issuer seeds `source` with enough of the asset to make one
+    //    payment to `dest` below.
+    let issuer_seq = wait_for_sequence(&horizon, &issuer_addr).await;
+    let seed_amount: i64 = 500_000_000; // 5.0 units, ten-millionths scale
+    let seed_op = Operation {
+        source_account: None,
+        body: OperationBody::Payment(stellar_xdr::curr::PaymentOp {
+            destination: MuxedAccount::Ed25519(Uint256(source.pubkey().0)),
+            asset: asset.clone(),
+            amount: seed_amount,
+        }),
+    };
+    let seed_result = submit_ops(&horizon, net_id, &issuer, vec![seed_op], issuer_seq + 1, 100).await;
+    assert!(
+        seed_result.successful,
+        "issuer seed payment did not succeed: {seed_result:?}"
+    );
+    eprintln!(
+        "issuer seeded source with {seed_amount} stroops of USDC: tx {} (ledger {})",
+        seed_result.hash, seed_result.ledger
+    );
+
+    // 6. THE ACTUAL TEST: `StellarRail::charge`, the real public entry
+    //    point every consumer calls — not a bypassed internal helper — pays
+    //    `dest` from `source` over the live network.
+    let cfg = StellarConfig::testnet(issuer_addr.clone());
+    let rpc_dyn: std::sync::Arc<dyn StellarRpc> = std::sync::Arc::new(horizon);
+    let rail = StellarRail::new(cfg, std::sync::Arc::clone(&rpc_dyn)).with_signer(source);
+
+    let pay_amount: i64 = 10_000_000; // 1.0 unit
+    let request = patala_core::PayRequest {
+        amount_minor: pay_amount as u64,
+        currency: "USDC".to_string(),
+        destination: dest_addr.clone(),
+        reference: "patala-stellar-b7-live-round-trip".to_string(),
+    };
+    let receipt = rail
+        .charge(&request)
+        .await
+        .unwrap_or_else(|e| panic!("StellarRail::charge failed against live testnet: {e}"));
+
+    let binding: StellarBinding =
+        serde_json::from_slice(&receipt.proof).expect("receipt proof must decode");
+    eprintln!("--- SETTLED ---");
+    eprintln!("tx_hash: {}", binding.tx_hash);
+
+    // 7. Read the same transaction back from Horizon directly (independent
+    //    of `verify`, purely to print the raw response into this report)
+    //    and print its ledger sequence + envelope.
+    let record = rpc_dyn
+        .get_transaction(&binding.tx_hash)
+        .await
+        .unwrap_or_else(|e| panic!("re-fetching the settled tx from Horizon failed: {e}"))
+        .unwrap_or_else(|| {
+            panic!(
+                "Horizon has no record of tx {} moments after it reported success",
+                binding.tx_hash
+            )
+        });
+    eprintln!("ledger: {}", record.ledger);
+    eprintln!("horizon successful: {}", record.successful);
+    eprintln!("horizon envelope_xdr: {}", record.envelope_xdr);
+    assert!(record.successful, "Horizon's own re-fetch reports failure");
+
+    // 8. `StellarRail::verify` — the actual entitlement check every
+    //    consumer gates on — must independently confirm this receipt,
+    //    online, against Horizon.
+    let verified = rail
+        .verify(&receipt)
+        .await
+        .unwrap_or_else(|e| panic!("verify errored instead of answering: {e}"));
+    assert!(
+        verified,
+        "StellarRail::verify rejected a receipt for a payment Horizon itself reports as \
+         successful and settled"
+    );
+
+    eprintln!(
+        "=== B7 PASSED: one real payment settled on Stellar testnet and StellarRail::verify \
+         confirmed it ==="
+    );
+}
+
+/// Always-on (no network, no `#[ignore]`) guard against the live testnet
+/// test silently vanishing or being weakened. `#[ignore]`d tests are
+/// invisible in a default `cargo test` summary — this is the "skip loudly"
+/// half of that guard: it runs every time and fails if the live test's name,
+/// its `#[ignore]` gate, or its `PATALA_LIVE_TESTNET` gate ever disappear.
+#[test]
+fn the_live_testnet_round_trip_test_exists_and_is_gated_correctly() {
+    let src = include_str!("tests.rs");
+    // Built by concatenation, not a literal, so THIS line does not itself
+    // count as an occurrence of the needle it searches for.
+    let needle = format!("async fn {}(", "live_testnet_round_trip_settles_a_real_payment");
+    let occurrences = src.matches(&needle).count();
+    assert_eq!(
+        occurrences, LIVE_TESTNET_TEST_COUNT,
+        "the live Stellar testnet round-trip test must exist exactly {LIVE_TESTNET_TEST_COUNT} \
+         time(s) — if this fails, someone deleted, renamed, or duplicated the one test that has \
+         ever proven a patala rail settles anything on a real network (B7)"
+    );
+    assert!(
+        src.contains("#[ignore = \"moves real (testnet) money over the real network"),
+        "the live test must stay opt-in via #[ignore] so it never runs by accident in CI"
+    );
+    assert!(
+        src.contains("PATALA_LIVE_TESTNET"),
+        "the live test must stay gated on PATALA_LIVE_TESTNET so CI without network access \
+         is never made flaky by it"
+    );
 }

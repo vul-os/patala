@@ -23,7 +23,7 @@ this README describes what is actually built, honestly, as it lands.
 patala is a **library and a sidecar — there is no GUI**. Everything below is
 either a crate, a trait, or a process you run next to your own app.
 
-## Status: foundational — built and unit-tested, rails unverified against live networks
+## Status: foundational — built and unit-tested; one rail has one live testnet result
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
 runs two passes and both are gates: **260 offline tests** across the seven
@@ -34,11 +34,18 @@ processor feature is compiled in
 chain and no processor.
 
 What that does *not* mean: **no rail here has been run against a live
-network or a live merchant account from this repo** — each says so plainly
-in its own README, and the crypto rails name the exact step to validate
-(fund a testnet account, run the `#[ignore]`d, env-gated live test). Treat
-the rails as a tested foundation to validate against testnet/sandbox, not as
-production-proven.
+merchant account from this repo**, and only **one** rail has been run
+against a live network at all — `patala-stellar`, once, on **testnet**,
+2026-07-30: a single-leg USDC-shaped payment built and submitted through the
+real `StellarRail::charge` API, independently confirmed by
+`StellarRail::verify` reading it back from Horizon (transaction hash and
+ledger sequence in `patala-stellar/README.md`). Read that narrowly — it says
+nothing about mainnet, nothing about multi-party/split payments (not yet
+built — see `patala-stellar`'s own caveats), and nothing about any other
+rail, which each still say plainly, in their own READMEs, that they have not
+been run live and name the exact step to validate (fund a testnet account,
+run the `#[ignore]`d, env-gated live test). Treat the rails as a tested
+foundation to validate against testnet/sandbox, not as production-proven.
 
 The things that genuinely executed end-to-end are the **Python binding, the
 Go binding and the sidecar** — real round-trips over a real interpreter,

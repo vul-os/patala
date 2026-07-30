@@ -4,6 +4,15 @@
 is not lost. Where this document and any repo's code disagree, the code is true.
 Nothing described here has ever settled a real payment on any rail.
 
+**Narrow update, same day (B7):** `patala-stellar`'s underlying single-leg payment
+primitive — `StellarRail::charge`/`verify`, called directly, not through any product —
+has since settled once on Stellar **testnet** (2026-07-30; tx hash and ledger in
+`patala-stellar/README.md`). That is evidence the rail primitive itself moves and
+verifies real money on a real network. It is **not** evidence for anything else on
+this page: no recurring schedule, atomic split, escrow, or citation split described
+below has been exercised, by that test or by anything else, and mainnet remains
+untouched. Every claim past this paragraph stands exactly as before.
+
 ## 1. Who this is for
 
 Six Vulos products are **distributed platforms** — multi-operator, no central

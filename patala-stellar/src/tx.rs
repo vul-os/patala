@@ -67,14 +67,15 @@
 //!
 //! # Honesty
 //!
-//! This encoder has **not** been run against a live Stellar network from this
-//! environment. What *is* checked, offline, in `src/tests.rs`: every value
-//! built here round-trips through `stellar_xdr`'s own (spec-generated)
-//! decoder byte-for-byte, and a fixed-input known-answer transaction produces
-//! a deterministic hash + signature that regressions are pinned against. That
-//! is strong evidence the wire format is at least *internally* and
-//! *spec-decoder* consistent — it is not the same as confirmation from a real
-//! Horizon/testnet submission. See `README.md`.
+//! **This encoder has settled one real payment on Stellar testnet**
+//! (2026-07-30, tx `32663937fe1407f9de3e781effa6ac9f4b1d29340ea63e72f6335a6c91effb89`,
+//! ledger `3882739`) — see `src/lib.rs`'s module docs and `README.md` for the
+//! full evidence and its precise, narrow scope (single-leg only; mainnet and
+//! multi-party remain unverified). What *is* also checked, offline, in
+//! `src/tests.rs`: every value built here round-trips through `stellar_xdr`'s
+//! own (spec-generated) decoder byte-for-byte, and a fixed-input known-answer
+//! transaction produces a deterministic hash + signature that regressions are
+//! pinned against.
 
 use sha2::{Digest, Sha256};
 use stellar_xdr::curr::{

@@ -170,15 +170,58 @@ Every verdict — including `StructurallyValid` — carries
 `EXCHANGE_DEPOSIT_CAVEAT` and `human_must_confirm: true`. There is no verdict
 this rail can produce that means "safe to send to".
 
-## Honesty (`PATALA.md` §8) — READ THIS — UNVERIFIED AGAINST LIVE
+## Honesty (`PATALA.md` §8) — READ THIS
 
-**This crate has not been run against a live Stellar network — testnet or
-mainnet — from this environment**, because this environment cannot reach
-Horizon. Nothing in this crate's behavior against a real network has been
-confirmed.
+**Testnet: one payment operation has settled.** On 2026-07-30, a throwaway
+keypair paid another throwaway keypair a single-leg USDC-shaped payment
+(a self-issued `CreditAlphanum4` asset coded `"USDC"` — see caveat below) on
+Stellar **testnet**, built and submitted through this crate's real public
+entry point, `StellarRail::charge`, and independently re-confirmed by
+`StellarRail::verify` reading it back from Horizon:
 
-What **is** checked, offline, in `src/tests.rs` (23 tests, all passing, no
-network):
+- transaction hash: `32663937fe1407f9de3e781effa6ac9f4b1d29340ea63e72f6335a6c91effb89`
+- ledger sequence: `3882739`
+- Horizon: `"successful": true`, `"operation_count": 1`
+
+Reproduce it yourself — no secret is committed, every keypair is generated
+fresh at runtime:
+
+```sh
+PATALA_LIVE_TESTNET=1 cargo test -p patala-stellar live_testnet_round_trip \
+  -- --ignored --nocapture
+```
+
+(`live_testnet_round_trip_settles_a_real_payment` in `src/tests.rs`. A
+separate, always-on, network-free test asserts this test still exists and
+is still gated, so its deletion or weakening cannot pass silently.)
+
+**Read the claim exactly this narrowly — no wider:**
+
+- ✅ The wire encoding, the `TransactionSignaturePayload` signing base, the
+  Ed25519 signature, the Horizon submission, and the online
+  `verify()`-against-Horizon check all work end-to-end against real Stellar
+  testnet infrastructure, through this crate's actual `charge`/`verify` API
+  — not a bypassed internal helper.
+- ❌ **Mainnet remains untouched and unproven.** A structurally different,
+  real-money network; nothing above says anything about it.
+- ❌ **Multi-party / split payments remain unproven.** `StellarRail::charge`
+  still builds exactly one `Payment` operation per call (`patala` backlog
+  item B1); `tx.rs` carries N-leg builder/decoder primitives, but they are
+  not yet wired into `StellarRail`.
+- ❌ **Not Circle's own USDC.** The settled payment used a throwaway,
+  self-issued asset with the wire shape `PATALA.md` §6 describes (4-byte
+  code `"USDC"`, `CreditAlphanum4`) — testnet has no durable, free official
+  Circle-issued USDC reachable without a trustline already in place, which
+  is the exact chicken-and-egg this fixture breaks by issuing its own. Real
+  Circle USDC (mainnet or testnet) is unexercised.
+- ❌ This is not a claim that the rail is production-ready — see the
+  confidence assessment below, which still stands.
+
+What **is** checked, offline, in `src/tests.rs`: 25 tests total, of which
+**23 run by default with no network at all** (including the always-on guard
+that the live round-trip test above cannot silently vanish) and **2 are
+`#[ignore]`d and require live Horizon** — the pre-existing connectivity
+smoke test, and the round-trip test above:
 
 - A scripted fake Horizon (`FakeRpc`) that decodes and re-hashes whatever
   `charge` submits using this crate's own pure functions, so the full
@@ -207,7 +250,8 @@ network):
   stronger of the two claims — it flows through the Foundation's own
   decoder, not just through this crate's own logic twice.
 
-An opt-in live smoke test exists and is `#[ignore]`d by default:
+A second, older opt-in live smoke test also exists and is `#[ignore]`d by
+default:
 
 ```sh
 PATALA_STELLAR_LIVE=https://horizon-testnet.stellar.org \
@@ -215,15 +259,15 @@ PATALA_STELLAR_LIVE=https://horizon-testnet.stellar.org \
 ```
 
 It only confirms Horizon connectivity and that a hash that cannot exist is
-denied cleanly — it does not submit a real payment (no funded testnet
-account is assumed to exist). **Running an actual `charge()` against
-testnet Horizon and confirming `verify()` accepts the resulting receipt has
-not been done from this environment and is the single most important
-remaining step before trusting this rail with real value.** A human with
-network access should: fund a testnet account via Friendbot, set
-`STELLAR_SECRET_KEY`, build a `StellarRail` over `rpc::HorizonRpc`, call
-`charge`, and confirm `verify` returns `Ok(true)` — then repeat once against
-mainnet with a small real amount before treating this as production-ready.
+denied cleanly — it does not submit a payment. That gap is what
+`live_testnet_round_trip_settles_a_real_payment` (above) now closes: it
+funds throwaway testnet accounts via Friendbot, establishes trustlines,
+seeds a payer, calls the real `StellarRail::charge`, and confirms
+`StellarRail::verify` accepts the resulting receipt against live Horizon —
+done, on testnet, 2026-07-30 (evidence above). **Mainnet is the remaining
+step** before trusting this rail with real value: repeat the same shape of
+test once against `Network::Public` with a small real amount, using
+Circle's real `CIRCLE_USDC_ISSUER_PUBLIC` rather than a throwaway issuer.
 
 **Confidence assessment:** the StrKey encode/decode is delegated entirely to
 the Foundation's own crate (high confidence). The XDR *codec* — struct
@@ -232,7 +276,10 @@ Foundation's own generated code (high confidence). What this crate adds on
 top — which fields go into the `Transaction`/`Operation`/signing payload,
 in what order, with what values, and the SHA-256-then-Ed25519 signing
 procedure — matches this author's understanding of the Stellar protocol
-documentation, and passes an XDR round-trip through the official decoder,
-but **has not been cross-checked against stellar-core, js-stellar-sdk,
-py-stellar-base, or a live network.** Treat that layer as
-**plausible-but-unverified** until the live test above is run.
+documentation, passes an XDR round-trip through the official decoder, **and
+has now settled one real payment operation on Stellar testnet** (evidence
+above). It has still **not been cross-checked against stellar-core,
+js-stellar-sdk, or py-stellar-base directly**, and mainnet remains
+untouched. Treat single-leg testnet payments as **verified once**; treat
+mainnet, multi-party splits, and cross-implementation agreement as still
+**plausible-but-unverified**.

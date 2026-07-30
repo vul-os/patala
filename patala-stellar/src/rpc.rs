@@ -8,9 +8,12 @@
 //! [Horizon's REST API](https://developers.stellar.org/docs/data/apis/horizon)
 //! instead of Solana's JSON-RPC.
 //!
-//! **Honesty:** [`HorizonRpc`] has not been exercised against a live Horizon
-//! instance from this environment. See `README.md` and the `#[ignore]`d live
-//! test in `src/tests.rs`.
+//! **Honesty:** [`HorizonRpc`] submitted and read back a real transaction
+//! against live testnet Horizon on 2026-07-30 (tx
+//! `32663937fe1407f9de3e781effa6ac9f4b1d29340ea63e72f6335a6c91effb89`,
+//! ledger `3882739`) — see `src/lib.rs`'s module docs and `README.md` for
+//! the full evidence and scope (testnet only; mainnet unexercised). See the
+//! `#[ignore]`d live tests in `src/tests.rs`.
 
 use async_trait::async_trait;
 

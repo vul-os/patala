@@ -338,6 +338,7 @@ impl SolanaRail {
             holds_funds: false,
             currencies: vec!["USDC".to_string()],
             settlement: cfg.commitment.settlement(),
+            atomic_multi_party: false, // not yet built on this rail -- see the rail's own module docs (B3)
         };
         Self {
             cfg,

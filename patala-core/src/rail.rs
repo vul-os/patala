@@ -301,6 +301,7 @@ mod tests {
                     holds_funds: true,
                     currencies: vec!["USD".into()],
                     settlement: Settlement::Days(2),
+                    atomic_multi_party: false, // this bare test rail implements no atomic operation (B3)
                 },
             }
         }

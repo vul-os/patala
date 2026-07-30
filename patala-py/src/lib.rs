@@ -178,6 +178,12 @@ pub struct RailCapabilities {
     pub holds_funds: bool,
     pub currencies: Vec<String>,
     pub settlement: Settlement,
+    /// Mirrors [`patala_core::RailCapabilities::atomic_multi_party`] — see
+    /// that field's docs. `false` for every fiat processor, structurally;
+    /// `false` for every crypto rail exposed through this binding today,
+    /// because none has an atomic multi-party operation wired up yet (B3,
+    /// `docs/shared-economics.md` §5).
+    pub atomic_multi_party: bool,
 }
 
 impl From<&CoreRailCapabilities> for RailCapabilities {
@@ -189,6 +195,7 @@ impl From<&CoreRailCapabilities> for RailCapabilities {
             holds_funds: c.holds_funds,
             currencies: c.currencies.clone(),
             settlement: c.settlement.into(),
+            atomic_multi_party: c.atomic_multi_party,
         }
     }
 }

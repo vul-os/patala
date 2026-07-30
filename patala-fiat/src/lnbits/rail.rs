@@ -145,6 +145,7 @@ impl LNbitsRail {
             holds_funds: false, // self-hosted: the organiser's own node custodies -- never a third party, never patala.
             currencies: config.currencies.clone(),
             settlement: Settlement::Instant, // Lightning HTLC -- see module docs.
+            atomic_multi_party: false, // always false: N payouts here are N independent API calls, never one atomic event (B3)
         };
 
         let base_url = config.base_url.clone();

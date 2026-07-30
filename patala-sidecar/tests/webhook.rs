@@ -81,6 +81,7 @@ async fn spawn(token: &str, seen: Arc<Mutex<Option<WebhookDelivery>>>) -> String
                 holds_funds: true,
                 currencies: vec!["ZAR".to_string()],
                 settlement: Settlement::Days(2),
+                atomic_multi_party: false, // this webhook-test rail implements no atomic operation (B3)
             },
             seen,
         }) as Arc<dyn PaymentRail>,

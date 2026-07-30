@@ -145,6 +145,7 @@ pub struct RailCapabilities {
     pub holds_funds: bool,
     pub currencies: Vec<String>,
     pub settlement: Settlement,    // Instant | Seconds(u32) | Days(u8)
+    pub atomic_multi_party: bool,  // ALWAYS false for a fiat rail -- see below
 }
 ```
 
@@ -192,6 +193,14 @@ Webhooks, ZeroDecimalOK}`. Mapping:
   same-day — if so, use that and cite where you got it). Make both
   configurable via env vars, following `stripe::config`/`paystack::config`'s
   exact naming pattern (`<PROVIDER>_REQUIRES_KYC`, `<PROVIDER>_SETTLEMENT_DAYS`).
+- `atomic_multi_party` -> always `false`, for every fiat rail, with no
+  exception and no config knob. N payouts through any processor are N
+  independent API calls; there is no way to make them land atomically. Set
+  `atomic_multi_party: false` literally in your constructor (do not compute
+  it from config) — `patala-core`'s own test suite
+  (`capabilities::tests::every_fiat_processor_rail_in_this_workspace_declares_no_atomic_multi_party`)
+  greps every file in `patala-fiat/src` and `patala-hyperswitch/src` for
+  exactly this and fails the build if a new rail omits it or sets it `true`.
 - `holds_funds` -> always `true` for a fiat processor (`PATALA.md` §1, §8:
   this describes the PROCESSOR's custody, never patala's). Every fiat rail
   in this crate sets this unconditionally.

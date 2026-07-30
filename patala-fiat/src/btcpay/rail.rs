@@ -174,6 +174,7 @@ impl BTCPayRail {
             holds_funds: false, // self-hosted: the organiser's own wallet/node custodies -- never a third party, never patala. See module docs.
             currencies: config.currencies.clone(),
             settlement,
+            atomic_multi_party: false, // always false: N payouts here are N independent API calls, never one atomic event (B3)
         };
 
         let base_url = config.base_url.clone();

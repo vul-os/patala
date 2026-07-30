@@ -195,6 +195,7 @@ impl ManualRail {
                 holds_funds: false,  // no processor at all; see PATALA.md §1, §8
                 currencies: Vec::new(), // empty == every currency, mirrors cackle's `Currencies: nil`
                 settlement: Settlement::Days(0), // see module "Gaps" note
+                atomic_multi_party: false, // always false: N payouts here are N independent API calls, never one atomic event (B3)
             },
         }
     }

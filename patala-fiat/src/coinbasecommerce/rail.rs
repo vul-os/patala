@@ -120,6 +120,7 @@ impl CoinbaseCommerceRail {
             holds_funds: true, // Coinbase Commerce (the PROCESSOR) briefly custodies -- never patala.
             currencies: config.currencies.clone(),
             settlement: Settlement::Instant,
+            atomic_multi_party: false, // always false: N payouts here are N independent API calls, never one atomic event (B3)
         };
 
         let base_url = config.base_url.clone();

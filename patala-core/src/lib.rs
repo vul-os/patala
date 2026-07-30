@@ -8,7 +8,7 @@
 //! |---|---|
 //! | [`PaymentRail`] | The trait — `id`, `capabilities`, `quote`, `charge`, `verify`, `validate_destination`, `refund`, `verify_webhook`. |
 //! | [`RailClass`] | `CustodialReversible` \| `NonCustodialFinal` — the settlement class, in the type. |
-//! | [`RailCapabilities`] | class, reversible, requires_kyc, holds_funds, currencies, settlement. |
+//! | [`RailCapabilities`] | class, reversible, requires_kyc, holds_funds, currencies, settlement, atomic_multi_party. |
 //! | [`FailoverRail`] | Tries wrapped rails in order; never crosses [`RailClass`] silently. |
 //! | [`MockRail`] | The offline default — deterministic, dependency-free. |
 //! | [`WebhookDelivery`] / [`WebhookEvent`] | The push side: raw bytes + headers in, an authenticated [`WebhookStatus`] out. |

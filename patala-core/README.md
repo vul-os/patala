@@ -28,8 +28,14 @@ README describes what is actually built.
   owe the payer: a refundable "pending" state with a card form, or a wallet
   address with a signed final receipt. Never flatten it.
 - **`RailCapabilities`** — `class`, `reversible`, `requires_kyc`,
-  `holds_funds`, `currencies`, `settlement`. Everything a consumer is allowed
-  to know about a rail, without naming its provider.
+  `holds_funds`, `currencies`, `settlement`, `atomic_multi_party`. Everything
+  a consumer is allowed to know about a rail, without naming its provider.
+  `atomic_multi_party` is always `false` for every fiat processor rail
+  (structurally: N payouts are N independent API calls) and, today, `false`
+  for every crypto rail too — a chain can support it in principle, but no
+  rail here exposes it as an operation yet. A consumer that needs one calls
+  `RailCapabilities::require_atomic_multi_party` and is refused rather than
+  silently handed N separate payments (`docs/shared-economics.md` §5).
 - **`FailoverRail`** — wraps `Vec<Box<dyn PaymentRail>>`, tries them in order,
   falls through on error. It will not silently cross from a
   `NonCustodialFinal` request to a `CustodialReversible` rail (or the

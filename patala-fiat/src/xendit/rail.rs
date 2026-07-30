@@ -128,6 +128,7 @@ impl XenditRail {
             holds_funds: true, // Xendit (the PROCESSOR) custodies funds in flight -- never patala. See PATALA.md §1, §8.
             currencies: config.currencies.clone(),
             settlement: Settlement::Days(config.settlement_days),
+            atomic_multi_party: false, // always false: N payouts here are N independent API calls, never one atomic event (B3)
         };
 
         Ok(Self {

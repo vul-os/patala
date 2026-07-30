@@ -151,12 +151,33 @@ processor are N independent API calls and **cannot** be made atomic. Therefore a
 `Settlement`, so a consumer declares its requirement and a rail that cannot meet it is
 **refused** rather than silently degrading.
 
+**Done (B3, 2026-07-30):** the field, `RailCapabilities::require_atomic_multi_party`,
+and `false` declared explicitly on every rail in the workspace — `patala-core`'s own
+test suite greps `patala-fiat`/`patala-hyperswitch` so a future rail cannot silently
+claim `true` without a real atomic operation behind it. Declared `false`, not yet
+`true`, on the two crypto rails too: `patala-solana` and `patala-stellar` have no
+atomic multi-party operation *wired up* today, even though `patala-stellar/src/tx.rs`
+already carries the N-leg builder/decoder primitives an atomic split would use (see
+B1 below). The capability field is a declaration a future atomic-charge path will
+read; nothing yet calls `require_atomic_multi_party` at runtime, because no such path
+exists yet.
+
 > ### DECISION — the Stellar multi-operation work lands in `patala-stellar`
 >
+> **Correction, 2026-07-30 (checked against code while landing B7/B3):** the
+> `tx.rs:169`/`tx.rs:237` citation below is stale. `tx.rs` already has N-leg builder
+> (`build_payment_transaction`, `PaymentLeg`) and decoder (`decode_payments`)
+> primitives, tested offline for up to the protocol's 100-operation limit. What is
+> genuinely still true is narrower: `StellarRail::charge`/`verify` — the
+> `patala_core::PaymentRail` trait methods every consumer actually calls — still
+> build and accept exactly **one** `Payment` operation each; the N-leg primitives are
+> not reachable through the rail. That narrower gap is what B1 still needs to close.
+>
 > `patala-stellar` currently builds **one** `Payment` operation and its verification
-> **rejects** multiples (`tx.rs:169`, `tx.rs:237`). Magnetite needs N operations for
-> its atomic split; vuna will need it for citation splits; soko will need it for
-> multi-seller orders.
+> **rejects** multiples (`tx.rs:169`, `tx.rs:237`) — see the correction above; this was
+> true when this record was written and is no longer the full picture. Magnetite
+> needs N operations for its atomic split; vuna will need it for citation splits;
+> soko will need it for multi-seller orders.
 >
 > **Put it in `patala-stellar`, not in a consumer-side adapter.** Same work, same
 > effort, and it is the difference between one implementation and three. This is the
@@ -203,9 +224,16 @@ assumption — and every assumption checked during this investigation moved, inc
 two chain facts that were simply false.
 
 1. Integrate magnetite's outstanding work; collapse its duplicate CBOR and root-hash
-   implementations.
-2. Extend `patala-stellar` to multi-operation, per §5.
+   implementations. — **not done by this record's update.**
+2. Extend `patala-stellar` to multi-operation, per §5. — **not done**: `tx.rs` has
+   carried the N-leg builder/decoder primitives since before this update, but
+   `StellarRail::charge`/`verify` (the trait `patala-core` consumers actually call)
+   still build/accept exactly one `Payment` operation. The primitives existing is not
+   the same as the rail exposing them.
 3. **Settle one real payment on Stellar testnet.** This is the gate on every economic
-   claim in every product.
+   claim in every product. — **done, 2026-07-30 (B7).** One single-leg payment,
+   through `StellarRail::charge`/`verify`, on testnet only. See `patala-stellar/README.md`.
 4. Then lift what proved out: the recurring primitive, the pointer registry,
-   `atomic_multi_party`.
+   `atomic_multi_party`. — **`atomic_multi_party` done (B3, 2026-07-30)**, the
+   capability field only, not the operation it will gate. The recurring primitive and
+   the pointer registry remain not built.

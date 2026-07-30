@@ -102,6 +102,7 @@ impl MockRail {
                 } else {
                     Settlement::Instant
                 },
+                atomic_multi_party: false, // MockRail has no atomic multi-party operation (B3)
             },
             key,
             fee_minor: 0,

@@ -68,6 +68,8 @@ pub struct RailCapabilities {
     pub holds_funds: bool,          // does the RAIL custody? (the substrate never does)
     pub currencies: Vec<String>,    // e.g. ["USDC", "USD", "NGN"]
     pub settlement: Settlement,     // Instant | Seconds(u32) | Days(u8)
+    pub atomic_multi_party: bool,   // N payouts as ONE atomic settlement, never N API calls.
+                                    // Structurally false for every fiat processor (docs/shared-economics.md §5).
 }
 
 #[async_trait]

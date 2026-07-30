@@ -146,6 +146,7 @@ impl PayPalRail {
             holds_funds: true, // PayPal (the PROCESSOR) custodies funds in flight -- never patala.
             currencies: config.currencies.clone(),
             settlement: Settlement::Days(config.settlement_days),
+            atomic_multi_party: false, // always false: N payouts here are N independent API calls, never one atomic event (B3)
         };
 
         let base_url = config.base_url.clone();

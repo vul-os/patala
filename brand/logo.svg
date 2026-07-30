@@ -1,19 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Patala">
   <title>Patala</title>
-  <!-- Canonical square app tile, to the Vulos product-logo standard: 128 box,
-       rx 28, a near-black ground tinted toward the product's own hue. #0c0f1e
-       is indigo-tinted (blue channel dominant, same hue direction as the
-       brand's indigo #151c33 and canvas #0d1220 CSS vars) at relative luminance
-       ≈0.0051 — between zana's #14110b (0.0057) and kotva's #0f0d0b (0.0041),
-       close to patala's own site canvas #0d1220 (0.0062) but a shade darker
-       so the tile holds against the dark product grid it sits on. -->
   <rect width="128" height="128" rx="28" fill="#0c0f1e"/>
-  <!-- The mark: a cowrie shell, one closed path, even-odd fill, single
-       colour (vermilion #f06b3d) — identical geometry to the one inline in
-       site/index.html. Scaled to 0.72 (centred) so its optical weight
-       matches the rest of the fleet's tiles, checked against zana.svg,
-       kotva.svg and openrate.svg side by side at 96/48/32/16px. -->
-  <g transform="translate(17.92,17.92) scale(0.72)">
-    <path fill="#f06b3d" fill-rule="evenodd" d="M64 12 C83 12 100 33 100 62 C100 93 83 116 64 116 C45 116 28 93 28 62 C28 33 45 12 64 12 Z M64 26 L70 32 L65.5 38 L70 45 L65.5 51 L70 58 L65.5 64 L70 71 L65.5 77 L70 84 L65.5 90 L70 97 L64 104 L58 97 L62.5 90 L58 84 L62.5 77 L58 71 L62.5 64 L58 58 L62.5 51 L58 45 L62.5 38 L58 32 Z"/>
+  <!-- cowrie shell: the traditional money-shell — a payment substrate -->
+  <ellipse cx="64" cy="64" rx="29" ry="40" fill="#f06b3d"/>
+  <!-- aperture: the shell's toothed opening -->
+  <path d="M64 33 Q74 64 64 95 Q54 64 64 33 Z" fill="#0c0f1e"/>
+  <g stroke="#f06b3d" stroke-width="3" stroke-linecap="round">
+    <line x1="60.5" y1="45" x2="67.5" y2="45"/>
+    <line x1="59" y1="54.5" x2="69" y2="54.5"/>
+    <line x1="58.5" y1="64" x2="69.5" y2="64"/>
+    <line x1="59" y1="73.5" x2="69" y2="73.5"/>
+    <line x1="60.5" y1="83" x2="67.5" y2="83"/>
   </g>
 </svg>

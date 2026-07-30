@@ -17,6 +17,18 @@
 //! * [`rpc`] — the `StellarRpc` seam (so `charge`/`verify` are unit-testable
 //!   offline against a fake) plus the real `HorizonRpc` REST client.
 //!
+//! # Atomic multi-party splits (B1, `docs/shared-economics.md` §5)
+//!
+//! [`PaymentRail::charge`]/[`PaymentRail::verify`] are single-recipient —
+//! that is `patala_core`'s own seam. [`StellarRail::charge_split`]/
+//! [`StellarRail::verify_split`] are the rail-specific, **atomic** N-leg
+//! counterpart, living beneath that seam: one Stellar transaction, one to
+//! [`tx::MAX_OPERATIONS`] `PAYMENT` operations, where either every leg lands
+//! or none does. They are deliberately not on the [`PaymentRail`] trait —
+//! see their own docs for why — so a consumer that needs one holds a
+//! concrete [`StellarRail`], not a `Box<dyn PaymentRail>`. Tested offline
+//! only; **not** run against a live network from this environment.
+//!
 //! # Keys (`PATALA.md` §6)
 //!
 //! Stellar is Ed25519-native, exactly like Solana: [`StellarRail`]'s
@@ -88,12 +100,14 @@
 //!
 //! **Read that narrowly.** It proves the wire encoding, signing base,
 //! Horizon submission, and online verification work end-to-end against real
-//! testnet infrastructure, through this crate's actual API. It does **not**
-//! prove: mainnet (untouched, a structurally different real-money network);
-//! multi-party/split payments (`charge` still builds exactly one `Payment`
-//! operation per call — `tx.rs` has N-leg primitives not yet wired in here);
-//! or that Circle's own USDC issuer behaves identically (only the wire shape
-//! was exercised). Every offline test in the `tests` module still runs with
+//! testnet infrastructure, through this crate's `charge`/`verify` API,
+//! **single-leg only**. It does **not** prove: mainnet (untouched, a
+//! structurally different real-money network); atomic multi-party splits
+//! ([`StellarRail::charge_split`]/[`StellarRail::verify_split`], added after
+//! this test settled, are tested offline only — never run against a live
+//! network from this environment); or that Circle's own USDC issuer behaves
+//! identically (only the wire shape was exercised). Every offline test in
+//! the `tests` module still runs with
 //! no network — Horizon is a scripted fake there — and a known-answer
 //! transaction (fixed seed, fixed inputs) is round-tripped through
 //! `stellar-xdr`'s own spec-generated decoder to catch wire-format bugs.
@@ -651,5 +665,341 @@ impl PaymentRail for StellarRail {
     /// See [`patala_core::destination`].
     async fn refund(&self, _receipt: &Receipt) -> Result<Receipt> {
         Err(Error::Unsupported("refund"))
+    }
+}
+
+/// One payee of an atomic split — see [`StellarRail::charge_split`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SplitLeg {
+    /// The payee's wallet address (StrKey `G...`).
+    pub destination: String,
+    /// The amount this leg pays, in the rail's currency's minor units
+    /// (`"USDC"`'s fixed-point ten-millionths — same scale as
+    /// [`PayRequest::amount_minor`]). Must be strictly positive.
+    pub amount_minor: u64,
+}
+
+impl SplitLeg {
+    /// A leg paying `amount_minor` to `destination`.
+    pub fn new(destination: impl Into<String>, amount_minor: u64) -> Self {
+        Self {
+            destination: destination.into(),
+            amount_minor,
+        }
+    }
+}
+
+/// The rail-specific data carried in a split [`Receipt::proof`] — the N-leg
+/// counterpart of [`StellarBinding`]. Same shape, same checks, generalised to
+/// a `Vec` of `(destination, amount)` legs bound, in order, by
+/// [`tx::split_memo_hash`].
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct StellarSplitBinding {
+    chain: String,
+    network_passphrase: String,
+    tx_hash: String,
+    source: String,
+    asset_code: String,
+    asset_issuer: String,
+    /// `(destination StrKey, amount in stroops)`, in transaction order — the
+    /// order [`tx::split_memo_hash`] binds.
+    legs: Vec<(String, i64)>,
+    seq_num: i64,
+    /// The **total** fee bid (all legs together) — matches
+    /// [`tx::DecodedPayments::fee`]'s convention.
+    fee: u32,
+    memo_hash: String,
+    signature: String,
+}
+
+impl StellarRail {
+    /// Pay every leg in `legs` **atomically** — in one Stellar transaction,
+    /// where either every leg lands or none does (`docs/shared-economics.md`
+    /// §5, `PATALA.md` §4/§6) — using [`tx::build_payment_transaction`], the
+    /// N-leg generalisation of what [`PaymentRail::charge`] builds for one.
+    ///
+    /// **Deliberately not on the [`PaymentRail`] trait.** `patala_core`'s seam
+    /// is single-recipient by design (see that trait's docs); an atomic
+    /// N-way split is Tier-B, per-rail work that lives *beneath* the seam.
+    /// A consumer that needs one holds a concrete [`StellarRail`] (not a
+    /// `Box<dyn PaymentRail>`) — see [`RailCapabilities::atomic_multi_party`]'s
+    /// docs for why this rail's own `capabilities()` still reports `false`
+    /// even though this method exists.
+    ///
+    /// `receipt.amount_minor` is the **sum** of every leg (see
+    /// [`tx::total_amount`]); `receipt.proof` is a [`StellarSplitBinding`],
+    /// verified by [`Self::verify_split`] (never by the trait's plain
+    /// [`PaymentRail::verify`], which only ever reads a [`StellarBinding`]).
+    ///
+    /// Refused, exactly as [`tx::build_payment_transaction`] refuses building
+    /// one: no legs, more than [`tx::MAX_OPERATIONS`] legs, or any
+    /// non-positive/unrepresentable leg amount — named by index. Also refused:
+    /// no signer configured, a malformed leg destination, or a blank
+    /// `reference`.
+    ///
+    /// **Honesty:** tested offline only (`src/tests.rs`) against the same
+    /// scripted `FakeRpc` `charge`/`verify` use. It has **not** been run
+    /// against a live network from this environment — unlike the single-leg
+    /// path, which settled once on testnet 2026-07-30 (see `README.md`).
+    /// Treat this method as **UNVERIFIED AGAINST LIVE**.
+    pub async fn charge_split(&self, legs: &[SplitLeg], reference: &str) -> Result<Receipt> {
+        if reference.trim().is_empty() {
+            return Err(Error::InvalidRequest("reference must not be empty".into()));
+        }
+        let signer = self.signer.as_ref().ok_or_else(|| {
+            Error::Rail(
+                "stellar rail holds no signing key; it is verify-only (configure one with \
+                 `with_signer`/`from_env` to charge_split)"
+                    .into(),
+            )
+        })?;
+        let issuer = PubKey::from_strkey(&self.cfg.usdc_issuer)
+            .map_err(|e| Error::Rail(format!("configured usdc_issuer is invalid: {e}")))?;
+        let asset = tx::usdc_asset("USDC", issuer.0).map_err(Error::from)?;
+
+        let mut payment_legs = Vec::with_capacity(legs.len());
+        let mut leg_pairs: Vec<(String, i64)> = Vec::with_capacity(legs.len());
+        for (i, leg) in legs.iter().enumerate() {
+            let dest = PubKey::from_strkey(&leg.destination).map_err(|e| {
+                Error::InvalidRequest(format!(
+                    "leg {i}: destination is not a valid stellar address: {e}"
+                ))
+            })?;
+            let amount = i64::try_from(leg.amount_minor).map_err(|_| {
+                Error::InvalidRequest(format!(
+                    "leg {i}: amount_minor exceeds Stellar's i64 range"
+                ))
+            })?;
+            payment_legs.push(tx::PaymentLeg::new(dest.0, asset.clone(), amount));
+            leg_pairs.push((leg.destination.clone(), amount));
+        }
+
+        let source = signer.pubkey();
+        let seq = self
+            .rpc
+            .load_sequence(&source.to_strkey())
+            .await
+            .map_err(Error::from)?;
+        let next_seq = seq
+            .checked_add(1)
+            .ok_or_else(|| Error::Rail("account sequence number overflow".into()))?;
+
+        let leg_refs: Vec<(&str, i64)> = leg_pairs
+            .iter()
+            .map(|(d, a)| (d.as_str(), *a))
+            .collect();
+        let memo = tx::split_memo_hash(self.id(), &source.to_strkey(), reference, &leg_refs);
+
+        let fee = tx::total_fee(self.cfg.base_fee_stroops, payment_legs.len()).map_err(Error::from)?;
+        let unsigned = tx::build_payment_transaction(
+            source.0,
+            &payment_legs,
+            next_seq,
+            self.cfg.base_fee_stroops,
+            memo,
+        )
+        .map_err(Error::from)?;
+        let net_id = tx::network_id(self.cfg.network.passphrase());
+        let hash = tx::tx_hash(net_id, &unsigned).map_err(Error::from)?;
+        let sig = signer.sign(&hash);
+        let env = tx::envelope(unsigned, source.0, sig.0).map_err(Error::from)?;
+        let env_b64 = tx::envelope_to_xdr_base64(&env).map_err(Error::from)?;
+
+        let submitted = self
+            .rpc
+            .submit_transaction(&env_b64)
+            .await
+            .map_err(Error::from)?;
+        if !submitted.successful {
+            return Err(Error::Rail(
+                "stellar split transaction failed on submission".into(),
+            ));
+        }
+        if submitted.hash != hex::encode(hash) {
+            return Err(Error::Rail(
+                "horizon-reported transaction hash does not match the locally computed hash".into(),
+            ));
+        }
+
+        let total = tx::total_amount(&payment_legs).map_err(Error::from)?;
+        let binding = StellarSplitBinding {
+            chain: "stellar".to_string(),
+            network_passphrase: self.cfg.network.passphrase().to_string(),
+            tx_hash: submitted.hash,
+            source: source.to_strkey(),
+            asset_code: "USDC".to_string(),
+            asset_issuer: issuer.to_strkey(),
+            legs: leg_pairs,
+            seq_num: next_seq,
+            fee,
+            memo_hash: hex::encode(memo),
+            signature: hex::encode(sig.0),
+        };
+        let proof = serde_json::to_vec(&binding)
+            .map_err(|e| Error::Rail(format!("encode receipt proof: {e}")))?;
+
+        Ok(Receipt {
+            rail_id: self.id().to_string(),
+            amount_minor: total as u64,
+            currency: "USDC".to_string(),
+            reference: reference.to_string(),
+            proof,
+            settled_at_unix: now_unix(),
+        })
+    }
+
+    /// Verify a receipt produced by [`Self::charge_split`] — the N-leg
+    /// counterpart of [`PaymentRail::verify`], with exactly the same checks
+    /// generalised over every leg: chain/network/asset, the outer
+    /// [`Receipt::amount_minor`] against the sum of the legs, the
+    /// [`tx::split_memo_hash`] binding, an offline signature re-check, and an
+    /// online read-back from Horizon compared operation-for-operation, in
+    /// order.
+    ///
+    /// A receipt built by plain [`PaymentRail::charge`] — a [`StellarBinding`],
+    /// not a [`StellarSplitBinding`] — fails to parse here and is refused, not
+    /// misread as a one-leg split; the reverse is equally true of
+    /// [`PaymentRail::verify`].
+    pub async fn verify_split(&self, receipt: &Receipt) -> Result<bool> {
+        if receipt.rail_id != self.id() {
+            return Ok(false);
+        }
+        if receipt.currency != "USDC" {
+            return Ok(false);
+        }
+        let Ok(binding) = serde_json::from_slice::<StellarSplitBinding>(&receipt.proof) else {
+            return Ok(false);
+        };
+        if binding.chain != "stellar" {
+            return Ok(false);
+        }
+        if binding.network_passphrase != self.cfg.network.passphrase() {
+            return Ok(false);
+        }
+        let Ok(configured_issuer) = PubKey::from_strkey(&self.cfg.usdc_issuer) else {
+            return Ok(false);
+        };
+        if binding.asset_code != "USDC" || binding.asset_issuer != configured_issuer.to_strkey() {
+            return Ok(false);
+        }
+        if binding.legs.is_empty() {
+            return Ok(false);
+        }
+
+        // The outer Receipt and the opaque proof blob must agree on the total.
+        let mut total: i64 = 0;
+        for (_, amount) in &binding.legs {
+            let Some(t) = total.checked_add(*amount) else {
+                return Ok(false);
+            };
+            total = t;
+        }
+        if total != receipt.amount_minor as i64 {
+            return Ok(false);
+        }
+
+        let leg_refs: Vec<(&str, i64)> =
+            binding.legs.iter().map(|(d, a)| (d.as_str(), *a)).collect();
+        let expected_memo = hex::encode(tx::split_memo_hash(
+            self.id(),
+            &binding.source,
+            &receipt.reference,
+            &leg_refs,
+        ));
+        if binding.memo_hash != expected_memo {
+            return Ok(false);
+        }
+
+        let Ok(source_pk) = PubKey::from_strkey(&binding.source) else {
+            return Ok(false);
+        };
+        let Ok(asset) = tx::usdc_asset(&binding.asset_code, configured_issuer.0) else {
+            return Ok(false);
+        };
+        let mut payment_legs = Vec::with_capacity(binding.legs.len());
+        for (i, (dest_str, amount)) in binding.legs.iter().enumerate() {
+            let Ok(dest_pk) = PubKey::from_strkey(dest_str) else {
+                return Ok(false);
+            };
+            let _ = i;
+            payment_legs.push(tx::PaymentLeg::new(dest_pk.0, asset.clone(), *amount));
+        }
+
+        let (Ok(memo_bytes), Ok(sig_bytes)) = (
+            hex::decode(&binding.memo_hash),
+            hex::decode(&binding.signature),
+        ) else {
+            return Ok(false);
+        };
+        let (Ok(memo_arr), Ok(sig_arr)) = (
+            <[u8; 32]>::try_from(memo_bytes),
+            <[u8; 64]>::try_from(sig_bytes),
+        ) else {
+            return Ok(false);
+        };
+        let Some(per_op_fee) = u32::try_from(payment_legs.len())
+            .ok()
+            .filter(|n| *n > 0)
+            .map(|n| binding.fee / n)
+        else {
+            return Ok(false);
+        };
+        let Ok(rebuilt) =
+            tx::build_payment_transaction(source_pk.0, &payment_legs, binding.seq_num, per_op_fee, memo_arr)
+        else {
+            return Ok(false);
+        };
+        let net_id = tx::network_id(&binding.network_passphrase);
+        let Ok(recomputed_hash) = tx::tx_hash(net_id, &rebuilt) else {
+            return Ok(false);
+        };
+        let Ok(claimed_hash_bytes) = hex::decode(&binding.tx_hash) else {
+            return Ok(false);
+        };
+        if claimed_hash_bytes != recomputed_hash {
+            return Ok(false);
+        }
+        if !Keypair::verify(&source_pk, &recomputed_hash, &keys::Sig(sig_arr)) {
+            return Ok(false);
+        }
+
+        // Online: Horizon must know this hash, report it successful, and its
+        // envelope must decode to exactly these legs, in order.
+        let record = match self.rpc.get_transaction(&binding.tx_hash).await {
+            Ok(Some(r)) => r,
+            Ok(None) => return Ok(false),
+            Err(e) => return Err(e.into()),
+        };
+        if !record.successful {
+            return Ok(false);
+        }
+        let Ok(env) = tx::envelope_from_xdr_base64(&record.envelope_xdr) else {
+            return Ok(false);
+        };
+        let Ok(decoded) = tx::decode_payments(&env) else {
+            return Ok(false);
+        };
+        if decoded.legs.len() != binding.legs.len()
+            || decoded.source_pk != source_pk.0
+            || decoded.memo != memo_arr
+            || decoded.seq_num != binding.seq_num
+            || decoded.fee != binding.fee
+        {
+            return Ok(false);
+        }
+        for (i, (dest_str, amount)) in binding.legs.iter().enumerate() {
+            let Ok(dest_pk) = PubKey::from_strkey(dest_str) else {
+                return Ok(false);
+            };
+            let d = &decoded.legs[i];
+            if d.dest_pk != dest_pk.0
+                || d.amount != *amount
+                || !tx::asset_is(&d.asset, "USDC", configured_issuer.0)
+            {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }

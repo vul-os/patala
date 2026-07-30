@@ -170,6 +170,50 @@ Every verdict — including `StructurallyValid` — carries
 `EXCHANGE_DEPOSIT_CAVEAT` and `human_must_confirm: true`. There is no verdict
 this rail can produce that means "safe to send to".
 
+## Atomic multi-party splits: `charge_split` / `verify_split` (B1)
+
+`patala_core::PaymentRail` is single-recipient by design — one `PayRequest`,
+one payee (`PATALA.md` §5). An atomic N-way split — every leg lands or none
+does — is Tier-B work that lives *beneath* that seam, per rail
+(`docs/shared-economics.md` §5), and for Stellar it lives here:
+
+```rust
+pub struct SplitLeg { pub destination: String, pub amount_minor: u64 }
+
+impl StellarRail {
+    pub async fn charge_split(&self, legs: &[SplitLeg], reference: &str) -> Result<Receipt>;
+    pub async fn verify_split(&self, receipt: &Receipt) -> Result<bool>;
+}
+```
+
+Built on `tx::build_payment_transaction`/`tx::decode_payments`/
+`tx::split_memo_hash` — primitives that already existed in `tx.rs` before
+this method pair wired them up. One transaction, 1–100 `PAYMENT` operations
+(`tx::MAX_OPERATIONS`), one `Memo::Hash` binding every leg's destination,
+amount, *and order* (`split_memo_hash`), so a receipt cannot have a leg
+re-pointed, re-priced, re-ordered, added or dropped without the binding —
+and therefore the signature — ceasing to match. `receipt.amount_minor` is
+the sum of every leg; `receipt.proof` is a distinct binding shape
+(`StellarSplitBinding`) that a plain `charge`/`verify` receipt can never be
+mistaken for, and vice versa (`src/tests.rs` asserts both directions).
+
+**Deliberately not on `PaymentRail`.** A consumer that needs an atomic split
+holds a concrete `StellarRail`, not a `Box<dyn PaymentRail>` — which is also
+why `StellarRail::capabilities().atomic_multi_party` stays `false` even
+though this method pair exists: that field is read through the *generic*
+trait interface, where `charge_split`/`verify_split` are not reachable at
+all. Declaring `true` there would be exactly the "capability claimed but
+unreachable through the interface that reports it" bug this codebase has
+been bitten by before (see `patala-core`'s destination-verdict reachability
+work). A future generic atomic-split path, if one is ever added to
+`patala_core` itself, is what would earn `true`.
+
+**Honesty:** tested offline only, against the same scripted `FakeRpc` the
+single-payment path uses. **Never run against a live network from this
+environment** — unlike single-leg `charge`/`verify`, which settled once on
+testnet 2026-07-30 (above). Treat atomic splits as **implemented and
+unit-tested, not live-verified.**
+
 ## Honesty (`PATALA.md` §8) — READ THIS
 
 **Testnet: one payment operation has settled.** On 2026-07-30, a throwaway
@@ -204,10 +248,12 @@ is still gated, so its deletion or weakening cannot pass silently.)
   — not a bypassed internal helper.
 - ❌ **Mainnet remains untouched and unproven.** A structurally different,
   real-money network; nothing above says anything about it.
-- ❌ **Multi-party / split payments remain unproven.** `StellarRail::charge`
-  still builds exactly one `Payment` operation per call (`patala` backlog
-  item B1); `tx.rs` carries N-leg builder/decoder primitives, but they are
-  not yet wired into `StellarRail`.
+- ❌ **Atomic multi-party splits remain unproven live.** `StellarRail::charge_split`/
+  `verify_split` (backlog item B1, added 2026-07-30, same day as this test —
+  *after* it settled) build/verify N `Payment` operations atomically, using the
+  `tx.rs` N-leg primitives. They are tested offline only (`src/tests.rs`) and
+  have never been run against a live network — this settlement predates them
+  and says nothing about them.
 - ❌ **Not Circle's own USDC.** The settled payment used a throwaway,
   self-issued asset with the wire shape `PATALA.md` §6 describes (4-byte
   code `"USDC"`, `CreditAlphanum4`) — testnet has no durable, free official
@@ -217,11 +263,15 @@ is still gated, so its deletion or weakening cannot pass silently.)
 - ❌ This is not a claim that the rail is production-ready — see the
   confidence assessment below, which still stands.
 
-What **is** checked, offline, in `src/tests.rs`: 25 tests total, of which
-**23 run by default with no network at all** (including the always-on guard
-that the live round-trip test above cannot silently vanish) and **2 are
-`#[ignore]`d and require live Horizon** — the pre-existing connectivity
-smoke test, and the round-trip test above:
+What **is** checked, offline, in `src/tests.rs`: 31 tests total, of which
+**29 run by default with no network at all** (including the always-on guard
+that the live round-trip test above cannot silently vanish, and 6 covering
+`charge_split`/`verify_split` — happy path, cross-rejection between the
+single and split verify paths, per-leg tamper detection via the split memo
+hash, empty/malformed-destination/blank-reference refusals, no-signer
+refusal, and cross-network rejection) and **2 are `#[ignore]`d and require
+live Horizon** — the pre-existing connectivity smoke test, and the
+round-trip test above:
 
 - A scripted fake Horizon (`FakeRpc`) that decodes and re-hashes whatever
   `charge` submits using this crate's own pure functions, so the full

@@ -40,12 +40,14 @@ against a live network at all — `patala-stellar`, once, on **testnet**,
 real `StellarRail::charge` API, independently confirmed by
 `StellarRail::verify` reading it back from Horizon (transaction hash and
 ledger sequence in `patala-stellar/README.md`). Read that narrowly — it says
-nothing about mainnet, nothing about multi-party/split payments (not yet
-built — see `patala-stellar`'s own caveats), and nothing about any other
-rail, which each still say plainly, in their own READMEs, that they have not
-been run live and name the exact step to validate (fund a testnet account,
-run the `#[ignore]`d, env-gated live test). Treat the rails as a tested
-foundation to validate against testnet/sandbox, not as production-proven.
+nothing about mainnet, and nothing about atomic multi-party splits
+(`patala-stellar` now has one — `StellarRail::charge_split`/`verify_split`,
+B1 — tested offline only, never run against a live network), and nothing
+about any other rail, which each still say plainly, in their own READMEs,
+that they have not been run live and name the exact step to validate (fund a
+testnet account, run the `#[ignore]`d, env-gated live test). Treat the rails
+as a tested foundation to validate against testnet/sandbox, not as
+production-proven.
 
 The things that genuinely executed end-to-end are the **Python binding, the
 Go binding and the sidecar** — real round-trips over a real interpreter,

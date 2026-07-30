@@ -15,7 +15,7 @@ use patala_core::{Error, PayRequest, PaymentRail, Receipt};
 
 use super::keys::Keypair;
 use super::rpc::{AssetHolding, HorizonRpc, StellarRpc, SubmitResult, TxRecord};
-use super::{tx, Network, StellarBinding, StellarConfig, StellarError, StellarRail};
+use super::{tx, Network, StellarBinding, StellarConfig, StellarError, StellarRail, StellarSplitBinding};
 
 /// A scripted Horizon: `submit_transaction` decodes+re-hashes whatever
 /// `charge` gave it (using the *same* pure functions `charge` used, so this
@@ -118,17 +118,21 @@ impl StellarRpc for FakeRpc {
         // Independently decode + re-hash exactly like a real Horizon/stellar-
         // core would derive the canonical transaction hash from the envelope
         // it was handed — this is not just echoing back what `charge` computed.
+        // `decode_payments` (not `decode_single_payment`) so this one fake
+        // serves both `charge`/`verify` (always exactly one leg) and
+        // `charge_split`/`verify_split` (one or more) — proven byte-identical
+        // for the one-leg case by `tx::tests::one_leg_through_the_multi_builder_is_byte_identical_to_the_single_builder`.
         let env = tx::envelope_from_xdr_base64(envelope_xdr_b64)?;
-        let decoded = tx::decode_single_payment(&env)?;
-        let rebuilt = tx::build_transaction(
-            decoded.source_pk,
-            decoded.dest_pk,
-            decoded.asset.clone(),
-            decoded.amount,
-            decoded.seq_num,
-            decoded.fee,
-            decoded.memo,
-        );
+        let decoded = tx::decode_payments(&env)?;
+        let legs: Vec<tx::PaymentLeg> = decoded
+            .legs
+            .iter()
+            .map(|l| tx::PaymentLeg::new(l.dest_pk, l.asset.clone(), l.amount))
+            .collect();
+        let per_op_fee = decoded.fee
+            / u32::try_from(legs.len()).map_err(|_| StellarError::Xdr("absurd leg count".into()))?;
+        let rebuilt =
+            tx::build_payment_transaction(decoded.source_pk, &legs, decoded.seq_num, per_op_fee, decoded.memo)?;
         let net_id = tx::network_id(&self.passphrase);
         let hash = tx::tx_hash(net_id, &rebuilt)?;
         let hash_hex = if self.lie_about_submit_hash {
@@ -674,6 +678,141 @@ fn envelope_round_trips_through_the_official_xdr_decoder() {
     let (hint, sig_bytes) = tx::single_signature(&decoded_env).unwrap();
     assert_eq!(hint.0, source.pubkey().0[28..32]);
     assert_eq!(sig_bytes, sig.0);
+}
+
+// ── Atomic splits (B1: charge_split/verify_split) ────────────────────────
+
+fn split_legs(pairs: &[(u8, u64)]) -> Vec<super::SplitLeg> {
+    pairs
+        .iter()
+        .map(|(byte, amount)| super::SplitLeg::new(Keypair::from_seed([*byte; 32]).pubkey().to_strkey(), *amount))
+        .collect()
+}
+
+#[tokio::test]
+async fn charge_split_then_verify_split_round_trips() {
+    let fake = FakeRpc::new(Network::Testnet.passphrase(), 9);
+    let rail = rail(fake, [1u8; 32], [2u8; 32]);
+    let legs = split_legs(&[(9, 700), (8, 300)]);
+
+    let receipt = rail.charge_split(&legs, "split-1").await.unwrap();
+    assert_eq!(receipt.rail_id, "stellar");
+    assert_eq!(receipt.amount_minor, 1_000, "sum of every leg");
+    assert_eq!(receipt.currency, "USDC");
+    assert!(
+        rail.verify_split(&receipt).await.unwrap(),
+        "a genuine split receipt must verify"
+    );
+}
+
+#[tokio::test]
+async fn a_split_receipt_never_verifies_through_the_plain_single_payment_path_or_vice_versa() {
+    let fake = FakeRpc::new(Network::Testnet.passphrase(), 9);
+    let rail = rail(fake.clone(), [1u8; 32], [2u8; 32]);
+    let dest = Keypair::from_seed([9u8; 32]).pubkey().to_strkey();
+
+    let single_receipt = rail.charge(&req(1_000, &dest, "single-1")).await.unwrap();
+    assert!(
+        !rail.verify_split(&single_receipt).await.unwrap(),
+        "a single-payment receipt is not a StellarSplitBinding and must not verify as one"
+    );
+
+    let split_receipt = rail
+        .charge_split(&split_legs(&[(9, 700), (8, 300)]), "split-2")
+        .await
+        .unwrap();
+    assert!(
+        !rail.verify(&split_receipt).await.unwrap(),
+        "a split receipt is not a StellarBinding and must not verify through the single path"
+    );
+}
+
+#[tokio::test]
+async fn split_binds_every_leg_its_amount_and_their_order_end_to_end() {
+    let fake = FakeRpc::new(Network::Testnet.passphrase(), 9);
+    let rail = rail(fake, [1u8; 32], [2u8; 32]);
+    let receipt = rail
+        .charge_split(&split_legs(&[(9, 700), (8, 300)]), "split-3")
+        .await
+        .unwrap();
+
+    // Re-pointing, re-pricing, re-ordering, or dropping a leg must all be
+    // caught by the split memo-hash binding, not just accepted because the
+    // total still matches.
+    for mutate in [
+        |b: &mut StellarSplitBinding| b.legs[0].1 = 699,
+        |b: &mut StellarSplitBinding| b.legs.swap(0, 1),
+        |b: &mut StellarSplitBinding| {
+            b.legs[0].0 = Keypair::from_seed([7u8; 32]).pubkey().to_strkey()
+        },
+    ] {
+        let mut binding: StellarSplitBinding = serde_json::from_slice(&receipt.proof).unwrap();
+        mutate(&mut binding);
+        let mut tampered = receipt.clone();
+        tampered.proof = serde_json::to_vec(&binding).unwrap();
+        // Total unchanged by the reorder/re-point cases, so this is a genuine
+        // test of the memo binding, not just the amount-sum check.
+        assert!(
+            !rail.verify_split(&tampered).await.unwrap(),
+            "tampering one leg must be caught even when the total is unchanged"
+        );
+    }
+}
+
+#[tokio::test]
+async fn charge_split_refuses_an_empty_bundle_and_a_bad_destination() {
+    let fake = FakeRpc::new(Network::Testnet.passphrase(), 9);
+    let rail = rail(fake, [1u8; 32], [2u8; 32]);
+
+    let err = rail.charge_split(&[], "split-empty").await.unwrap_err();
+    assert!(format!("{err}").contains("at least one leg"));
+
+    let bad = vec![super::SplitLeg::new("not-a-strkey-address", 100)];
+    let err = rail.charge_split(&bad, "split-bad-dest").await.unwrap_err();
+    assert!(format!("{err}").contains("leg 0"), "{err}");
+
+    let err = rail
+        .charge_split(&split_legs(&[(9, 100)]), "")
+        .await
+        .unwrap_err();
+    assert!(format!("{err}").contains("reference"), "{err}");
+}
+
+#[tokio::test]
+async fn charge_split_refuses_without_a_signer() {
+    let fake = FakeRpc::new(Network::Testnet.passphrase(), 9);
+    let issuer = Keypair::from_seed([2u8; 32]).pubkey();
+    let cfg = StellarConfig {
+        network: Network::Testnet,
+        usdc_issuer: issuer.to_strkey(),
+        base_fee_stroops: 100,
+    };
+    let verify_only = StellarRail::new(cfg, fake);
+    let err = verify_only
+        .charge_split(&split_legs(&[(9, 100)]), "split-no-signer")
+        .await
+        .unwrap_err();
+    assert!(format!("{err}").contains("no signing key"), "{err}");
+}
+
+#[tokio::test]
+async fn a_split_receipt_is_refused_against_a_rail_configured_for_a_different_network() {
+    let fake = FakeRpc::new(Network::Testnet.passphrase(), 9);
+    let rail = rail(fake, [1u8; 32], [2u8; 32]);
+    let receipt = rail
+        .charge_split(&split_legs(&[(9, 700), (8, 300)]), "split-net")
+        .await
+        .unwrap();
+
+    let fake2 = FakeRpc::new(Network::Public.passphrase(), 9);
+    let issuer = Keypair::from_seed([2u8; 32]).pubkey();
+    let mainnet_cfg = StellarConfig {
+        network: Network::Public,
+        usdc_issuer: issuer.to_strkey(),
+        base_fee_stroops: 100,
+    };
+    let mainnet_rail = StellarRail::new(mainnet_cfg, fake2);
+    assert!(!mainnet_rail.verify_split(&receipt).await.unwrap());
 }
 
 // ── Opt-in live test ──────────────────────────────────────────────────────

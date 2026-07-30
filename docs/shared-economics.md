@@ -143,7 +143,9 @@ atomic N-way splits live *below* it, per chain. That produces two capability tie
   payment plus verification. "Pay the developer" works on Stripe, Paystack, Yoco,
   PayFast, Solana, Stellar.
 - **Tier B — atomic multi-party split.** Per-chain work beneath the seam. Exists only
-  where someone writes it.
+  where someone writes it — **written for Stellar (B1, 2026-07-30):**
+  `StellarRail::charge_split`/`verify_split`, tested offline only, never run live.
+  Not written for Solana or any fiat rail.
 
 This is a property of the rail, not a gap in patala: N payouts through a fiat
 processor are N independent API calls and **cannot** be made atomic. Therefore add
@@ -154,24 +156,32 @@ processor are N independent API calls and **cannot** be made atomic. Therefore a
 **Done (B3, 2026-07-30):** the field, `RailCapabilities::require_atomic_multi_party`,
 and `false` declared explicitly on every rail in the workspace — `patala-core`'s own
 test suite greps `patala-fiat`/`patala-hyperswitch` so a future rail cannot silently
-claim `true` without a real atomic operation behind it. Declared `false`, not yet
-`true`, on the two crypto rails too: `patala-solana` and `patala-stellar` have no
-atomic multi-party operation *wired up* today, even though `patala-stellar/src/tx.rs`
-already carries the N-leg builder/decoder primitives an atomic split would use (see
-B1 below). The capability field is a declaration a future atomic-charge path will
-read; nothing yet calls `require_atomic_multi_party` at runtime, because no such path
-exists yet.
+claim `true` without a real atomic operation behind it. Declared `false` on every
+rail, **including `patala-stellar` after B1 landed it an atomic operation the same
+day** — deliberately: `charge_split`/`verify_split` are concrete-`StellarRail`
+methods, not on `PaymentRail`, so `capabilities()` (read through the generic trait) has
+no way to report them truthfully as `true` without misleading a caller who only has a
+`Box<dyn PaymentRail>` and no way to reach them. `patala-solana` has neither the field
+value nor the operation. The capability field is a declaration a future *generic*
+atomic-charge path (if `patala_core` ever grows one) would read; nothing yet calls
+`require_atomic_multi_party` at runtime.
 
 > ### DECISION — the Stellar multi-operation work lands in `patala-stellar`
 >
 > **Correction, 2026-07-30 (checked against code while landing B7/B3):** the
 > `tx.rs:169`/`tx.rs:237` citation below is stale. `tx.rs` already has N-leg builder
 > (`build_payment_transaction`, `PaymentLeg`) and decoder (`decode_payments`)
-> primitives, tested offline for up to the protocol's 100-operation limit. What is
-> genuinely still true is narrower: `StellarRail::charge`/`verify` — the
-> `patala_core::PaymentRail` trait methods every consumer actually calls — still
-> build and accept exactly **one** `Payment` operation each; the N-leg primitives are
-> not reachable through the rail. That narrower gap is what B1 still needs to close.
+> primitives, tested offline for up to the protocol's 100-operation limit. What was
+> genuinely still true, at the moment this correction was first written: the trait
+> methods every consumer calls, `StellarRail::charge`/`verify`, still built and
+> accepted exactly one `Payment` operation each; the N-leg primitives were not
+> reachable through the rail.
+>
+> **Update, same day: closed (B1).** `StellarRail::charge_split`/`verify_split` now
+> expose exactly that — atomic, N-leg, built on the same primitives, tested offline.
+> Deliberately not added to the `PaymentRail` trait itself (single-recipient by
+> design); a consumer needing an atomic split holds a concrete `StellarRail`. See
+> `patala-stellar/README.md`'s own section on this.
 >
 > `patala-stellar` currently builds **one** `Payment` operation and its verification
 > **rejects** multiples (`tx.rs:169`, `tx.rs:237`) — see the correction above; this was
@@ -225,15 +235,20 @@ two chain facts that were simply false.
 
 1. Integrate magnetite's outstanding work; collapse its duplicate CBOR and root-hash
    implementations. — **not done by this record's update.**
-2. Extend `patala-stellar` to multi-operation, per §5. — **not done**: `tx.rs` has
-   carried the N-leg builder/decoder primitives since before this update, but
-   `StellarRail::charge`/`verify` (the trait `patala-core` consumers actually call)
-   still build/accept exactly one `Payment` operation. The primitives existing is not
-   the same as the rail exposing them.
+2. Extend `patala-stellar` to multi-operation, per §5. — **done, 2026-07-30 (B1).**
+   `StellarRail::charge_split`/`verify_split` now expose the N-leg primitives
+   `tx.rs` already carried, atomically, tested offline. `PaymentRail::charge`/`verify`
+   (the trait every other consumer calls) are unchanged and still single-operation —
+   see §5's "deliberately not on `PaymentRail`" note for why that is by design, not
+   a shortfall.
 3. **Settle one real payment on Stellar testnet.** This is the gate on every economic
    claim in every product. — **done, 2026-07-30 (B7).** One single-leg payment,
    through `StellarRail::charge`/`verify`, on testnet only. See `patala-stellar/README.md`.
+   The split path from step 2 above was NOT part of this settlement and remains
+   untested live.
 4. Then lift what proved out: the recurring primitive, the pointer registry,
    `atomic_multi_party`. — **`atomic_multi_party` done (B3, 2026-07-30)**, the
-   capability field only, not the operation it will gate. The recurring primitive and
-   the pointer registry remain not built.
+   capability field only — deliberately still `false` on `patala-stellar` even after
+   step 2 landed an atomic operation, because that operation sits outside the generic
+   trait the field is read through (see §5). The recurring primitive and the pointer
+   registry remain not built.

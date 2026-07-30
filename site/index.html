@@ -183,7 +183,7 @@
 <body>
 <nav class="top"><div class="wrap">
   <a class="brand" href="#top">
-    <svg class="cowrie" viewBox="0 0 128 128" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="M64 12 C83 12 100 33 100 62 C100 93 83 116 64 116 C45 116 28 93 28 62 C28 33 45 12 64 12 Z M64 26 L70 32 L65.5 38 L70 45 L65.5 51 L70 58 L65.5 64 L70 71 L65.5 77 L70 84 L65.5 90 L70 97 L64 104 L58 97 L62.5 90 L58 84 L62.5 77 L58 71 L62.5 64 L58 58 L62.5 51 L58 45 L62.5 38 L58 32 Z"/></svg>
+    <img class="cowrie" src="./assets/logo.svg" alt="" width="24" height="24">
     <b>patala</b>
   </a>
   <div class="nlinks">
@@ -211,7 +211,7 @@
     </div>
     <div class="honest-box">
       <span class="status pending">UNVERIFIED AGAINST LIVE</span>
-      <p>168 offline tests pass in the default build, 547 more with every processor feature compiled in — but no rail in this repo has been run against a live network or a live merchant account. Read the <a href="./docs.html#status">full status</a> before you trust it with real money.</p>
+      <p>260 offline tests pass in the default build, 572 more with every processor feature compiled in — but no rail in this repo has been run against a live network or a live merchant account. Read the <a href="./docs.html#status">full status</a> before you trust it with real money.</p>
     </div>
   </div>
   <div class="seal-wrap">
@@ -299,8 +299,8 @@
   </div>
 
   <div class="stat-strip">
-    <div class="stat"><span class="stat-num tabular">168</span><span class="stat-lbl">offline tests, default build</span></div>
-    <div class="stat"><span class="stat-num tabular">547</span><span class="stat-lbl">more tests, every processor feature on</span></div>
+    <div class="stat"><span class="stat-num tabular">260</span><span class="stat-lbl">offline tests, default build</span></div>
+    <div class="stat"><span class="stat-num tabular">572</span><span class="stat-lbl">more tests, every processor feature on</span></div>
     <div class="stat"><span class="stat-num tabular">0</span><span class="stat-lbl">rails run against a live network from this repo</span></div>
   </div>
 
@@ -310,7 +310,7 @@
       <tbody>
         <tr>
           <td class="mono">patala-core</td><td>&mdash;</td>
-          <td class="mono tabular">19 + 1 doctest</td>
+          <td class="mono tabular">35 + 2 doctests</td>
           <td><span class="status settled">OFFLINE BY DESIGN</span></td>
         </tr>
         <tr>
@@ -320,27 +320,27 @@
         </tr>
         <tr>
           <td class="mono">patala-solana</td><td>Non-custodial, final</td>
-          <td class="mono tabular">41 (+1 gated) + 1 doctest</td>
+          <td class="mono tabular">56 (+1 gated) + 2 doctests</td>
           <td><span class="status pending">NO — TESTNET STEP IN README</span></td>
         </tr>
         <tr>
           <td class="mono">patala-stellar</td><td>Non-custodial, final</td>
-          <td class="mono tabular">29 (+1 gated) + 1 doctest</td>
+          <td class="mono tabular">56 (+1 gated) + 4 doctests</td>
           <td><span class="status pending">NO — TESTNET STEP IN README</span></td>
         </tr>
         <tr>
           <td class="mono">patala-hyperswitch</td><td>Custodial, reversible</td>
-          <td class="mono tabular">20</td>
+          <td class="mono tabular">23</td>
           <td><span class="status pending">NO — NEEDS A LIVE INSTANCE</span></td>
         </tr>
         <tr>
           <td class="mono">patala-py / patala-go</td><td>&mdash;</td>
-          <td class="mono tabular">14 Rust + 24 Go</td>
+          <td class="mono tabular">20 Rust + 19 Go</td>
           <td><span class="status settled">EXECUTED, CI-ENFORCED</span></td>
         </tr>
         <tr>
           <td class="mono">patala-sidecar</td><td>&mdash;</td>
-          <td class="mono tabular">9 (6 HTTP + 3 unit)</td>
+          <td class="mono tabular">15 (12 HTTP + 3 unit)</td>
           <td><span class="status settled">EXECUTED</span></td>
         </tr>
       </tbody>
@@ -418,15 +418,15 @@
       <figcaption>Real HTTP round-trips against it: capabilities, charge, verify — and the fail-closed 401 when the token is missing.</figcaption>
     </figure>
     <figure class="proof-item wide">
-      <div class="proof-scroll tall"><img src="./assets/shots/test-suite.webp" width="920" height="940" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 168 passed."></div>
-      <figcaption><code>cargo test --workspace</code> — the same 168 offline tests <a href="#status">the status table</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.</figcaption>
+      <div class="proof-scroll tall"><img src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 260 passed."></div>
+      <figcaption><code>cargo test --workspace</code> — the same 260 offline tests <a href="#status">the status table</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.</figcaption>
     </figure>
     <figure class="proof-item">
-      <div class="proof-scroll"><img src="./assets/shots/binding-python.webp" width="720" height="448" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
+      <div class="proof-scroll"><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
       <figcaption>The Python binding, over a real interpreter — same MockRail round-trip, called from <code>patala-py</code>.</figcaption>
     </figure>
     <figure class="proof-item">
-      <div class="proof-scroll"><img src="./assets/shots/binding-go.webp" width="720" height="837" alt="Terminal: cd patala-go && make test — 12 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 12 top-level tests passed and 5 required tests present."></div>
+      <div class="proof-scroll"><img src="./assets/shots/binding-go.webp" width="720" height="1309" alt="Terminal: cd patala-go && make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
       <figcaption>The Go binding, over real cgo — the same UniFFI surface, generated for Go.</figcaption>
     </figure>
   </div>

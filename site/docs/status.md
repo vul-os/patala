@@ -3,7 +3,7 @@
 ## Foundational — built and unit-tested, rails unverified against live networks
 
 The core, the rails and the polyglot layer are all in the repo. `make check`
-runs two passes and both are gates: **249 offline tests** across the seven
+runs two passes and both are gates: **260 offline tests** across the seven
 landed crates in the default workspace build, and **572 more** once every
 processor feature is compiled in (`cargo test -p patala-fiat --all-features` +
 `cargo test -p patala-py --features fiat-all`). Clippy-clean, fmt-clean; the

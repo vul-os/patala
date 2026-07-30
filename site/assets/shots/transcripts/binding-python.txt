@@ -9,6 +9,7 @@ error mapping OK: unsupported currency raised PatalaError.InvalidRequest(message
 
 (no real-rail features were compiled into this build — only MockRail was exercised; rebuild with --features solana,stellar,hyperswitch to cover the real rails too)
 webhook OK: MockRail reports unsupported rather than faking an event
+validate_destination OK: all 5 verdicts reached Python distinctly (MALFORMED, NOT_A_WALLET, STRUCTURALLY_VALID, UNKNOWN, WRONG_NETWORK); every one requires human confirmation
 webhook OK: authenticated from Python, status=WebhookStatus.SETTLED, amount_minor=5000 (int), reference=py-smoke-order-webhook
 webhook OK: tampered delivery rejected; `manual` reports unsupported
 

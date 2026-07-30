@@ -9,7 +9,7 @@ $ RECEIPT=$(curl -s http://127.0.0.1:8420/v1/rails/mock/charge \
     -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN" \
     -d '{"amount_minor":1250,"currency":"USDC","destination":"dest-wallet-abc123","reference":"order-42"}')
 $ echo "$RECEIPT"
-{"rail_id":"mock","amount_minor":1250,"currency":"USDC","reference":"order-42","proof":[184,130,172,86,227,36,169,152,177,124,164,145,209,192,246,26,250,11,216,189,65,89,134,91,211,65,73,221,30,71,162,10],"settled_at_unix":1785282511}
+{"rail_id":"mock","amount_minor":1250,"currency":"USDC","reference":"order-42","proof":[116,225,248,10,10,238,129,3,57,234,151,78,132,110,18,14,206,145,0,100,248,69,6,191,11,249,199,70,117,165,89,19],"settled_at_unix":1785429339}
 
 
 $ curl -s http://127.0.0.1:8420/v1/rails/mock/verify \

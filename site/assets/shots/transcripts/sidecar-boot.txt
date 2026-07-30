@@ -1,5 +1,5 @@
 $ export PATALA_SIDECAR_TOKEN=$(openssl rand -hex 32)
 $ cargo run -p patala-sidecar
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.29s
      Running `target/debug/patala-sidecar`
-2026-07-28T23:48:31.671441Z  INFO patala_sidecar: patala-sidecar listening on 127.0.0.1:8420 (loopback only)
+2026-07-30T16:35:38.861595Z  INFO patala_sidecar: patala-sidecar listening on 127.0.0.1:8420 (loopback only)

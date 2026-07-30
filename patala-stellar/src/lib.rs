@@ -732,9 +732,9 @@ impl StellarRail {
     /// even though this method exists.
     ///
     /// `receipt.amount_minor` is the **sum** of every leg (see
-    /// [`tx::total_amount`]); `receipt.proof` is a [`StellarSplitBinding`],
+    /// [`tx::total_amount`]); `receipt.proof` is a `StellarSplitBinding`,
     /// verified by [`Self::verify_split`] (never by the trait's plain
-    /// [`PaymentRail::verify`], which only ever reads a [`StellarBinding`]).
+    /// [`PaymentRail::verify`], which only ever reads a `StellarBinding`).
     ///
     /// Refused, exactly as [`tx::build_payment_transaction`] refuses building
     /// one: no legs, more than [`tx::MAX_OPERATIONS`] legs, or any
@@ -857,8 +857,8 @@ impl StellarRail {
     /// online read-back from Horizon compared operation-for-operation, in
     /// order.
     ///
-    /// A receipt built by plain [`PaymentRail::charge`] — a [`StellarBinding`],
-    /// not a [`StellarSplitBinding`] — fails to parse here and is refused, not
+    /// A receipt built by plain [`PaymentRail::charge`] — a `StellarBinding`,
+    /// not a `StellarSplitBinding` — fails to parse here and is refused, not
     /// misread as a one-leg split; the reverse is equally true of
     /// [`PaymentRail::verify`].
     pub async fn verify_split(&self, receipt: &Receipt) -> Result<bool> {

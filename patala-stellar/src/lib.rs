@@ -309,7 +309,12 @@ impl StellarRail {
             holds_funds: false,
             currencies: vec!["USDC".to_string()],
             settlement: Settlement::Seconds(5),
-            atomic_multi_party: false, // not yet built on this rail -- see the rail's own module docs (B3)
+            // NOT "unbuilt" — `charge_split`/`verify_split` DO exist on this rail (B1).
+            // This flag is read through the `PaymentRail` trait, where those methods are
+            // deliberately unreachable, so it reports what a trait-object holder can
+            // actually get: no atomic split. A consumer holding a concrete `StellarRail`
+            // has one. See `charge_split`'s docs for the full rationale.
+            atomic_multi_party: false,
         };
         Self {
             cfg,
@@ -766,9 +771,7 @@ impl StellarRail {
                 ))
             })?;
             let amount = i64::try_from(leg.amount_minor).map_err(|_| {
-                Error::InvalidRequest(format!(
-                    "leg {i}: amount_minor exceeds Stellar's i64 range"
-                ))
+                Error::InvalidRequest(format!("leg {i}: amount_minor exceeds Stellar's i64 range"))
             })?;
             payment_legs.push(tx::PaymentLeg::new(dest.0, asset.clone(), amount));
             leg_pairs.push((leg.destination.clone(), amount));
@@ -784,13 +787,11 @@ impl StellarRail {
             .checked_add(1)
             .ok_or_else(|| Error::Rail("account sequence number overflow".into()))?;
 
-        let leg_refs: Vec<(&str, i64)> = leg_pairs
-            .iter()
-            .map(|(d, a)| (d.as_str(), *a))
-            .collect();
+        let leg_refs: Vec<(&str, i64)> = leg_pairs.iter().map(|(d, a)| (d.as_str(), *a)).collect();
         let memo = tx::split_memo_hash(self.id(), &source.to_strkey(), reference, &leg_refs);
 
-        let fee = tx::total_fee(self.cfg.base_fee_stroops, payment_legs.len()).map_err(Error::from)?;
+        let fee =
+            tx::total_fee(self.cfg.base_fee_stroops, payment_legs.len()).map_err(Error::from)?;
         let unsigned = tx::build_payment_transaction(
             source.0,
             &payment_legs,
@@ -944,9 +945,13 @@ impl StellarRail {
         else {
             return Ok(false);
         };
-        let Ok(rebuilt) =
-            tx::build_payment_transaction(source_pk.0, &payment_legs, binding.seq_num, per_op_fee, memo_arr)
-        else {
+        let Ok(rebuilt) = tx::build_payment_transaction(
+            source_pk.0,
+            &payment_legs,
+            binding.seq_num,
+            per_op_fee,
+            memo_arr,
+        ) else {
             return Ok(false);
         };
         let net_id = tx::network_id(&binding.network_passphrase);

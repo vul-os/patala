@@ -15,7 +15,9 @@ use patala_core::{Error, PayRequest, PaymentRail, Receipt};
 
 use super::keys::Keypair;
 use super::rpc::{AssetHolding, HorizonRpc, StellarRpc, SubmitResult, TxRecord};
-use super::{tx, Network, StellarBinding, StellarConfig, StellarError, StellarRail, StellarSplitBinding};
+use super::{
+    tx, Network, StellarBinding, StellarConfig, StellarError, StellarRail, StellarSplitBinding,
+};
 
 /// A scripted Horizon: `submit_transaction` decodes+re-hashes whatever
 /// `charge` gave it (using the *same* pure functions `charge` used, so this
@@ -130,9 +132,15 @@ impl StellarRpc for FakeRpc {
             .map(|l| tx::PaymentLeg::new(l.dest_pk, l.asset.clone(), l.amount))
             .collect();
         let per_op_fee = decoded.fee
-            / u32::try_from(legs.len()).map_err(|_| StellarError::Xdr("absurd leg count".into()))?;
-        let rebuilt =
-            tx::build_payment_transaction(decoded.source_pk, &legs, decoded.seq_num, per_op_fee, decoded.memo)?;
+            / u32::try_from(legs.len())
+                .map_err(|_| StellarError::Xdr("absurd leg count".into()))?;
+        let rebuilt = tx::build_payment_transaction(
+            decoded.source_pk,
+            &legs,
+            decoded.seq_num,
+            per_op_fee,
+            decoded.memo,
+        )?;
         let net_id = tx::network_id(&self.passphrase);
         let hash = tx::tx_hash(net_id, &rebuilt)?;
         let hash_hex = if self.lie_about_submit_hash {
@@ -685,7 +693,12 @@ fn envelope_round_trips_through_the_official_xdr_decoder() {
 fn split_legs(pairs: &[(u8, u64)]) -> Vec<super::SplitLeg> {
     pairs
         .iter()
-        .map(|(byte, amount)| super::SplitLeg::new(Keypair::from_seed([*byte; 32]).pubkey().to_strkey(), *amount))
+        .map(|(byte, amount)| {
+            super::SplitLeg::new(
+                Keypair::from_seed([*byte; 32]).pubkey().to_strkey(),
+                *amount,
+            )
+        })
         .collect()
 }
 
@@ -1048,7 +1061,10 @@ async fn live_testnet_round_trip_settles_a_real_payment() {
     // 4. `source` and `dest` each establish a trustline — required before
     //    either can hold a non-native asset at all (a PAYMENT of an asset
     //    into an account with no trustline fails `op_no_trust`).
-    for (name, kp, addr) in [("source", &source, &source_addr), ("dest", &dest, &dest_addr)] {
+    for (name, kp, addr) in [
+        ("source", &source, &source_addr),
+        ("dest", &dest, &dest_addr),
+    ] {
         let seq = wait_for_sequence(&horizon, addr).await;
         let op = Operation {
             source_account: None,
@@ -1062,7 +1078,10 @@ async fn live_testnet_round_trip_settles_a_real_payment() {
             result.successful,
             "{name} trustline transaction did not succeed: {result:?}"
         );
-        eprintln!("{name} trustline established: tx {} (ledger {})", result.hash, result.ledger);
+        eprintln!(
+            "{name} trustline established: tx {} (ledger {})",
+            result.hash, result.ledger
+        );
     }
 
     // 5. The issuer seeds `source` with enough of the asset to make one
@@ -1077,7 +1096,15 @@ async fn live_testnet_round_trip_settles_a_real_payment() {
             amount: seed_amount,
         }),
     };
-    let seed_result = submit_ops(&horizon, net_id, &issuer, vec![seed_op], issuer_seq + 1, 100).await;
+    let seed_result = submit_ops(
+        &horizon,
+        net_id,
+        &issuer,
+        vec![seed_op],
+        issuer_seq + 1,
+        100,
+    )
+    .await;
     assert!(
         seed_result.successful,
         "issuer seed payment did not succeed: {seed_result:?}"
@@ -1158,7 +1185,10 @@ fn the_live_testnet_round_trip_test_exists_and_is_gated_correctly() {
     let src = include_str!("tests.rs");
     // Built by concatenation, not a literal, so THIS line does not itself
     // count as an occurrence of the needle it searches for.
-    let needle = format!("async fn {}(", "live_testnet_round_trip_settles_a_real_payment");
+    let needle = format!(
+        "async fn {}(",
+        "live_testnet_round_trip_settles_a_real_payment"
+    );
     let occurrences = src.matches(&needle).count();
     assert_eq!(
         occurrences, LIVE_TESTNET_TEST_COUNT,

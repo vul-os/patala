@@ -118,6 +118,7 @@
 
 pub mod destination;
 pub mod keys;
+pub mod recurring;
 pub mod rpc;
 pub mod tx;
 

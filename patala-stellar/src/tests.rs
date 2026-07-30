@@ -1206,3 +1206,285 @@ fn the_live_testnet_round_trip_test_exists_and_is_gated_correctly() {
          is never made flaky by it"
     );
 }
+
+// ── B4: a live testnet demonstration of the recurring primitive ──────────
+//
+// A second live test, additional to B7's single-leg payment above: proves
+// `recurring::RecurringPlan`'s `PreconditionsV2` mechanism against REAL
+// Horizon/stellar-core — not just this crate's own offline oracle
+// (`recurring::would_be_valid`), which is internally consistent by
+// construction but was never independent evidence that the real network
+// enforces the same outcome. Opt-in via `#[ignore]` AND
+// `PATALA_LIVE_TESTNET=1`, exactly like the B7 test.
+//
+// What this demonstrates, and ONLY this:
+// * instalment 1 of a pre-signed 3-instalment schedule settles immediately;
+// * instalment 2, submitted immediately afterward, is REJECTED by real
+//   Horizon — its `min_seq_age` floor (8s) has not yet elapsed since
+//   instalment 1 executed;
+// * the SAME already-signed instalment 2 envelope, resubmitted unchanged
+//   after the floor elapses, is ACCEPTED — no re-signing, exactly as
+//   "pre-signed" promises;
+// * a `BUMP_SEQUENCE` cancellation transaction, submitted after instalment
+//   2 settles, permanently invalidates the still-unexecuted instalment 3 —
+//   real Horizon rejects it even once its own age floor has separately
+//   elapsed.
+//
+// What it does NOT prove: mainnet; a shared/loose `min_seq_num` (not built,
+// see `recurring`'s module docs on why); any behaviour beyond this one
+// dedicated throwaway account and this one 3-instalment schedule.
+#[tokio::test]
+#[ignore = "moves real (testnet) money over the real network; set PATALA_LIVE_TESTNET=1"]
+async fn live_testnet_recurring_schedule_paces_execution_and_can_be_cancelled() {
+    if std::env::var("PATALA_LIVE_TESTNET").as_deref() != Ok("1") {
+        eprintln!(
+            "SKIPPING live_testnet_recurring_schedule_paces_execution_and_can_be_cancelled: \
+             PATALA_LIVE_TESTNET is not \"1\". No network round trip was attempted — this is \
+             NOT evidence that any recurring schedule executed. Run with:\n\
+             PATALA_LIVE_TESTNET=1 cargo test -p patala-stellar live_testnet_recurring \
+             -- --ignored --nocapture"
+        );
+        return;
+    }
+
+    let horizon = HorizonRpc::new("https://horizon-testnet.stellar.org");
+    let net_id = tx::network_id(Network::Testnet.passphrase());
+
+    let issuer = Keypair::generate();
+    let source = Keypair::generate();
+    let dest = Keypair::generate();
+    let issuer_addr = issuer.pubkey().to_strkey();
+    let source_addr = source.pubkey().to_strkey();
+    let dest_addr = dest.pubkey().to_strkey();
+    eprintln!("=== B4 live Stellar testnet recurring schedule ===");
+    eprintln!("issuer (throwaway, testnet-only): {issuer_addr}");
+    eprintln!("source (throwaway, testnet-only, DEDICATED to this schedule): {source_addr}");
+    eprintln!("dest   (throwaway, testnet-only): {dest_addr}");
+
+    let http = reqwest::Client::new();
+    for (name, addr) in [
+        ("issuer", &issuer_addr),
+        ("source", &source_addr),
+        ("dest", &dest_addr),
+    ] {
+        let url = format!("https://friendbot.stellar.org/?addr={addr}");
+        let resp = http
+            .get(&url)
+            .send()
+            .await
+            .unwrap_or_else(|e| panic!("friendbot request for {name} failed: {e}"));
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        assert!(
+            status.is_success(),
+            "friendbot did not fund {name} ({addr}): HTTP {status}: {body}"
+        );
+        eprintln!("friendbot funded {name}: HTTP {status}");
+    }
+
+    let asset = tx::usdc_asset("USDC", issuer.pubkey().0).expect("valid asset code");
+    let stellar_xdr::curr::Asset::CreditAlphanum4(alpha) = asset.clone() else {
+        unreachable!("usdc_asset always returns CreditAlphanum4")
+    };
+    let change_trust_asset = stellar_xdr::curr::ChangeTrustAsset::CreditAlphanum4(alpha);
+
+    for (name, kp, addr) in [
+        ("source", &source, &source_addr),
+        ("dest", &dest, &dest_addr),
+    ] {
+        let seq = wait_for_sequence(&horizon, addr).await;
+        let op = Operation {
+            source_account: None,
+            body: OperationBody::ChangeTrust(stellar_xdr::curr::ChangeTrustOp {
+                line: change_trust_asset.clone(),
+                limit: i64::MAX,
+            }),
+        };
+        let result = submit_ops(&horizon, net_id, kp, vec![op], seq + 1, 100).await;
+        assert!(
+            result.successful,
+            "{name} trustline transaction did not succeed: {result:?}"
+        );
+        eprintln!(
+            "{name} trustline established: tx {} (ledger {})",
+            result.hash, result.ledger
+        );
+    }
+
+    let issuer_seq = wait_for_sequence(&horizon, &issuer_addr).await;
+    let seed_amount: i64 = 500_000_000; // 5.0 units — 3 instalments of 1.0 unit each
+    let seed_op = Operation {
+        source_account: None,
+        body: OperationBody::Payment(stellar_xdr::curr::PaymentOp {
+            destination: MuxedAccount::Ed25519(Uint256(source.pubkey().0)),
+            asset: asset.clone(),
+            amount: seed_amount,
+        }),
+    };
+    let seed_result = submit_ops(
+        &horizon,
+        net_id,
+        &issuer,
+        vec![seed_op],
+        issuer_seq + 1,
+        100,
+    )
+    .await;
+    assert!(
+        seed_result.successful,
+        "issuer seed payment did not succeed: {seed_result:?}"
+    );
+    eprintln!(
+        "issuer seeded source with {seed_amount} stroops of USDC: tx {} (ledger {})",
+        seed_result.hash, seed_result.ledger
+    );
+
+    // THE ACTUAL TEST: a 3-instalment recurring plan on `source` — used for
+    // nothing else in this test besides the trustline/seed above and this
+    // one schedule, i.e. genuinely "dedicated" per the backlog item's own
+    // wording. Each instalment pays `dest` 1.0 unit, gated behind an
+    // 8-second `min_seq_age` floor per hop and a 0 `min_seq_ledger_gap`
+    // (isolating the age dimension, which this test's timing checks).
+    let base_seq = wait_for_sequence(&horizon, &source_addr).await;
+    let plan = crate::recurring::RecurringPlan {
+        source_pk: source.pubkey().0,
+        dest_pk: dest.pubkey().0,
+        asset: asset.clone(),
+        amount: 10_000_000, // 1.0 unit
+        base_seq,
+        count: 3,
+        base_fee_stroops: 100,
+        min_seq_age_step_seconds: 8,
+        min_seq_ledger_gap_step: 0,
+        rail_id: "stellar".to_string(),
+        source_strkey: source_addr.clone(),
+        dest_strkey: dest_addr.clone(),
+        reference: "patala-stellar-b4-live-recurring".to_string(),
+    };
+
+    let sign_and_encode = |txn: XdrTransaction| -> String {
+        let hash = tx::tx_hash(net_id, &txn).expect("signing payload");
+        let sig = source.sign(&hash);
+        let env = tx::envelope(txn, source.pubkey().0, sig.0).expect("envelope");
+        tx::envelope_to_xdr_base64(&env).expect("encode envelope")
+    };
+
+    let instalment1 = plan.build_instalment(1).expect("build instalment 1");
+    let instalment2 = plan.build_instalment(2).expect("build instalment 2");
+    let instalment3 = plan.build_instalment(3).expect("build instalment 3");
+
+    // All 3 are pre-signed HERE, up front, before instalment 1 is even
+    // submitted — this is what "N pre-signed transactions" means.
+    let env1 = sign_and_encode(instalment1);
+    let env2 = sign_and_encode(instalment2);
+    let env3 = sign_and_encode(instalment3);
+
+    // 1. Instalment 1: no wait required, must settle immediately.
+    let r1 = horizon
+        .submit_transaction(&env1)
+        .await
+        .unwrap_or_else(|e| panic!("instalment 1 was rejected: {e}"));
+    assert!(
+        r1.successful,
+        "instalment 1 must succeed immediately: {r1:?}"
+    );
+    eprintln!(
+        "instalment 1 settled: tx {} (ledger {})",
+        r1.hash, r1.ledger
+    );
+
+    // 2. Instalment 2, submitted IMMEDIATELY after: must be REJECTED by
+    //    real Horizon/stellar-core — the min_seq_age floor (8s) has not
+    //    elapsed since instalment 1 executed. This is the literal claim "N
+    //    pre-signed transactions cannot all be redeemed back to back",
+    //    checked against the real network, not this crate's own oracle.
+    let too_early = horizon.submit_transaction(&env2).await;
+    assert!(
+        too_early.is_err(),
+        "instalment 2 must be REJECTED when submitted immediately after instalment 1 \
+         (min_seq_age not yet satisfied) — got {too_early:?}"
+    );
+    eprintln!("instalment 2 correctly REJECTED when submitted early: {too_early:?}");
+
+    // 3. Wait out the real floor, then resubmit the SAME already-signed
+    //    envelope — no re-signing.
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    let r2 = horizon
+        .submit_transaction(&env2)
+        .await
+        .unwrap_or_else(|e| panic!("instalment 2 was rejected even after waiting: {e}"));
+    assert!(
+        r2.successful,
+        "instalment 2 must succeed once the age floor has elapsed: {r2:?}"
+    );
+    eprintln!(
+        "instalment 2 settled after waiting: tx {} (ledger {})",
+        r2.hash, r2.ledger
+    );
+
+    // 4. Cancellation: bump the source account's sequence past instalment
+    //    3's own seqNum. Instalment 3 must then be PERMANENTLY rejected —
+    //    the actual, mechanical, non-contract "cancellable" claim, proven
+    //    against real Horizon rather than only asserted.
+    let current_seq = wait_for_sequence(&horizon, &source_addr).await;
+    let cancel_tx = plan
+        .build_cancel_transaction(current_seq, 100)
+        .expect("build cancel tx");
+    let cancel_env_b64 = sign_and_encode(cancel_tx);
+    let cancel_result = horizon
+        .submit_transaction(&cancel_env_b64)
+        .await
+        .unwrap_or_else(|e| panic!("cancel transaction was rejected: {e}"));
+    assert!(
+        cancel_result.successful,
+        "cancel (BUMP_SEQUENCE) must succeed: {cancel_result:?}"
+    );
+    eprintln!(
+        "cancellation settled: tx {} (ledger {})",
+        cancel_result.hash, cancel_result.ledger
+    );
+
+    // Even after waiting out its own age floor, instalment 3 must now be
+    // permanently unsatisfiable.
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+    let after_cancel = horizon.submit_transaction(&env3).await;
+    assert!(
+        after_cancel.is_err(),
+        "instalment 3 must be PERMANENTLY rejected after cancellation, even once its own age \
+         floor has elapsed — got {after_cancel:?}"
+    );
+    eprintln!("instalment 3 correctly REJECTED after cancellation: {after_cancel:?}");
+
+    eprintln!(
+        "=== B4 PASSED: a 3-instalment recurring schedule paced by a real minSeqAge floor \
+         settled on Stellar testnet, and cancellation permanently invalidated the remaining \
+         instalment ==="
+    );
+}
+
+/// Always-on companion to the live test above, for the identical reason
+/// `the_live_testnet_round_trip_test_exists_and_is_gated_correctly` exists.
+#[test]
+fn the_live_testnet_recurring_test_exists_and_is_gated_correctly() {
+    let src = include_str!("tests.rs");
+    let needle = format!(
+        "async fn {}(",
+        "live_testnet_recurring_schedule_paces_execution_and_can_be_cancelled"
+    );
+    let occurrences = src.matches(&needle).count();
+    assert_eq!(
+        occurrences, 1,
+        "the live Stellar testnet recurring-schedule test (B4) must exist exactly once — if \
+         this fails, someone deleted, renamed, or duplicated the one test that has ever proven \
+         a patala recurring schedule executes on a real network"
+    );
+    assert!(
+        src.contains("#[ignore = \"moves real (testnet) money over the real network"),
+        "the live recurring test must stay opt-in via #[ignore] so it never runs by accident in CI"
+    );
+    assert!(
+        src.contains("PATALA_LIVE_TESTNET"),
+        "the live recurring test must stay gated on PATALA_LIVE_TESTNET so CI without network \
+         access is never made flaky by it"
+    );
+}

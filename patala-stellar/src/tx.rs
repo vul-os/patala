@@ -79,11 +79,11 @@
 
 use sha2::{Digest, Sha256};
 use stellar_xdr::curr::{
-    AccountId, AlphaNum4, Asset, AssetCode4, DecoratedSignature, Hash, Limits, Memo, MuxedAccount,
-    Operation, OperationBody, PaymentOp, Preconditions, PublicKey as XdrPublicKey, ReadXdr,
-    SequenceNumber, Signature as XdrSignature, SignatureHint, Transaction, TransactionEnvelope,
-    TransactionExt, TransactionSignaturePayload, TransactionSignaturePayloadTaggedTransaction,
-    TransactionV1Envelope, Uint256, VecM, WriteXdr,
+    AccountId, AlphaNum4, Asset, AssetCode4, BumpSequenceOp, DecoratedSignature, Hash, Limits,
+    Memo, MuxedAccount, Operation, OperationBody, PaymentOp, Preconditions,
+    PublicKey as XdrPublicKey, ReadXdr, SequenceNumber, Signature as XdrSignature, SignatureHint,
+    Transaction, TransactionEnvelope, TransactionExt, TransactionSignaturePayload,
+    TransactionSignaturePayloadTaggedTransaction, TransactionV1Envelope, Uint256, VecM, WriteXdr,
 };
 
 use crate::StellarError;
@@ -240,6 +240,68 @@ pub fn split_memo_hash(
     h.finalize().into()
 }
 
+/// Domain-separated 32-byte binding for one instalment of a B4 recurring
+/// schedule: `SHA256("patala-stellar-recurring-v1" || rail_id || source ||
+/// destination || reference || base_seq || instalment_index ||
+/// instalment_count)`.
+///
+/// Binds not just the parties and reference (like [`memo_hash`]) but also
+/// **which instalment of which schedule** this transaction is: instalment 3
+/// of a 12-payment plan can never be replayed as instalment 3 of a
+/// different plan sharing the same source/destination/reference (a
+/// different `base_seq`), and the domain string keeps it from ever
+/// colliding with a one-off [`memo_hash`] or a [`split_memo_hash`] moving
+/// identical money between the same two parties.
+///
+/// ```
+/// use patala_stellar::tx::recurring_memo_hash;
+///
+/// let a = recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 1, 12);
+/// assert_eq!(a, recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 1, 12));
+///
+/// // A different instalment of the SAME plan is a different binding...
+/// assert_ne!(a, recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 2, 12));
+/// // ...and so is the same instalment NUMBER of a DIFFERENT plan (different base_seq).
+/// assert_ne!(a, recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 200, 1, 12));
+/// ```
+pub fn recurring_memo_hash(
+    rail_id: &str,
+    source: &str,
+    destination: &str,
+    reference: &str,
+    base_seq: i64,
+    instalment_index: u32,
+    instalment_count: u32,
+) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"patala-stellar-recurring-v1");
+    for field in [rail_id, source, destination, reference] {
+        h.update((field.len() as u64).to_le_bytes());
+        h.update(field.as_bytes());
+    }
+    h.update(base_seq.to_le_bytes());
+    h.update(instalment_index.to_le_bytes());
+    h.update(instalment_count.to_le_bytes());
+    h.finalize().into()
+}
+
+/// Domain-separated 32-byte binding for a B4 **cancellation** transaction
+/// (a `BUMP_SEQUENCE`, see [`build_bump_sequence_transaction`]):
+/// `SHA256("patala-stellar-recurring-cancel-v1" || rail_id || source ||
+/// reference || base_seq)`. Exists purely for audit trail (so a stored
+/// cancellation record names which plan it cancelled); nothing decodes or
+/// checks it against anything on-chain, unlike the payment memos above.
+pub fn cancel_memo_hash(rail_id: &str, source: &str, reference: &str, base_seq: i64) -> [u8; 32] {
+    let mut h = Sha256::new();
+    h.update(b"patala-stellar-recurring-cancel-v1");
+    for field in [rail_id, source, reference] {
+        h.update((field.len() as u64).to_le_bytes());
+        h.update(field.as_bytes());
+    }
+    h.update(base_seq.to_le_bytes());
+    h.finalize().into()
+}
+
 /// `networkId = SHA256(network passphrase)` — the Stellar-protocol-defined
 /// domain separator between e.g. the public network and testnet, so a
 /// signature over a testnet transaction can never be replayed as a mainnet
@@ -302,15 +364,18 @@ fn payment_op(leg: &PaymentLeg) -> Operation {
 }
 
 /// Assemble a [`Transaction`] from already-built operations: the payer's
-/// account as the source, [`Preconditions::None`] (no time bounds — see
-/// `crate`'s docs on offline signing), the given sequence number, the given
-/// **total** fee bid, and a [`Memo::Hash`] carrying `memo`.
+/// account as the source, the given [`Preconditions`] (`Preconditions::None`
+/// everywhere in this module except [`crate::recurring`], which is the only
+/// caller that ever passes something else — see that module for why), the
+/// given sequence number, the given **total** fee bid, and a [`Memo::Hash`]
+/// carrying `memo`.
 fn transaction_from_ops(
     source_pk: [u8; 32],
     ops: Vec<Operation>,
     seq_num: i64,
     fee: u32,
     memo: [u8; 32],
+    cond: Preconditions,
 ) -> Result<Transaction, StellarError> {
     let operations = VecM::try_from(ops).map_err(|_| {
         StellarError::Xdr(format!(
@@ -321,7 +386,7 @@ fn transaction_from_ops(
         source_account: muxed(source_pk),
         fee,
         seq_num: SequenceNumber(seq_num),
-        cond: Preconditions::None,
+        cond,
         memo: Memo::Hash(Hash(memo)),
         operations,
         ext: TransactionExt::V0,
@@ -418,7 +483,7 @@ pub fn build_payment_transaction(
 
     let fee = total_fee(base_fee_stroops, legs.len())?;
     let ops: Vec<Operation> = legs.iter().map(payment_op).collect();
-    transaction_from_ops(source_pk, ops, seq_num, fee, memo)
+    transaction_from_ops(source_pk, ops, seq_num, fee, memo, Preconditions::None)
 }
 
 /// Build the (unsigned) single-payment [`Transaction`] — one `PAYMENT`
@@ -441,8 +506,79 @@ pub fn build_transaction(
     fee: u32,
     memo: [u8; 32],
 ) -> Transaction {
+    // Delegates to the `Preconditions::None` case of the generalised
+    // builder below rather than duplicating the operation-assembly logic —
+    // byte-identical output is pinned by
+    // `tests::build_transaction_is_the_preconditions_none_case_of_the_generalised_builder`.
+    build_transaction_with_preconditions(
+        source_pk,
+        dest_pk,
+        asset,
+        amount,
+        seq_num,
+        fee,
+        memo,
+        Preconditions::None,
+    )
+}
+
+/// [`build_transaction`], generalised to an explicit [`Preconditions`] value.
+///
+/// Added for B4 (`crate::recurring`, `docs/shared-economics.md`): a
+/// recurring/pre-authorized payment schedule pre-signs several transactions
+/// on one dedicated source account using `PreconditionsV2`
+/// (`min_seq_age`/`min_seq_ledger_gap`) so they cannot all be redeemed back
+/// to back — see that module for the mechanism and its honest limits.
+///
+/// [`build_transaction`] is this function's `Preconditions::None` special
+/// case, kept as a separate name because every existing caller (B7's
+/// settled testnet payment, the KAT regression test, `charge`/`verify`)
+/// depends on that exact, unchanged signing payload; nothing about this
+/// function changes what `build_transaction` produces.
+#[allow(clippy::too_many_arguments)] // generalises build_transaction (7 args) by one field: cond
+pub fn build_transaction_with_preconditions(
+    source_pk: [u8; 32],
+    dest_pk: [u8; 32],
+    asset: Asset,
+    amount: i64,
+    seq_num: i64,
+    fee: u32,
+    memo: [u8; 32],
+    cond: Preconditions,
+) -> Transaction {
     let leg = PaymentLeg::new(dest_pk, asset, amount);
-    transaction_from_ops(source_pk, vec![payment_op(&leg)], seq_num, fee, memo)
+    transaction_from_ops(source_pk, vec![payment_op(&leg)], seq_num, fee, memo, cond)
+        .expect("one operation is well under the 100 limit")
+}
+
+/// Build the (unsigned) [`Transaction`] for a `BUMP_SEQUENCE` operation: the
+/// **cancellation** primitive for B4's recurring schedule
+/// (`crate::recurring::RecurringPlan::build_cancel_transaction`).
+///
+/// This is an ordinary, normally-sequenced transaction
+/// ([`Preconditions::None`] — a cancellation is submitted like any other
+/// transaction, it needs no relaxed precondition of its own) whose one
+/// operation raises the source account's on-chain sequence number to
+/// `bump_to` **if that is higher than its current sequence** (stellar-core
+/// never lowers it). Raising it past every remaining pre-signed
+/// instalment's own `seqNum` makes every one of them permanently
+/// unsatisfiable — see [`crate::recurring`] for why that is the real
+/// non-contract cancellation mechanism, and what it does and does not do
+/// (it cannot undo an instalment that already executed).
+pub fn build_bump_sequence_transaction(
+    source_pk: [u8; 32],
+    seq_num: i64,
+    fee: u32,
+    bump_to: i64,
+    memo: [u8; 32],
+) -> Transaction {
+    let op = Operation {
+        source_account: None,
+        body: OperationBody::BumpSequence(BumpSequenceOp {
+            bump_to: SequenceNumber(bump_to),
+        }),
+    };
+    transaction_from_ops(source_pk, vec![op], seq_num, fee, memo, Preconditions::None)
         .expect("one operation is well under the 100 limit")
 }
 
@@ -692,6 +828,7 @@ pub fn single_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use stellar_xdr::curr::{Duration, PreconditionsV2};
 
     #[test]
     fn asset_code4_pads_short_codes_and_rejects_bad_ones() {
@@ -852,8 +989,15 @@ mod tests {
 
         let mut overridden = good.clone();
         overridden.source_account = Some(muxed([5u8; 32]));
-        let tx = transaction_from_ops([1u8; 32], vec![good.clone(), overridden], 1, 200, [0u8; 32])
-            .unwrap();
+        let tx = transaction_from_ops(
+            [1u8; 32],
+            vec![good.clone(), overridden],
+            1,
+            200,
+            [0u8; 32],
+            Preconditions::None,
+        )
+        .unwrap();
         let env = envelope(tx, [1u8; 32], [0u8; 64]).unwrap();
         let err = decode_payments(&env).unwrap_err();
         assert!(format!("{err}").contains("operation 1"), "{err}");
@@ -862,8 +1006,15 @@ mod tests {
             source_account: None,
             body: OperationBody::Inflation,
         };
-        let tx =
-            transaction_from_ops([1u8; 32], vec![good, not_payment], 1, 200, [0u8; 32]).unwrap();
+        let tx = transaction_from_ops(
+            [1u8; 32],
+            vec![good, not_payment],
+            1,
+            200,
+            [0u8; 32],
+            Preconditions::None,
+        )
+        .unwrap();
         let env = envelope(tx, [1u8; 32], [0u8; 64]).unwrap();
         let err = decode_payments(&env).unwrap_err();
         assert!(
@@ -919,5 +1070,180 @@ mod tests {
     fn network_id_is_sha256_of_the_passphrase() {
         let want: [u8; 32] = Sha256::digest(b"Test SDF Network ; September 2015").into();
         assert_eq!(network_id("Test SDF Network ; September 2015"), want);
+    }
+
+    // ── B4: preconditions must not disturb the existing, pinned path ──────
+
+    #[test]
+    fn build_transaction_is_the_preconditions_none_case_of_the_generalised_builder() {
+        // `build_transaction` must still be exactly what B7's settled
+        // testnet payment and the KAT regression test in `tests.rs` pin —
+        // this is the direct, in-module proof that generalising
+        // `transaction_from_ops` to take a `cond` parameter changed nothing
+        // for every existing caller.
+        let asset = usdc_asset("USDC", [42u8; 32]).unwrap();
+        let memo = memo_hash("stellar", "GSRC", "GDST", "r-1");
+        let via_old_name =
+            build_transaction([1u8; 32], [9u8; 32], asset.clone(), 5_000, 7, 100, memo);
+        let via_generalised = build_transaction_with_preconditions(
+            [1u8; 32],
+            [9u8; 32],
+            asset,
+            5_000,
+            7,
+            100,
+            memo,
+            Preconditions::None,
+        );
+        assert_eq!(via_old_name, via_generalised);
+        assert_eq!(via_old_name.cond, Preconditions::None);
+    }
+
+    #[test]
+    fn preconditions_v2_is_actually_available_on_the_pinned_xdr_version() {
+        // The B4 gating fact, pinned as a compiling, running test rather
+        // than a doc claim: `stellar_xdr::curr::PreconditionsV2` exists
+        // with `min_seq_num`/`min_seq_age`/`min_seq_ledger_gap`, and a
+        // transaction carrying it round-trips through the SDF's own
+        // spec-generated (de)coder byte-for-byte.
+        let asset = usdc_asset("USDC", [42u8; 32]).unwrap();
+        let memo = memo_hash("stellar", "GSRC", "GDST", "r-1");
+        let cond = Preconditions::V2(PreconditionsV2 {
+            time_bounds: None,
+            ledger_bounds: None,
+            min_seq_num: None,
+            min_seq_age: Duration(30),
+            min_seq_ledger_gap: 2,
+            extra_signers: Default::default(),
+        });
+        let tx = build_transaction_with_preconditions(
+            [1u8; 32], [9u8; 32], asset, 5_000, 7, 100, memo, cond,
+        );
+        let encoded = tx.to_xdr(Limits::none()).unwrap();
+        let decoded = Transaction::from_xdr(&encoded, Limits::none()).unwrap();
+        assert_eq!(tx, decoded);
+        let Preconditions::V2(v2) = &decoded.cond else {
+            panic!("preconditions did not round-trip as V2");
+        };
+        assert_eq!(v2.min_seq_age, Duration(30));
+        assert_eq!(v2.min_seq_ledger_gap, 2);
+    }
+
+    #[test]
+    fn changing_any_v2_precondition_field_changes_the_signing_hash() {
+        // The preconditions are part of what gets signed — tampering any
+        // one of them must be detectable as a different transaction hash,
+        // exactly like tampering an amount or a memo already is.
+        let asset = usdc_asset("USDC", [42u8; 32]).unwrap();
+        let memo = memo_hash("stellar", "GSRC", "GDST", "r-1");
+        let net_id = network_id("Test SDF Network ; September 2015");
+        let base_cond = |age: u64, gap: u32| {
+            Preconditions::V2(PreconditionsV2 {
+                time_bounds: None,
+                ledger_bounds: None,
+                min_seq_num: None,
+                min_seq_age: Duration(age),
+                min_seq_ledger_gap: gap,
+                extra_signers: Default::default(),
+            })
+        };
+        let base = build_transaction_with_preconditions(
+            [1u8; 32],
+            [9u8; 32],
+            asset.clone(),
+            5_000,
+            7,
+            100,
+            memo,
+            base_cond(30, 2),
+        );
+        let diff_age = build_transaction_with_preconditions(
+            [1u8; 32],
+            [9u8; 32],
+            asset.clone(),
+            5_000,
+            7,
+            100,
+            memo,
+            base_cond(31, 2),
+        );
+        let diff_gap = build_transaction_with_preconditions(
+            [1u8; 32],
+            [9u8; 32],
+            asset,
+            5_000,
+            7,
+            100,
+            memo,
+            base_cond(30, 3),
+        );
+        let h_base = tx_hash(net_id, &base).unwrap();
+        let h_age = tx_hash(net_id, &diff_age).unwrap();
+        let h_gap = tx_hash(net_id, &diff_gap).unwrap();
+        assert_ne!(
+            h_base, h_age,
+            "a changed min_seq_age must change the signed hash"
+        );
+        assert_ne!(
+            h_base, h_gap,
+            "a changed min_seq_ledger_gap must change the signed hash"
+        );
+        assert_ne!(
+            h_age, h_gap,
+            "the two tampered variants must not coincidentally collide with each other"
+        );
+    }
+
+    #[test]
+    fn recurring_memo_binds_the_plan_the_instalment_and_its_position() {
+        let base = recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 1, 12);
+        assert_eq!(
+            base,
+            recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 1, 12)
+        );
+        for other in [
+            recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 2, 12), // different index
+            recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 1, 6),  // different count
+            recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 200, 1, 12), // different base_seq
+            recurring_memo_hash("stellar", "GSRC", "GDST", "sub-2", 100, 1, 12), // different reference
+        ] {
+            assert_ne!(base, other);
+        }
+        // Domain separation from the single-payment and split bindings on
+        // the same parties/reference.
+        assert_ne!(base, memo_hash("stellar", "GSRC", "GDST", "sub-1"));
+        assert_ne!(
+            base,
+            split_memo_hash("stellar", "GSRC", "sub-1", &[("GDST", 100)])
+        );
+    }
+
+    #[test]
+    fn cancel_memo_binds_the_plan_being_cancelled() {
+        let a = cancel_memo_hash("stellar", "GSRC", "sub-1", 100);
+        assert_eq!(a, cancel_memo_hash("stellar", "GSRC", "sub-1", 100));
+        assert_ne!(a, cancel_memo_hash("stellar", "GSRC", "sub-1", 200));
+        assert_ne!(a, cancel_memo_hash("stellar", "GSRC", "sub-2", 100));
+        assert_ne!(
+            a,
+            recurring_memo_hash("stellar", "GSRC", "GDST", "sub-1", 100, 1, 12)
+        );
+    }
+
+    #[test]
+    fn bump_sequence_transaction_round_trips_and_carries_the_target_seq() {
+        let memo = cancel_memo_hash("stellar", "GSRC", "sub-1", 100);
+        let tx = build_bump_sequence_transaction([1u8; 32], 55, 100, 112, memo);
+        assert_eq!(tx.cond, Preconditions::None);
+        let encoded = tx.to_xdr(Limits::none()).unwrap();
+        let decoded = Transaction::from_xdr(&encoded, Limits::none()).unwrap();
+        assert_eq!(tx, decoded);
+        let [op] = decoded.operations.as_slice() else {
+            panic!("expected exactly one operation");
+        };
+        let OperationBody::BumpSequence(b) = &op.body else {
+            panic!("expected a BUMP_SEQUENCE operation");
+        };
+        assert_eq!(b.bump_to.0, 112);
     }
 }

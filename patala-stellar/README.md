@@ -214,6 +214,124 @@ environment** — unlike single-leg `charge`/`verify`, which settled once on
 testnet 2026-07-30 (above). Treat atomic splits as **implemented and
 unit-tested, not live-verified.**
 
+## The recurring primitive: `recurring::RecurringPlan` (B4)
+
+N pre-signed, time-bounded transactions on **one dedicated source account**
+— non-custodial (the payer's own account, no platform-held funds), no
+contract, cancellable. Lives in its own module, `src/recurring.rs`, entirely
+separate from `charge`/`verify`/`charge_split`/`verify_split` above.
+
+**The gating fact, verified against the pinned crate, not assumed:**
+`stellar-xdr = "22"` resolves (`Cargo.lock`) to `22.2.0`, and that crate's
+own `curr::PreconditionsV2` really does carry `min_seq_num`, `min_seq_age`,
+and `min_seq_ledger_gap` — read directly from its generated source, and
+pinned as a running test
+(`tx::tests::preconditions_v2_is_actually_available_on_the_pinned_xdr_version`),
+not just a doc claim. **B4 is buildable on the pinned XDR version.**
+
+```rust
+pub struct RecurringPlan { /* source_pk, dest_pk, asset, amount, base_seq,
+                              count, base_fee_stroops, min_seq_age_step_seconds,
+                              min_seq_ledger_gap_step, ... */ }
+
+impl RecurringPlan {
+    pub fn build_instalment(&self, instalment_index: u32) -> Result<Transaction, StellarError>;
+    pub fn build_all_instalments(&self) -> Result<Vec<Transaction>, StellarError>;
+    pub fn build_cancel_transaction(&self, current_seq: i64, fee: u32) -> Result<Transaction, StellarError>;
+}
+```
+
+**A conservative, honestly-scoped reading of "relax".** `min_seq_num` is
+left `None` in every instalment — by the XDR spec text itself, that is
+identical to the ordinary "must be exactly `seqNum - 1`" rule every Stellar
+transaction already has. **No skipping, no reordering, no forgiveness for a
+missed instalment is claimed.** A looser, shared `min_seq_num` (tolerating a
+skipped instalment) is a real, documented use of the field that was
+modelled and deliberately **not** built: the same window that forgives a
+skip also lets whoever holds the pre-signed envelopes jump straight to a
+later instalment — burning every one in between — once just one spacing
+period has elapsed, because `min_seq_age` is measured against the source
+account's own `seqTime`, which resets every time *any* instalment executes.
+Getting real per-hop pacing without opening that cherry-pick path needs
+more care than this pass gives it unilaterally.
+
+**What ships instead:** ordinary strict sequencing (unchanged), plus a
+`min_seq_age`/`min_seq_ledger_gap` floor — constant across every instalment
+after the first — that only exists inside `PreconditionsV2` at all
+(`Preconditions::None`/`Time` have no field expressing "at least this long
+since this account's sequence last changed"). That is what makes "N
+pre-signed transactions cannot all be redeemed back to back" literally
+true: instalment *i* needs the account's sequence to be exactly what
+instalment *i − 1* left it at **and** the real floor to have elapsed since
+instalment *i − 1* actually executed.
+
+**Cancellation, mechanically.** Stellar has no message-recall — once signed,
+a signature exists. "Cancellable" means `build_cancel_transaction`: one
+ordinary `BUMP_SEQUENCE` operation that raises the dedicated source
+account's sequence past every remaining instalment's own `seqNum`. Because
+every instalment's rule is "valid only while the account's sequence is
+below mine", one bump makes every not-yet-executed instalment permanently
+unsatisfiable in a single step — no per-instalment revocation, no contract.
+It does **not** undo an instalment that already executed (Stellar payments
+do not reverse).
+
+**Proven twice: an offline oracle, and real testnet.** `recurring::would_be_valid`
+is a pure, offline reimplementation of the documented validity rule, used
+to prove the pacing/cancellation claims by simulation — 15 tests in
+`recurring.rs`, several added specifically because mutation-testing the
+first draft caught real gaps (a `min_seq_ledger_gap` check that no test
+exercised independently of `min_seq_age`, and a `<=` vs `==` looseness in
+the ordering check that no test would have caught either — both fixed and
+now pinned). But an in-process oracle is not evidence the real network
+agrees, so a second live test also exists:
+
+```sh
+PATALA_LIVE_TESTNET=1 cargo test -p patala-stellar live_testnet_recurring \
+  -- --ignored --nocapture
+```
+
+**Settled for real, on testnet, 2026-07-30** (independently re-confirmed
+against the public Horizon API, outside this crate's own code path):
+
+| Step | tx hash | ledger | Horizon result |
+|---|---|---|---|
+| Instalment 1 (immediate) | `94750fed0d49c432ea829af5655bd78f7fa86fdf32e86c0450fe90940d418cf3` | `3885196` | successful |
+| Instalment 2, submitted immediately after | — | — | **rejected**: `tx_bad_minseq_age_or_gap` |
+| Instalment 2, resubmitted (same envelope) after waiting | `cb55f02b9ee19329aeaa876efab2e1666c0b57f83f679676d26b4e8df9d27d31` | `3885199` | successful |
+| Cancellation (`BUMP_SEQUENCE`) | `052bb1e5434282381eb57861380b28456bd80f67a8fc062c3fc272630f251dce` | `3885200` | successful |
+| Instalment 3, after cancellation | — | — | **rejected**: `tx_bad_seq` |
+
+Real stellar-core rejected the early resubmission with its own
+`tx_bad_minseq_age_or_gap` result code — confirming the pacing floor is
+enforced by the network, not just by this crate's logic — and rejected the
+post-cancellation instalment with `tx_bad_seq`, confirming cancellation
+works against the real network too. The SAME already-signed instalment-2
+envelope was resubmitted unchanged (no re-signing) once the floor elapsed.
+
+**Read this exactly as narrowly as the B7 claim above:** one 3-instalment
+schedule, one dedicated throwaway testnet account, one 8-second pacing
+floor. **Not proven:** mainnet; any schedule with more than 3 instalments;
+a looser/shared `min_seq_num` (not built — see above); wiring into
+`StellarRail::charge`/`verify` (deliberately not done — see next
+paragraph).
+
+**Not wired into `PaymentRail`/`charge`/`verify`.** Those hard-code
+`Preconditions::None` end to end, and `verify`'s offline step rebuilds a
+transaction from `StellarBinding`'s scalar fields via `tx::build_transaction`
+to re-derive the signed hash. Threading preconditions through that struct
+and function would change what `verify` signs/rebuilds for every *existing*
+receipt shape — exactly the risk this backlog item's own brief called out.
+Nothing about `build_transaction`, `StellarBinding`, `decode_payments`, or
+`StellarRail::charge`/`verify` changed behaviour: the pre-existing KAT
+regression test and a new direct unit test both still pin
+`build_transaction` byte-for-byte, and mutation-testing this claim (making
+the generaliser silently ignore whatever `cond` it was given) turned both
+of those tests — plus most of `recurring.rs`'s own suite — red immediately.
+This module has its own binding-free, submit-it-yourself flow instead:
+build, sign, and submit each instalment through the same
+`StellarRpc::submit_transaction`/`get_transaction` seam `StellarRail::charge`
+already uses, whenever it is due.
+
 ## Honesty (`PATALA.md` §8) — READ THIS
 
 **Testnet: one payment operation has settled.** On 2026-07-30, a throwaway
@@ -263,15 +381,17 @@ is still gated, so its deletion or weakening cannot pass silently.)
 - ❌ This is not a claim that the rail is production-ready — see the
   confidence assessment below, which still stands.
 
-What **is** checked, offline, in `src/tests.rs`: 31 tests total, of which
-**29 run by default with no network at all** (including the always-on guard
-that the live round-trip test above cannot silently vanish, and 6 covering
-`charge_split`/`verify_split` — happy path, cross-rejection between the
-single and split verify paths, per-leg tamper detection via the split memo
-hash, empty/malformed-destination/blank-reference refusals, no-signer
-refusal, and cross-network rejection) and **2 are `#[ignore]`d and require
-live Horizon** — the pre-existing connectivity smoke test, and the
-round-trip test above:
+What **is** checked, offline, in `src/tests.rs`: 33 tests total, of which
+**30 run by default with no network at all** (including the always-on guards
+that neither live test above can silently vanish or be weakened, and 6
+covering `charge_split`/`verify_split` — happy path, cross-rejection between
+the single and split verify paths, per-leg tamper detection via the split
+memo hash, empty/malformed-destination/blank-reference refusals, no-signer
+refusal, and cross-network rejection) and **3 are `#[ignore]`d and require
+live Horizon** — the pre-existing connectivity smoke test, B7's single-leg
+round-trip, and B4's recurring-schedule test above. `tx.rs` and the new
+`recurring.rs` carry their own offline suites on top of this (see B4's
+section above for the mutation-testing history on the latter).
 
 - A scripted fake Horizon (`FakeRpc`) that decodes and re-hashes whatever
   `charge` submits using this crate's own pure functions, so the full

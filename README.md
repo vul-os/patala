@@ -35,19 +35,26 @@ chain and no processor.
 
 What that does *not* mean: **no rail here has been run against a live
 merchant account from this repo**, and only **one** rail has been run
-against a live network at all — `patala-stellar`, once, on **testnet**,
-2026-07-30: a single-leg USDC-shaped payment built and submitted through the
-real `StellarRail::charge` API, independently confirmed by
-`StellarRail::verify` reading it back from Horizon (transaction hash and
-ledger sequence in `patala-stellar/README.md`). Read that narrowly — it says
-nothing about mainnet, and nothing about atomic multi-party splits
-(`patala-stellar` now has one — `StellarRail::charge_split`/`verify_split`,
-B1 — tested offline only, never run against a live network), and nothing
-about any other rail, which each still say plainly, in their own READMEs,
-that they have not been run live and name the exact step to validate (fund a
-testnet account, run the `#[ignore]`d, env-gated live test). Treat the rails
-as a tested foundation to validate against testnet/sandbox, not as
-production-proven.
+against a live network at all — `patala-stellar`, twice, both on
+**testnet**, both 2026-07-30: a single-leg USDC-shaped payment built and
+submitted through the real `StellarRail::charge` API, independently
+confirmed by `StellarRail::verify` reading it back from Horizon (B7), and
+separately, a 3-instalment recurring/pre-authorized schedule (B4,
+`recurring::RecurringPlan`) that settled its first instalment immediately,
+had its second instalment genuinely **rejected by real Horizon**
+(`tx_bad_minseq_age_or_gap`) when resubmitted too early and then accepted
+once the pacing floor elapsed, and had its third, still-outstanding
+instalment permanently invalidated by a real on-chain cancellation
+(`tx_bad_seq` on resubmission) — transaction hashes and ledger sequences for
+both in `patala-stellar/README.md`. Read both narrowly — neither says
+anything about mainnet, and neither says anything about atomic multi-party
+splits (`patala-stellar` now has one — `StellarRail::charge_split`/
+`verify_split`, B1 — tested offline only, never run against a live network),
+or about any other rail, which each still say plainly, in their own
+READMEs, that they have not been run live and name the exact step to
+validate (fund a testnet account, run the `#[ignore]`d, env-gated live
+test). Treat the rails as a tested foundation to validate against
+testnet/sandbox, not as production-proven.
 
 The things that genuinely executed end-to-end are the **Python binding, the
 Go binding and the sidecar** — real round-trips over a real interpreter,

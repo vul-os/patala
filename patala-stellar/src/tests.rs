@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use patala_core::{Error, PayRequest, PaymentRail, Receipt};
 
 use super::keys::Keypair;
-use super::rpc::{StellarRpc, SubmitResult, TxRecord};
+use super::rpc::{AssetHolding, StellarRpc, SubmitResult, TxRecord};
 use super::{tx, Network, StellarBinding, StellarConfig, StellarError, StellarRail};
 
 /// A scripted Horizon: `submit_transaction` decodes+re-hashes whatever
@@ -83,6 +83,28 @@ impl StellarRpc for FakeRpc {
             return Err(StellarError::Rpc("connection refused".into()));
         }
         Ok(self.seq)
+    }
+
+    async fn load_account_holdings(
+        &self,
+        _account_strkey: &str,
+    ) -> Result<Option<Vec<AssetHolding>>, StellarError> {
+        // `fail_load` is the existing opt-in "Horizon is unreachable" flag, and
+        // it means the same thing here: could-not-check, which the trait doc
+        // requires the call site to treat as fail-closed rather than as "the
+        // payee is not ready". The funded case returns the native balance only,
+        // which is what an account with no trustlines actually looks like.
+        if self.fail_load {
+            return Err(StellarError::Rpc("connection refused".into()));
+        }
+        Ok(Some(vec![AssetHolding {
+            is_native: true,
+            asset_code: String::new(),
+            asset_issuer: String::new(),
+            balance_stroops: 100_000_000,
+            limit_stroops: i64::MAX,
+            is_authorized: true,
+        }]))
     }
 
     async fn submit_transaction(

@@ -225,6 +225,83 @@ impl StellarRpc for HorizonRpc {
             .ok_or_else(|| StellarError::Rpc("GET /accounts: no sequence".into()))
     }
 
+    async fn load_account_holdings(
+        &self,
+        account_strkey: &str,
+    ) -> Result<Option<Vec<AssetHolding>>, StellarError> {
+        let url = format!("{}/accounts/{}", self.base_url, account_strkey);
+        let resp = self
+            .http
+            .get(&url)
+            .send()
+            .await
+            .map_err(|e| StellarError::Rpc(format!("GET /accounts: {e}")))?;
+        // 404 is the one status that is an ANSWER rather than a failure: on
+        // Stellar an unfunded account does not exist. Every other non-success
+        // is "I could not check", which the trait doc requires the call site
+        // to treat as fail-closed rather than as "not ready".
+        if resp.status().as_u16() == 404 {
+            return Ok(None);
+        }
+        if !resp.status().is_success() {
+            return Err(StellarError::Rpc(format!(
+                "GET /accounts: HTTP {}",
+                resp.status()
+            )));
+        }
+        let v: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| StellarError::Rpc(format!("GET /accounts: bad JSON: {e}")))?;
+        let balances = v
+            .get("balances")
+            .and_then(|b| b.as_array())
+            .ok_or_else(|| StellarError::Rpc("GET /accounts: no balances array".into()))?;
+
+        let mut out = Vec::with_capacity(balances.len());
+        for b in balances {
+            let asset_type = b.get("asset_type").and_then(|a| a.as_str()).unwrap_or("");
+            let is_native = asset_type == "native";
+            let balance_stroops =
+                parse_stroops(b.get("balance").and_then(|x| x.as_str()).ok_or_else(|| {
+                    StellarError::Rpc("GET /accounts: balance not a string".into())
+                })?)?;
+            // The native balance has no trustline, so it has no limit and is
+            // always usable; i64::MAX is the documented sentinel for that.
+            let limit_stroops = if is_native {
+                i64::MAX
+            } else {
+                match b.get("limit").and_then(|x| x.as_str()) {
+                    Some(l) => parse_stroops(l)?,
+                    None => i64::MAX,
+                }
+            };
+            out.push(AssetHolding {
+                is_native,
+                asset_code: b
+                    .get("asset_code")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                asset_issuer: b
+                    .get("asset_issuer")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                balance_stroops,
+                limit_stroops,
+                // Horizon omits is_authorized for the native balance; every
+                // account can always hold XLM. Absent on a trustline means the
+                // issuer has NOT authorised it, so default false and fail closed.
+                is_authorized: is_native
+                    || b.get("is_authorized")
+                        .and_then(|x| x.as_bool())
+                        .unwrap_or(false),
+            });
+        }
+        Ok(Some(out))
+    }
+
     async fn submit_transaction(
         &self,
         envelope_xdr_b64: &str,

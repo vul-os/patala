@@ -145,8 +145,9 @@ pub trait StellarRpc: Send + Sync {
     async fn load_sequence(&self, account_strkey: &str) -> Result<i64, StellarError>;
 
     /// What assets an account holds and on what terms (`GET /accounts/{id}`,
-    /// `balances` array) — the query behind
-    /// [`crate::StellarRail::check_trustlines`].
+    /// `balances` array) — the query a `check_trustlines` pre-flight would be
+    /// built on (not yet implemented; see the `Trustlines` note on this
+    /// crate's docs).
     ///
     /// `Ok(None)` means Horizon has no such account (404): on Stellar an
     /// unfunded account does not exist, and a payment to it fails with

@@ -38,9 +38,9 @@
 //!   account with no trustline for the asset fails (`op_no_trust`), and
 //!   because operations are atomic that failure takes every other leg with it.
 //!   This is a griefing vector when payees are not all under the payer's
-//!   control. [`crate::StellarRail::check_trustlines`] is the pre-flight check;
-//!   [`CLAIMABLE_BALANCE_RESERVE_STROOPS`] documents the fallback and why it is
-//!   not the default.
+//!   control. A `check_trustlines` pre-flight would be the fix (not yet
+//!   implemented); [`CLAIMABLE_BALANCE_RESERVE_STROOPS`] documents the
+//!   fallback and why it is not the default.
 //! * **The fee scales with the operation count.** stellar-core requires
 //!   `fee ≥ base_fee × operation_count`, so [`build_payment_transaction`]
 //!   multiplies (see [`total_fee`]) instead of reusing a single-operation bid
@@ -102,9 +102,9 @@ pub const MAX_OPERATIONS: usize = 100;
 
 /// What a `CREATE_CLAIMABLE_BALANCE` operation locks up, per leg, in stroops
 /// (0.5 XLM) — **documented, not used**: this crate builds no claimable
-/// balances. See [`crate::StellarRail::check_trustlines`] for why a caller
-/// might want one, and the `Trustlines` section of `crate`'s docs for exactly
-/// what implementing it would take.
+/// balances. See the `check_trustlines` note above (not yet implemented) for
+/// why a caller might want one, and the `Trustlines` section of `crate`'s
+/// docs for exactly what implementing it would take.
 ///
 /// This is *today's* value of a **network parameter** — the ledger's base
 /// reserve, currently 0.5 XLM, which is what one claimable balance entry with
@@ -427,7 +427,8 @@ pub fn build_payment_transaction(
 /// Kept infallible and unvalidated: `crate::StellarRail::verify` rebuilds a
 /// transaction from an **untrusted** receipt's own scalar fields in order to
 /// re-derive its hash, so this has to be able to encode a hostile value (a zero
-/// amount, say) and let the hash be what disagrees. See [`payment_op`].
+/// amount, say) and let the hash be what disagrees. See `payment_op` (private
+/// to this module).
 /// [`build_payment_transaction`] is the validating, N-leg generalisation, and
 /// for one leg the two produce byte-identical XDR.
 pub fn build_transaction(

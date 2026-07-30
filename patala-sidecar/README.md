@@ -1,7 +1,8 @@
 # patala-sidecar
 
 A thin local HTTP server over `patala-core` (`PATALA.md` §5): `quote`,
-`charge`, `verify` as JSON, over a loopback socket. This is the universal
+`charge`, `verify`, `validate-destination` and `webhook` as JSON, over a
+loopback socket. This is the universal
 polyglot path — any language with an HTTP client can drive the substrate
 without FFI, a generated binding, or even a Rust toolchain on the calling
 side.
@@ -42,7 +43,41 @@ the `u64` minor-units integers `patala-core` defines; `serde_json` encodes a
 | `POST` | `/v1/rails/:rail_id/quote` | `PayRequest` | `Quote` |
 | `POST` | `/v1/rails/:rail_id/charge` | `PayRequest` | `Receipt` |
 | `POST` | `/v1/rails/:rail_id/verify` | `Receipt` | `{"valid": bool}` |
+| `POST` | `/v1/rails/:rail_id/validate-destination` | `{"destination": string}` | `DestinationVerdict` + `is_refusal` |
 | `POST` | `/v1/rails/:rail_id/webhook` | the processor's **raw request** | `WebhookEvent` |
+
+`/validate-destination` is the pre-flight check: what a rail can honestly say
+about a payout address, **offline**, before any money moves. It is how a
+consumer with no FFI reaches `PaymentRail::validate_destination`, and it never
+touches a rail's network path — it answers on a sidecar whose rails have no
+reachable RPC or processor at all.
+
+It exists for the compensating-payment flow (`docs/compensating-payments.md`):
+on a `NonCustodialFinal` rail there is no reversal, so paying a customer back is
+a second `charge` to an address the **customer** supplies — never the address
+the payment came from, which is very often an exchange withdrawal address where
+the funds cannot be credited back to them.
+
+**Read the body, not just the status code.** A `200` means *the rail answered*,
+not that the address is good. All five verdicts (`Malformed`, `WrongNetwork`,
+`NotAWallet`, `StructurallyValid`, `Unknown`) come back as `200` — for the same
+reason `/verify` returns `200` with `{"valid": false}`: a rail's honest refusal
+is data, and mapping some verdicts onto HTTP codes would flatten a five-state
+answer into "worked / did not work". Branch on `status` and `is_refusal`.
+
+`is_refusal` is added to the core type's own JSON shape because it is a *method*
+on `DestinationVerdict` and a method does not survive JSON; a consumer
+re-deriving it from `status` would fall through to its default for any status
+added later, and that default is "not a refusal" — failing open. Every verdict
+also carries `human_must_confirm: true` (including `StructurallyValid`) and the
+`exchange_deposit_caveat` text, because patala does not detect exchange-owned
+addresses and will not guess.
+
+A `400` means the **request** was malformed — not JSON, a missing or non-string
+`destination`, or an unexpected field — and carries no verdict fields at all, so
+a rejected request can never be mistaken for a checked address. Note that
+`{"destination": ""}` is a well-formed *request* and answers `200` with the
+rail's `Malformed` refusal.
 
 `/webhook` is the push counterpart to `/verify`: forward the processor's
 webhook request to it **verbatim** — same body bytes, same headers, same
@@ -128,7 +163,7 @@ process has never heard of it. Per-rail registration is **unwritten** —
 described in `registry.rs`'s doc comment, not implemented.
 
 Everything *around* the registry is real and tested: the loopback bind, the
-fail-closed token gate, the error mapping, all five endpoints, and their
+fail-closed token gate, the error mapping, all six endpoints, and their
 round-trips over a real socket. So "the sidecar works" is true of the HTTP
 surface and false of the rail set behind it. `registry.rs`'s
 `registry_is_mock_only` test pins that claim so this section cannot rot.

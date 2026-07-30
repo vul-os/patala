@@ -52,13 +52,24 @@ for p in $processors; do
   printf '%s\n' "$fiat_all_members" | grep -qx "fiat-$p" \
     || note "patala-py fiat-all is missing fiat-$p (patala-go's cdylib would omit it)"
 
-  # 4. tests/webhook_coverage.rs names the processor, so the webhook-surface
-  #    coverage test actually exercises it. That test is feature-gated, so a
-  #    count assertion INSIDE it cannot notice an adapter that was never
-  #    added to its list -- only this structural check can.
+  # 4. tests/webhook_coverage.rs names the processor, so the trait-surface
+  #    coverage tests actually exercise it -- both verify_webhook and
+  #    validate_destination, the two PaymentRail methods that have defaults and
+  #    can therefore be silently left unimplemented. That test is
+  #    feature-gated, so a count assertion INSIDE it cannot notice an adapter
+  #    that was never added to its list -- only this structural check can.
   grep -q "feature = \"$p\"" "$webhook_cov" \
     || note "patala-fiat/tests/webhook_coverage.rs has no #[cfg(feature = \"$p\")] entry \
-(src/$p/'s verify_webhook would never be exercised)"
+(src/$p/'s verify_webhook and validate_destination would never be exercised)"
+
+  # 4b. ...and it is classified in that file's dest_shape() table, which says
+  #     what the processor's `destination` field actually is (a redirect URL,
+  #     the buyer's email, or nothing). dest_shape() panics on an unknown name
+  #     rather than defaulting, but only for an adapter that reached it -- this
+  #     catches one that was added to neither list.
+  grep -q "\"$p\"" "$webhook_cov" \
+    || note "patala-fiat/tests/webhook_coverage.rs's dest_shape() does not classify $p \
+(decide whether its PayRequest::destination is a redirect URL, the buyer's email, or unread)"
 
   # 5. The processor feature enables the private `_adapter` marker. That marker
   #    is what compiles `httpshared` in and what gates the webhook-coverage

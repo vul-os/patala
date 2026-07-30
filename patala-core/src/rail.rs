@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::capabilities::{RailCapabilities, Settlement};
+use crate::destination::DestinationVerdict;
 use crate::error::{Error, Result};
 use crate::webhook::{WebhookDelivery, WebhookEvent};
 
@@ -14,7 +15,9 @@ use crate::webhook::{WebhookDelivery, WebhookEvent};
 ///
 /// `patala-core` never parses `destination` — it is a wallet address to a
 /// crypto rail and an opaque processor-side token to a fiat rail, and only the
-/// rail that receives it knows which.
+/// rail that receives it knows which. A caller that wants to check one *before*
+/// committing to a charge asks that rail, through
+/// [`PaymentRail::validate_destination`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PayRequest {
     /// Amount in the currency's smallest unit (cents, USDC base units, ...).
@@ -26,6 +29,11 @@ pub struct PayRequest {
     pub currency: String,
     /// Where the money should go. A wallet address for a crypto rail, or an
     /// opaque processor-side destination token for a fiat rail.
+    ///
+    /// [`Self::validate`] only rejects an empty one; whether the string is a
+    /// well-formed address is a question for the rail that will receive it —
+    /// see [`PaymentRail::validate_destination`], which answers it offline,
+    /// before any money moves.
     pub destination: String,
     /// Caller-supplied idempotency / correlation key. Rails should make
     /// [`PaymentRail::charge`] idempotent on this where their backend permits
@@ -128,12 +136,116 @@ pub trait PaymentRail: Send + Sync {
     /// on a receipt this rail cannot actually re-derive.
     async fn verify(&self, receipt: &Receipt) -> Result<bool>;
 
+    /// Check a destination address as far as this rail can, **offline**, before
+    /// any money moves.
+    ///
+    /// This exists so a caller can tell a person "that is not a valid Solana
+    /// address" at the moment they type it, rather than discovering it at charge
+    /// time — or, worse, not at all. It is the one call in the two-party payout
+    /// flow described in [`crate::destination`]: the customer supplies an
+    /// address they control, this says what is decidably wrong with it, and a
+    /// human confirms what no code here can know.
+    ///
+    /// # Contract
+    ///
+    /// - **Pure and offline.** No network, no clock, no filesystem, no global
+    ///   state; the same `dest` must always give the same verdict. It has to run
+    ///   in a browser, on a gate device with no uplink, and in a test with no
+    ///   RPC. A check that needs to ask a chain a question (does this account
+    ///   exist, does it have a trustline for this asset) is a *different*
+    ///   method, and not this one.
+    /// - **Never `Result`.** "I could not check" is a verdict
+    ///   ([`crate::DestinationStatus::Unknown`]), not an error, because a caller
+    ///   must handle it exactly as carefully as a refusal.
+    /// - **Fails closed.** A malformed address is
+    ///   [`crate::DestinationStatus::Malformed`] — a refusal, never a shrug.
+    ///   Conversely a rail must not claim
+    ///   [`crate::DestinationStatus::StructurallyValid`] for a check it did not
+    ///   actually perform.
+    /// - **No verdict means "safe to send to".** patala does not and will not
+    ///   detect whether an address is an exchange deposit address; every
+    ///   verdict carries [`crate::EXCHANGE_DEPOSIT_CAVEAT`] and
+    ///   `human_must_confirm`. See [`DestinationVerdict`].
+    ///
+    /// # Default
+    ///
+    /// The default answers [`crate::DestinationStatus::Unknown`] — "a human must
+    /// confirm" — for anything non-empty, and
+    /// [`crate::DestinationStatus::Malformed`] for a blank string, which is
+    /// undeliverable on every rail there is. It is deliberately **not**
+    /// `StructurallyValid`: that would silently bless every fiat
+    /// processor-side token and every rail that has not written a parser yet.
+    /// A rail overrides this only when it genuinely parses its own addresses.
+    ///
+    /// Like [`Self::verify_webhook`], this is a trait method and not a free
+    /// function beside each rail, because a free function is unreachable from
+    /// every non-Rust consumer: the UniFFI surface and the sidecar both
+    /// dispatch through `dyn PaymentRail`.
+    ///
+    /// ```
+    /// use patala_core::{DestinationStatus, MockRail, PaymentRail, RailClass};
+    ///
+    /// let rail = MockRail::new("mock", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+    ///
+    /// // MockRail's synthetic grammar: `<network>:<kind>:<label>`.
+    /// let v = rail.validate_destination("mock:wallet:alice");
+    /// assert_eq!(v.status, DestinationStatus::StructurallyValid);
+    ///
+    /// // ...and even then, a human confirms. There is no verdict that skips this.
+    /// assert!(v.human_must_confirm);
+    /// assert!(!v.exchange_deposit_caveat.is_empty());
+    ///
+    /// // A refusal is a refusal: do not charge to it.
+    /// assert!(rail.validate_destination("not-an-address").is_refusal());
+    /// ```
+    fn validate_destination(&self, dest: &str) -> DestinationVerdict {
+        if dest.trim().is_empty() {
+            return DestinationVerdict::malformed(
+                self.id(),
+                "an empty destination is not an address on any rail",
+            );
+        }
+        DestinationVerdict::unknown(
+            self.id(),
+            format!(
+                "the {} rail does not check destinations offline, so it can neither accept nor \
+                 reject this one; a human who controls the receiving wallet must confirm it",
+                self.id()
+            ),
+        )
+    }
+
     /// Reverse a settled payment.
     ///
     /// Rails that cannot reverse a payment — any `NonCustodialFinal` rail, by
     /// definition, since finality is the whole point — MUST return
     /// [`Error::Unsupported`] rather than a stub that appears to work. This is
     /// the default, so a rail only needs to override it if it genuinely can.
+    ///
+    /// # `Unsupported` does not mean "the customer cannot be paid back"
+    ///
+    /// It means *this rail cannot undo that transaction*. On a
+    /// `NonCustodialFinal` rail, giving the money back is a **compensating
+    /// payment**: a second, independent payment in the opposite direction, with
+    /// its own transaction, its own fee, its own confirmation, and its own
+    /// ability to fail. Nothing about the original payment changes. Conflating
+    /// the two would flatten exactly the distinction [`crate::RailClass`] exists
+    /// to preserve, which is why it is `charge` that does this and not `refund`:
+    ///
+    /// 1. Ask the **customer** for a destination and never reuse the address the
+    ///    payment came from — that is very often an exchange withdrawal address,
+    ///    and an exchange does not credit funds arriving there to the customer
+    ///    who withdrew from it. This is what BitPay, Coinbase Commerce and
+    ///    OpenNode all do, and it is the correct design rather than a fallback.
+    /// 2. Run it through [`Self::validate_destination`] and show a human the
+    ///    verdict, its reason and its caveat. A refusal stops there.
+    /// 3. Call [`Self::charge`] with that destination, a fresh
+    ///    [`PayRequest::reference`] of your own (the payout is its own payment,
+    ///    so it needs its own idempotency key), and keep the [`Receipt`] it
+    ///    returns — that receipt, not the original one, is the proof the payout
+    ///    happened.
+    ///
+    /// See [`crate::destination`] for why step 1 is not automatable.
     async fn refund(&self, _receipt: &Receipt) -> Result<Receipt> {
         Err(Error::Unsupported("refund"))
     }
@@ -161,5 +273,111 @@ pub trait PaymentRail: Send + Sync {
     /// Python, Go, Swift or an HTTP client at all.
     async fn verify_webhook(&self, _delivery: &WebhookDelivery) -> Result<WebhookEvent> {
         Err(Error::Unsupported("verify_webhook"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capabilities::RailClass;
+    use crate::destination::DestinationStatus;
+
+    /// A rail that implements *only* the required methods, so what these tests
+    /// exercise is the trait's own defaults rather than [`crate::MockRail`]'s
+    /// overrides. This is the shape of every rail written against this trait
+    /// that has not implemented an address parser — and the point is that such
+    /// a rail cannot accidentally claim it validated anything.
+    struct BareRail {
+        capabilities: RailCapabilities,
+    }
+
+    impl BareRail {
+        fn new() -> Self {
+            Self {
+                capabilities: RailCapabilities {
+                    class: RailClass::CustodialReversible,
+                    reversible: true,
+                    requires_kyc: true,
+                    holds_funds: true,
+                    currencies: vec!["USD".into()],
+                    settlement: Settlement::Days(2),
+                },
+            }
+        }
+    }
+
+    #[async_trait]
+    impl PaymentRail for BareRail {
+        fn id(&self) -> &str {
+            "bare"
+        }
+        fn capabilities(&self) -> &RailCapabilities {
+            &self.capabilities
+        }
+        async fn quote(&self, _req: &PayRequest) -> Result<Quote> {
+            Err(Error::Unsupported("quote"))
+        }
+        async fn charge(&self, _req: &PayRequest) -> Result<Receipt> {
+            Err(Error::Unsupported("charge"))
+        }
+        async fn verify(&self, _receipt: &Receipt) -> Result<bool> {
+            Ok(false)
+        }
+    }
+
+    #[test]
+    fn the_default_verdict_is_unknown_and_never_structurally_valid() {
+        // A default that answered `StructurallyValid` would silently bless every
+        // fiat processor-side token and every rail with no parser yet. The
+        // honest default is "a human must confirm".
+        let rail = BareRail::new();
+        let v = rail.validate_destination("cus_XYZ_opaque_processor_token");
+
+        assert_eq!(v.status, DestinationStatus::Unknown);
+        assert!(!v.is_refusal(), "unknown is not an established defect");
+        assert!(
+            v.human_must_confirm,
+            "the whole value of Unknown is that it hands the decision to a person"
+        );
+        assert_eq!(v.rail_id, "bare", "a verdict names whose opinion it is");
+        assert!(
+            v.reason.contains("bare"),
+            "the reason has to be showable to a person: {}",
+            v.reason
+        );
+    }
+
+    #[test]
+    fn the_default_still_refuses_a_blank_destination_rather_than_shrugging() {
+        // The one thing decidable with no rail knowledge at all. Guards fail
+        // closed, so this is Malformed and not Unknown.
+        let rail = BareRail::new();
+        for blank in ["", " ", "\t\n"] {
+            let v = rail.validate_destination(blank);
+            assert_eq!(v.status, DestinationStatus::Malformed, "{blank:?}");
+            assert!(v.is_refusal(), "{blank:?} must be a refusal");
+        }
+    }
+
+    #[tokio::test]
+    async fn refund_stays_unsupported_on_the_default_and_says_so_by_name() {
+        // Audited, not changed: finality is the whole point of a
+        // NonCustodialFinal rail. Paying a customer back there is a
+        // compensating `charge` to a customer-supplied, validated destination —
+        // see this method's docs.
+        let rail = BareRail::new();
+        let receipt = Receipt {
+            rail_id: "bare".into(),
+            amount_minor: 100,
+            currency: "USD".into(),
+            reference: "order-1".into(),
+            proof: Vec::new(),
+            settled_at_unix: 0,
+        };
+        let err = rail
+            .refund(&receipt)
+            .await
+            .expect_err("the default must never fake a reversal");
+        assert!(matches!(err, Error::Unsupported("refund")));
     }
 }

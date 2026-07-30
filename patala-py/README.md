@@ -66,11 +66,30 @@ support) could be added alongside the synchronous one without redesigning
   contract.
 - `PatalaRail` — the one object type Python ever touches. It wraps
   `Arc<dyn patala_core::PaymentRail>` and exports `id()`, `capabilities()`,
-  `quote()`, `charge()`, `verify()`, `verify_webhook()`.
+  `quote()`, `charge()`, `verify()`, `verify_webhook()`,
+  `validate_destination()`.
   `PatalaRail.new_mock(...)`, built on `patala_core::MockRail`, is always
   available — no feature flag needed, and this is what CI and a bare
   `pip install patala-py` get by default.
 - `WebhookDelivery` / `WebhookEvent` / `WebhookStatus` — the push side.
+- `DestinationStatus` / `DestinationVerdict` — the pre-flight side.
+  `validate_destination(addr)` is **pure and offline** (no network, no clock,
+  no filesystem), so it is safe to call on every keystroke of an address field.
+  It returns a verdict and never raises: "I cannot check" is
+  `DestinationStatus.UNKNOWN`, a verdict, because a caller must handle it as
+  carefully as a refusal — raising there would let a `try`/`except` swallow it.
+  Five variants, never a bool. A verdict carries `reason` (never empty),
+  `human_must_confirm` (**True on every verdict, including
+  `STRUCTURALLY_VALID`**), `exchange_deposit_caveat`, and `is_refusal` —
+  a field, not something to re-derive from `status`.
+- `PatalaRail.new_mock_without_destination_checks(...)` — a `MockRail` that
+  answers `UNKNOWN` for every destination, so the fiat-shaped "a human must
+  decide" branch of a payout UI is testable in the default build.
+- `exchange_deposit_caveat()` — a module-level function returning the same
+  caveat text every verdict carries, for the form where a customer is first
+  asked for a payout address. patala does **not** detect whether an address
+  belongs to an exchange; this is how it says so. See
+  `docs/compensating-payments.md` for the flow and the customer-facing wording.
 
 ## Webhooks
 

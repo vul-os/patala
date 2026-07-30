@@ -14,6 +14,21 @@
 //! | `httpshared` | Bounded reads + shared webhook-HMAC verify | `internal/payments/httpshared.go` |
 //! | [`registry`] | Provider-registry pattern (`manual` always-on) | `internal/payments/registry.go` |
 //! | [`manual`] | The offline, always-available default rail | `internal/payments/manual.go` |
+//! | [`destination`] | Offline `validate_destination` for every rail here — no cackle precursor (new with `patala_core`'s pre-flight seam) | — |
+//!
+//! ## `destination` on a fiat rail is not a payout address
+//!
+//! Worth stating up front because it is the thing a caller most often assumes
+//! wrongly: on every rail in this crate `PayRequest::destination` is a
+//! post-checkout **redirect URL**, the **buyer's email**, or simply
+//! **unread** — never a place money goes. So no
+//! [`patala_core::PaymentRail::validate_destination`] here ever reports
+//! `StructurallyValid`; the honest ceiling is `Unknown`, and what each rail
+//! *can* still decide offline (is this a URL at all, is this an email at all,
+//! is this a blockchain address someone pasted into the wrong field) lives in
+//! [`destination`]. Giving a customer their money back on these rails is
+//! [`patala_core::PaymentRail::refund`] — the money goes back the way it came
+//! and no destination is involved.
 //!
 //! One module per processor, each behind a Cargo feature of the same name and
 //! each ported from the cackle adapter of the same name: `adyen`, `btcpay`,
@@ -80,6 +95,7 @@ pub mod checkoutcom;
 #[cfg(feature = "coinbasecommerce")]
 pub mod coinbasecommerce;
 pub mod currency;
+pub mod destination;
 #[cfg(feature = "flutterwave")]
 pub mod flutterwave;
 #[cfg(feature = "_adapter")]

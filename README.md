@@ -26,8 +26,9 @@ either a crate, a trait, or a process you run next to your own app.
 ## Status: foundational — built and unit-tested, rails unverified against live networks
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
-runs two passes and both are gates: **168 offline tests** in the default
-workspace build, and **547 more** once every processor feature is compiled in
+runs two passes and both are gates: **249 offline tests** across the seven
+landed crates in the default workspace build, and **572 more** once every
+processor feature is compiled in
 (`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
 --features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
 chain and no processor.
@@ -119,16 +120,16 @@ never does. There is no balance table, no payout queue, no ledger.
 
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
-| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam | — | 19 + 1 doctest | offline by design |
-| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 533 (all features) | **no — no live merchant account** |
-| `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 41 (+1 gated) + 1 doctest | **no — testnet step in its README** |
-| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) + 1 doctest | **no — testnet step in its README** |
-| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 20 | **no — needs a live instance** |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 Rust + 24 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
-| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 9 (6 HTTP round-trips + 3 unit) | executed |
+| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 35 + 2 doctests | offline by design |
+| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 552 (all features) | **no — no live merchant account** |
+| `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 56 (+1 gated) + 2 doctests | **no — testnet step in its README** |
+| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 47 (+1 gated) + 2 doctests | **no — testnet step in its README** |
+| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 34 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still
-mock-only.** The server, its auth, its error mapping and all five endpoints
+mock-only.** The server, its auth, its error mapping and all six endpoints
 are real and exercised over a real socket, but `default_registry()` registers
 exactly one rail — `"mock"`. Reaching a Solana, Stellar, Hyperswitch or fiat
 rail *through the sidecar* needs the per-rail registration its
@@ -148,13 +149,27 @@ this repo stays fully offline no matter how many rails exist here.
 ## One trait, both directions
 
 Every consumer — Rust, Python, Go, or an HTTP client talking to the sidecar —
-gets the same six methods on `PaymentRail`: `id`, `capabilities`, `quote`,
-`charge`, `verify`, and `verify_webhook`. The last one is the *push* path:
+gets the same seven methods on `PaymentRail`: `id`, `capabilities`, `quote`,
+`charge`, `verify`, `verify_webhook`, and `validate_destination`.
 `verify` is for when you hold a receipt and want it re-derived; `verify_webhook`
-is for when the processor calls you and you need to know the delivery is
-genuine. Both live on the trait deliberately — anything beside it is invisible
-to every consumer that dispatches through `dyn PaymentRail`, which leaves them
-able only to poll.
+is the *push* path, for when the processor calls you and you need to know the
+delivery is genuine; `validate_destination` is the *pre-flight* path, for
+checking a payout address offline before any money moves. All three live on the
+trait deliberately — anything beside it is invisible to every consumer that
+dispatches through `dyn PaymentRail`, which leaves them able only to poll.
+
+### Paying a customer back
+
+`refund` returns `Unsupported` on every `NonCustodialFinal` rail — finality is
+the whole point of that class — and that is not a gap. Giving the money back
+there is a **compensating payment**: a second, independent `charge` to an
+address the **customer** supplies, never the address the payment came from,
+which is very often an exchange withdrawal address where the funds cannot be
+credited back to them. `validate_destination` is the offline check on that
+address; every verdict it returns requires a human to confirm, because patala
+does not detect exchange-owned addresses and will not guess. The whole flow,
+including the wording to show a customer, is in
+[`docs/compensating-payments.md`](docs/compensating-payments.md).
 
 ## The polyglot layer — one adapter, three ways in
 

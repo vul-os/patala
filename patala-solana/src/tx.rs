@@ -46,7 +46,13 @@ pub fn pubkey_to_base58(k: &PubKey) -> String {
 
 /// Is a compressed Edwards point actually on the ed25519 curve? A program
 /// derived address must NOT be (that is what makes it unsignable).
-fn is_on_curve(bytes: &[u8; 32]) -> bool {
+///
+/// Public because it is the one Solana property that separates "somebody can
+/// sign for this account" from "nobody can": an off-curve 32-byte account is a
+/// PDA — an associated token account, a program's state account — and a
+/// payment to one is typically unrecoverable. [`crate::destination`] uses it
+/// for exactly that, offline.
+pub fn is_on_curve(bytes: &[u8; 32]) -> bool {
     curve25519_dalek::edwards::CompressedEdwardsY(*bytes)
         .decompress()
         .is_some()

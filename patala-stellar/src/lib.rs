@@ -86,6 +86,7 @@
 //! Treat the live path as **UNVERIFIED AGAINST LIVE** until someone runs that
 //! ignored test against testnet and confirms it passes. See `README.md`.
 
+pub mod destination;
 pub mod keys;
 pub mod rpc;
 pub mod tx;
@@ -602,9 +603,35 @@ impl PaymentRail for StellarRail {
         Ok(true)
     }
 
+    /// Check a destination address offline, before any money moves —
+    /// delegated whole to [`destination::validate`], which is a free function
+    /// so it needs no configured rail, no Horizon URL and no keypair to run.
+    ///
+    /// StrKey lets this rail decide more offline than most: a bad checksum is
+    /// unambiguous, and the version byte tells an account (`G…`) from a muxed
+    /// account (`M…`), a contract (`C…`) and a **secret seed** (`S…`) — which
+    /// gets its own loud refusal, because a seed in a destination field is a
+    /// key disclosure, not a typo. What still needs Horizon (does the account
+    /// exist, does it hold a USDC trustline) is named in that module's docs
+    /// and deliberately not guessed at here.
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        debug_assert_eq!(self.id(), destination::RAIL_ID);
+        destination::validate(dest)
+    }
+
     /// Settlement here is final by construction — Stellar payments do not
     /// reverse — and this rail will not pretend otherwise (`PATALA.md` §3,
     /// §8).
+    ///
+    /// **This does not mean a customer cannot be paid back.** It means this
+    /// rail cannot *undo* a transaction. Giving the money back on Stellar is a
+    /// compensating payment: ask the customer for a destination (never reuse
+    /// the address the payment came from — it is very often an exchange
+    /// withdrawal address), run it through [`Self::validate_destination`],
+    /// show a human the verdict and its caveat, then [`Self::charge`] to it
+    /// with a fresh [`PayRequest::reference`]. The receipt that `charge`
+    /// returns is the proof of the payout; the original receipt is unchanged.
+    /// See [`patala_core::destination`].
     async fn refund(&self, _receipt: &Receipt) -> Result<Receipt> {
         Err(Error::Unsupported("refund"))
     }

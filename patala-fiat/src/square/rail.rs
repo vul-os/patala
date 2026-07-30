@@ -220,6 +220,27 @@ impl PaymentRail for SquareRail {
         &self.capabilities
     }
 
+    /// Check this rail's `destination` offline — delegated to
+    /// [`crate::destination::redirect_url`], because on the `square` rail
+    /// `destination` is not a payout address: it is the post-checkout return
+    /// URL, sent as Square's `checkout_options.redirect_url` (see this module's docs above).
+    ///
+    /// So the honest ceiling here is
+    /// [`patala_core::DestinationStatus::Unknown`], never
+    /// `StructurallyValid` — that status means "a well-formed address for the
+    /// network this rail pays on", and claiming it would tell a caller a
+    /// redirect URL had been vetted as somewhere to send a customer's money.
+    /// What *is* decided offline: a string that is not an absolute http(s)
+    /// URL is refused (the processor documents this field as one), and a
+    /// blockchain address or a private key pasted here is refused **by name**.
+    ///
+    /// Giving a customer their money back on this `CustodialReversible` rail
+    /// is [`PaymentRail::refund`] — back the way it came, no destination
+    /// involved — not a charge to a customer-supplied address.
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        crate::destination::redirect_url(self.id(), dest)
+    }
+
     async fn quote(&self, req: &PayRequest) -> Result<Quote> {
         req.validate()?;
         self.check_currency(&req.currency)?;

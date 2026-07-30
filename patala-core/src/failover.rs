@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 
 use crate::capabilities::RailClass;
+use crate::destination::DestinationVerdict;
 use crate::error::{Error, Result};
 use crate::rail::{PayRequest, PaymentRail, Quote, Receipt};
 
@@ -192,12 +193,46 @@ impl FailoverRail {
             "refund: the rail that issued this receipt is not wrapped by this FailoverRail",
         ))
     }
+
+    /// Every wrapped rail's verdict on `dest`, in construction order (not
+    /// policy order), paired with the rail that produced it.
+    ///
+    /// A chain does not have *one* opinion about an address, and pretending it
+    /// does is the mistake: an address that is
+    /// [`crate::DestinationStatus::StructurallyValid`] on a Solana rail is
+    /// [`crate::DestinationStatus::WrongNetwork`] on a Stellar one, and both
+    /// answers are correct. So this returns them all and leaves the choice
+    /// where it belongs — with the caller, who must pay on the same rail whose
+    /// verdict they acted on. `[]` for an empty chain.
+    ///
+    /// Pure and offline, like [`PaymentRail::validate_destination`] itself.
+    pub fn destination_verdicts(&self, dest: &str) -> Vec<DestinationVerdict> {
+        self.rails
+            .iter()
+            .map(|rail| rail.validate_destination(dest))
+            .collect()
+    }
+
+    /// The verdict of one named wrapped rail — the prospective counterpart to
+    /// [`Self::verify`]'s dispatch by `receipt.rail_id`, for a caller that has
+    /// already decided which rail the payout will go out on.
+    ///
+    /// `None` when no wrapped rail has that id: an absent rail must not be
+    /// answered for by an arbitrary other member, and `None` is not a verdict
+    /// a caller could mistake for one.
+    pub fn validate_destination_on(&self, rail_id: &str, dest: &str) -> Option<DestinationVerdict> {
+        self.rails
+            .iter()
+            .find(|rail| rail.id() == rail_id)
+            .map(|rail| rail.validate_destination(dest))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::capabilities::RailClass;
+    use crate::destination::DestinationStatus;
     use crate::mock::MockRail;
 
     fn req(reference: &str) -> PayRequest {
@@ -274,6 +309,46 @@ mod tests {
         let mut foreign = a_receipt.clone();
         foreign.rail_id = "somewhere-else".into();
         assert!(!failover.verify(&foreign).await.unwrap());
+    }
+
+    #[test]
+    fn a_chain_reports_every_rails_verdict_rather_than_inventing_one() {
+        // The same string, two rails, two correct-and-different answers. A
+        // chain that collapsed these would be the WrongNetwork bug itself.
+        let a = MockRail::new("a", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+        let b = MockRail::new("b", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+        let failover = FailoverRail::new(vec![Box::new(a), Box::new(b)]);
+
+        let verdicts = failover.destination_verdicts("a:wallet:alice");
+        assert_eq!(verdicts.len(), 2);
+        assert_eq!(verdicts[0].rail_id, "a");
+        assert_eq!(verdicts[0].status, DestinationStatus::StructurallyValid);
+        assert_eq!(verdicts[1].rail_id, "b");
+        assert_eq!(verdicts[1].status, DestinationStatus::WrongNetwork);
+        // Whichever one a caller acts on, a human still confirms it.
+        assert!(verdicts.iter().all(|v| v.human_must_confirm));
+
+        assert!(FailoverRail::new(Vec::new())
+            .destination_verdicts("a:wallet:alice")
+            .is_empty());
+    }
+
+    #[test]
+    fn validating_on_a_rail_this_chain_does_not_wrap_answers_nothing() {
+        let a = MockRail::new("a", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+        let failover = FailoverRail::new(vec![Box::new(a)]);
+
+        assert_eq!(
+            failover
+                .validate_destination_on("a", "a:program:vault")
+                .expect("wrapped rail must answer")
+                .status,
+            DestinationStatus::NotAWallet
+        );
+        // Fails closed: no other member speaks for a rail that isn't here.
+        assert!(failover
+            .validate_destination_on("somewhere-else", "a:wallet:alice")
+            .is_none());
     }
 
     #[tokio::test]

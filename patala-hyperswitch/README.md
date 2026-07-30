@@ -173,6 +173,37 @@ accepts the request:
   accepted but hasn't completed yet also returns `amount_minor: 0` on the new
   `Receipt` it produces.
 
+## `validate_destination`: a refusal to guess
+
+`PayRequest::destination` on this rail is passed straight through as
+Hyperswitch's `payment_token` — a reference to a payment method the caller
+tokenized out of band via Hyperswitch's own client-side SDK (that mapping is
+itself listed under NEEDS-CONFIRMATION above). Two consequences:
+
+* **It is not a payout address.** Nothing is sent *to* a `payment_token`; it
+  names the payment method money is taken *from*. `StructurallyValid` — "a
+  well-formed address for the network this rail pays on" — is therefore not a
+  status this rail could ever truthfully report, and it never does.
+* **Its format is Hyperswitch's to define, not patala's.** Hyperswitch's
+  OpenAPI spec types `payment_token` as a plain string with no documented
+  grammar, and a self-hosted instance may be any version against any connector.
+  So this rail makes **no format check at all** rather than guess one and
+  refuse a token a live instance would have accepted.
+
+This is a deliberate difference from `patala-fiat`, whose rails *do* refuse a
+pasted wallet address — they can, because their `destination` has a documented
+format (a URL, an email) that an address demonstrably is not. This rail has no
+such ground to stand on, and a test pins that it does not pretend otherwise.
+
+The verdict is `Unknown` for any non-empty string, with a reason that says why
+nothing was checked, and `Malformed` for a blank one (`PayRequest::validate()`
+refuses one too, so accepting it here would put the two in disagreement). Every
+verdict carries `EXCHANGE_DEPOSIT_CAVEAT` and `human_must_confirm: true`.
+
+Giving a customer their money back on this `CustodialReversible` rail is
+`PaymentRail::refund`, which goes back the way it came and needs no destination
+at all.
+
 ## Non-custodial invariant
 
 `patala` itself never holds funds (`PATALA.md` §1, §8).
@@ -196,7 +227,7 @@ verifiable alignment rather than a source of silent rounding bugs.
 
 ## Testing
 
-All 18 unit tests (`src/config.rs`, `src/rail.rs`, `src/webhook.rs`) run
+All 23 unit tests (`src/config.rs`, `src/rail.rs`, `src/webhook.rs`) run
 fully offline. HTTP is mocked with [`wiremock`](https://docs.rs/wiremock)
 (a local loopback mock server, not a real network call) and assert:
 

@@ -61,6 +61,49 @@ signs the transaction, not deducted from the USDC amount transferred, and
 the request's own. That is a real cost of using this rail; it is stated here
 rather than hidden.
 
+## Paying a customer back: `validate_destination`
+
+Settlement here is final, so `refund()` is `Error::Unsupported("refund")` and
+stays that way. That is not the same as "the customer cannot be paid back":
+giving the money back on Solana is a **compensating payment** — a second,
+independent `charge` to an address the *customer* supplies, with its own
+transaction, its own fee and its own confirmation.
+
+Never reuse the address the payment came from. It is very often an exchange
+**withdrawal** address, and an exchange does not credit funds arriving there to
+the customer who withdrew from it. BitPay, Coinbase Commerce and OpenNode all
+ask the customer for a destination instead; that is the correct design, not a
+fallback.
+
+`destination::validate` is the offline, pure check to run on that address at
+the moment a person types it. It needs no rail, no RPC URL and no keypair — it
+runs in a browser, on a gate device with no uplink, and in a test with no
+validator.
+
+| Verdict | When |
+|---|---|
+| `Malformed` | Not base58 (the offending character is named, including the `0`/`O` and `I`/`l` look-alikes base58 omits), or base58 that does not decode to exactly 32 bytes, or surrounded by whitespace, or empty. A pasted Stellar **secret seed** lands here too, with its own loud refusal — see below. |
+| `WrongNetwork` | A well-formed address for another chain, **named**: a Stellar `G…`/`C…`/`M…`, an Ethereum/EVM `0x…`, a Sui/Aptos `0x…`, a Bitcoin address in either era. "This looks like a Stellar address" is the message that saves the money; "invalid" is not. |
+| `NotAWallet` | A real 32-byte account nobody can be paid at: the System Program, SPL Token / Token-2022, the ATA program, Memo, Compute Budget, Stake, Vote, the Rent/Clock sysvars, the incinerator, or the USDC/wSOL **mints** themselves — plus anything **off the ed25519 curve**, which is a program-derived address. That last one catches an associated token account, and matters: `charge` derives the recipient's token account *from their wallet address*, so passing an ATA builds a transfer against the token account of a token account. |
+| `StructurallyValid` | Every offline check passed. **Not** "valid" and **not** "safe" — see below. |
+
+A pasted `S…` seed is reported as a **private key disclosure**, not as an
+invalid address: the verdict says a key was leaked and what to do about it, and
+deliberately never repeats the value (a verdict is shown to a person and very
+likely logged on the way there).
+
+**What this cannot decide, and does not attempt.** Whether the account exists,
+is rent-exempt, or already holds a USDC token account — all chain queries, and
+therefore a different method than this one. Whether an *on-curve* key is a
+plain wallet or a token account created from a keypair — indistinguishable
+without reading the account's owner program. And **whether the address belongs
+to an exchange**: patala does not and will not guess at that, because it needs
+commercial address-attribution data this suite refuses to depend on, and a
+heuristic would be worse than nothing. Every verdict — including
+`StructurallyValid` — therefore carries `EXCHANGE_DEPOSIT_CAVEAT` and
+`human_must_confirm: true`. There is no verdict this rail can produce that
+means "safe to send to".
+
 ## Honesty (`PATALA.md` §8) — UNVERIFIED AGAINST LIVE
 
 Every offline test in `src/tests.rs` runs with **no network** — the RPC is a

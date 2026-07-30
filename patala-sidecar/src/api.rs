@@ -15,9 +15,11 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use patala_core::{Error as CoreError, PayRequest, Receipt, WebhookDelivery, WebhookEvent};
+use patala_core::{
+    DestinationVerdict, Error as CoreError, PayRequest, Receipt, WebhookDelivery, WebhookEvent,
+};
 
 use crate::registry::RailRegistry;
 
@@ -170,6 +172,116 @@ pub async fn verify(
     let rail = lookup(&state, &rail_id)?;
     let valid = rail.verify(&receipt).await?;
     Ok(Json(VerifyResponse { valid }))
+}
+
+/// The body of `POST /v1/rails/:rail_id/validate-destination`.
+///
+/// `deny_unknown_fields` is deliberate and is the fail-closed choice for a
+/// route whose whole job is to answer a safety question. A caller that POSTs
+/// the whole `PayRequest` here, or misspells `destination`, gets a `400` naming
+/// the problem — rather than a `200` carrying a verdict about a field the
+/// server picked and the caller did not mean. There is no back-compat to break:
+/// nothing has ever accepted a looser shape at this path.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ValidateDestinationRequest {
+    /// The address to check. A wallet address for a crypto rail; for a fiat
+    /// rail this is the opaque processor-side token, which that rail will
+    /// honestly report as `"Unknown"`.
+    pub destination: String,
+}
+
+/// The body of a `200` from `POST /v1/rails/:rail_id/validate-destination`:
+/// every field of `patala_core::DestinationVerdict` (flattened, so this is the
+/// core type's own shape and not a second DTO that could drift) plus
+/// `is_refusal`.
+///
+/// `is_refusal` is added here because it is a **method** on the core type, and
+/// a method does not survive JSON. Leaving it out would force every consumer
+/// to re-derive it from `status` in its own language — and a `switch` that has
+/// not heard of a status added later falls through to its default, which a
+/// caller writes as "not a refusal". That fails OPEN, on the one question where
+/// the answer decides whether a customer's money is sent to an address the rail
+/// already knows is wrong. So the classification is computed once, in Rust, by
+/// the core type itself.
+#[derive(Serialize)]
+pub struct ValidateDestinationResponse {
+    #[serde(flatten)]
+    pub verdict: DestinationVerdict,
+    pub is_refusal: bool,
+}
+
+impl From<DestinationVerdict> for ValidateDestinationResponse {
+    fn from(verdict: DestinationVerdict) -> Self {
+        Self {
+            is_refusal: verdict.is_refusal(),
+            verdict,
+        }
+    }
+}
+
+/// `POST /v1/rails/:rail_id/validate-destination` — check a payout address as
+/// far as this rail can, **offline**, before any money moves.
+///
+/// This is how a consumer with no FFI reaches
+/// `patala_core::PaymentRail::validate_destination`, and it is the pre-flight
+/// step of the two-party payout flow in `docs/compensating-payments.md`: on a
+/// final rail there is no reversal, so paying a customer back is a second
+/// `charge` to an address **the customer supplies** — never the address the
+/// payment came from, which is very often an exchange withdrawal address where
+/// the funds cannot be credited back to them.
+///
+/// # Why a POST with a body, and not a GET with the address in the path
+///
+/// An address in a URL ends up in access logs, proxy logs and browser history.
+/// It is not a secret, but it is a payout instruction, and there is no reason
+/// to spray it across every log between the caller and this process.
+///
+/// # Status codes — read the body, not just the status
+///
+/// A `200` means **the rail answered**, not that the address is good. All five
+/// verdicts come back as `200` with the verdict in the body, for exactly the
+/// reason [`verify`] returns `200` with `{"valid": false}`: a rail's honest
+/// refusal is data, and mapping some verdicts onto HTTP error codes would
+/// flatten a five-state answer into "worked / did not work" — losing the
+/// distinction the type exists to carry. Branch on `status` and `is_refusal`.
+///
+/// - `200` — a verdict. `is_refusal: true` means **do not charge to this
+///   address**; `status: "Unknown"` means this rail could not check at all and
+///   a human must decide. `human_must_confirm` is `true` on every verdict,
+///   including `StructurallyValid`, and `exchange_deposit_caveat` is the
+///   sentence to show that human.
+/// - `400` — the *request* was malformed: a body that is not JSON, a missing or
+///   non-string `destination`, or an unexpected field. Fail-closed: no verdict
+///   is invented for a request whose meaning is unclear. Note that an *empty*
+///   `destination` is a well-formed request and comes back as a `200` carrying
+///   a `Malformed` verdict, which is the rail's answer and not a request error.
+/// - `404` — no rail is registered under `rail_id` (the registry is mock-only
+///   today; see `crate::registry`).
+/// - `401` — no or wrong bearer token, like every other `/v1` route.
+///
+/// This handler never calls a rail's network path, so it works on a sidecar
+/// whose rails have no reachable RPC or processor at all.
+pub async fn validate_destination(
+    State(state): State<AppState>,
+    Path(rail_id): Path<String>,
+    body: Bytes,
+) -> Result<Json<ValidateDestinationResponse>, ApiError> {
+    let rail = lookup(&state, &rail_id)?;
+
+    // Parsed by hand rather than through axum's `Json` extractor so a bad body
+    // becomes this module's own `400 {"error":..,"kind":"invalid_request"}`
+    // with serde's message in it, instead of the extractor's bare-text
+    // rejection. A caller wiring this route up gets told what was wrong with
+    // the request in the same envelope as every other error here.
+    let req: ValidateDestinationRequest = serde_json::from_slice(&body).map_err(|e| {
+        ApiError::Core(CoreError::InvalidRequest(format!(
+            "expected a JSON object with a single string field \"destination\": {e}"
+        )))
+    })?;
+
+    // Infallible on purpose: "I could not check" is a verdict, not an error.
+    Ok(Json(rail.validate_destination(&req.destination).into()))
 }
 
 /// `POST /v1/rails/:rail_id/webhook` — authenticate an inbound webhook

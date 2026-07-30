@@ -33,6 +33,10 @@ pub trait PaymentRail {
     async fn quote(&self, req: &PayRequest) -> Result<Quote>;
     async fn charge(&self, req: &PayRequest) -> Result<Receipt>;
     async fn verify(&self, receipt: &Receipt) -> Result<bool>;     // fail-closed
+    // Pre-flight: what this rail can honestly say about a destination address
+    // BEFORE any money moves. Pure and offline — no network, no clock, no
+    // filesystem. Never a Result: "I cannot check" is a verdict, not an error.
+    fn validate_destination(&self, dest: &str) -> DestinationVerdict { /* Unknown */ }
     // Optional — a rail that can't do it returns Unsupported, never fakes it:
     async fn refund(&self, receipt: &Receipt) -> Result<Receipt> { Err(Error::Unsupported) }
     // The push path: the processor calls YOU. Fail-closed — an unauthentic
@@ -53,6 +57,49 @@ payment did not settle.
 
 Money is always an integer `amount_minor: u64` plus a currency string. Never
 a float, anywhere in this crate.
+
+## Paying a customer back on a final rail
+
+`refund()` returns `Unsupported` on every `NonCustodialFinal` rail, and that is
+the honest answer rather than a missing feature — finality is the whole point of
+that class. **It does not mean the customer cannot be paid back.** It means this
+rail cannot *undo* that transaction. Giving the money back is a **compensating
+payment**: a second, independent `charge()` in the opposite direction, with its
+own transaction, its own fee, its own confirmation and its own fresh
+`reference`. The original receipt is unchanged.
+
+The address that payment goes to must come **from the customer**, and never from
+the original transaction. A sending address is very often an exchange
+*withdrawal* address, and an exchange does not credit funds arriving there to
+whoever withdrew from it — the money is unrecoverable by the customer, by the
+merchant and by patala. BitPay, Coinbase Commerce and OpenNode all ask the
+customer for a destination for exactly this reason.
+
+`validate_destination` is the offline pre-flight check on that address, so a
+consumer can tell someone "that is not a valid Solana address" at the moment
+they type it. `DestinationStatus` has five variants, not a bool, because a UI
+renders each differently:
+
+| Status | Meaning |
+|---|---|
+| `Malformed` | Wrong alphabet, length, checksum, or empty. A **refusal**. |
+| `WrongNetwork` | Well-formed, wrong chain — a Stellar `G…` in a Solana payout. A **refusal**. |
+| `NotAWallet` | A program/contract account, a Solana PDA, a token mint. Nobody holds a key for it. A **refusal**. |
+| `StructurallyValid` | Every offline check passed. **Not "valid", not "safe"** — the absence of a decidable defect. |
+| `Unknown` | This rail cannot check at all, and says so rather than guessing. The honest answer for a fiat rail. **Never treat as valid.** |
+
+**patala does not detect exchange addresses.** That needs commercial
+address-attribution data (Chainalysis, TRM) — hosted services this workspace
+will not depend on — and a heuristic would be worse than nothing: a host who
+trusts "looks safe" and loses a customer's money is worse off than one told
+plainly that this cannot be known. So every verdict, including the most positive
+one, carries `human_must_confirm: true` and an `exchange_deposit_caveat` string
+a UI shows verbatim. There is no verdict that waives the human step, and no
+`is_valid()`/`is_safe()` method that could be mistaken for one.
+
+Which rails check what, and which return `Unknown`, is in
+[Status](#status). The full flow — including the wording to put in front of a
+customer — is in `docs/compensating-payments.md`.
 
 - **`FailoverRail`** wraps `Vec<Box<dyn PaymentRail>>`, tries them in order,
   falls through on error. It will not silently cross from a
@@ -119,7 +166,8 @@ One Rust core, four ways to consume it, written once:
 - **`patala-go`** — the same UniFFI surface, generated for Go (cgo; see that
   package's README for the honest trade-offs of leaving pure-static Go).
 - **`patala-sidecar`** — a thin local HTTP server over the core (`quote` /
-  `charge` / `verify` / `webhook` as JSON over a loopback socket), for any
+  `charge` / `verify` / `validate-destination` / `webhook` as JSON over a
+  loopback socket), for any
   language with an HTTP client and zero FFI. Binds to `127.0.0.1` only, unconditionally,
   and refuses to start without `PATALA_SIDECAR_TOKEN` set — there is no
   auto-generated fallback and no unauthenticated payment route besides

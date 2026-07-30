@@ -6,12 +6,13 @@
 //!
 //! | Piece | What it is |
 //! |---|---|
-//! | [`PaymentRail`] | The trait — `id`, `capabilities`, `quote`, `charge`, `verify`, `refund`, `verify_webhook`. |
+//! | [`PaymentRail`] | The trait — `id`, `capabilities`, `quote`, `charge`, `verify`, `validate_destination`, `refund`, `verify_webhook`. |
 //! | [`RailClass`] | `CustodialReversible` \| `NonCustodialFinal` — the settlement class, in the type. |
 //! | [`RailCapabilities`] | class, reversible, requires_kyc, holds_funds, currencies, settlement. |
 //! | [`FailoverRail`] | Tries wrapped rails in order; never crosses [`RailClass`] silently. |
 //! | [`MockRail`] | The offline default — deterministic, dependency-free. |
 //! | [`WebhookDelivery`] / [`WebhookEvent`] | The push side: raw bytes + headers in, an authenticated [`WebhookStatus`] out. |
+//! | [`DestinationVerdict`] / [`DestinationStatus`] | The pre-flight side: what a rail can honestly say about an address *offline*, before money moves. |
 //!
 //! Nothing outside a rail's own implementation names a provider-specific
 //! type. Every consumer of this crate programs against [`PaymentRail`] and
@@ -38,6 +39,19 @@
 //!
 //! **Money is integer minor units plus a currency string, never a float** —
 //! see [`PayRequest`], [`Quote`], [`Receipt`].
+//!
+//! **Paying a customer back on a final rail is not a reversal.**
+//! [`PaymentRail::refund`] stays [`Error::Unsupported`] on a
+//! `NonCustodialFinal` rail because finality is the whole point of that class.
+//! Giving the money back there is a *compensating payment*: a second,
+//! independent [`PaymentRail::charge`] to an address **the customer supplies**
+//! — never the address the payment came from, which is very often an exchange
+//! withdrawal address where the funds cannot be credited back to them.
+//! [`PaymentRail::validate_destination`] is the offline, pure check a caller
+//! runs on that address before a human approves the payout; it can never
+//! report that an address is *safe*, only that no defect it can decide was
+//! found. See the [`destination`] module for the whole flow and
+//! [`EXCHANGE_DEPOSIT_CAVEAT`] for what patala refuses to guess at.
 //!
 //! # Example — the offline default, end to end
 //!
@@ -70,6 +84,7 @@
 //! ```
 
 mod capabilities;
+pub mod destination;
 mod error;
 mod failover;
 mod mock;
@@ -77,6 +92,7 @@ mod rail;
 mod webhook;
 
 pub use capabilities::{RailCapabilities, RailClass, Settlement};
+pub use destination::{DestinationStatus, DestinationVerdict, EXCHANGE_DEPOSIT_CAVEAT};
 pub use error::{Error, Result};
 pub use failover::{FailoverRail, InOrderPolicy, RoutingPolicy};
 pub use mock::MockRail;

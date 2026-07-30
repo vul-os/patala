@@ -85,6 +85,7 @@
 //! against devnet or `solana-test-validator` (see its doc comment for the
 //! exact command) and confirms it passes.
 
+pub mod destination;
 pub mod keys;
 pub mod rpc;
 pub mod tx;
@@ -685,9 +686,34 @@ impl PaymentRail for SolanaRail {
         Ok(true)
     }
 
+    /// Check a destination address offline, before any money moves —
+    /// delegated whole to [`destination::validate`], which is a free function
+    /// so it needs no configured rail, no RPC URL and no keypair to run.
+    ///
+    /// See that module for exactly what is decidable from a Solana address
+    /// alone (alphabet, 32-byte length, on-curve-ness, the well-known
+    /// programs and mints) and what is deliberately not attempted (account
+    /// existence, rent-exemption, token-account state — all chain queries —
+    /// and ownership, which patala never guesses at).
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        debug_assert_eq!(self.id(), destination::RAIL_ID);
+        destination::validate(dest)
+    }
+
     /// Crypto settlement here is final by construction — there is no
     /// reversal to perform, and this rail will not pretend otherwise
     /// (`PATALA.md` §3, §8).
+    ///
+    /// **This does not mean a customer cannot be paid back.** It means this
+    /// rail cannot *undo* a transaction. Giving the money back on Solana is a
+    /// compensating payment: ask the customer for a destination (never reuse
+    /// the address the payment came from — on Solana that is very often an
+    /// exchange withdrawal address), run it through
+    /// [`Self::validate_destination`], show a human the verdict and its
+    /// caveat, then [`Self::charge`] to it with a fresh
+    /// [`PayRequest::reference`]. The receipt that `charge` returns is the
+    /// proof of the payout; the original receipt is unchanged. See
+    /// [`patala_core::destination`].
     async fn refund(&self, _receipt: &Receipt) -> Result<Receipt> {
         Err(Error::Unsupported("refund"))
     }

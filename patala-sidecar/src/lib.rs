@@ -1,9 +1,9 @@
 //! # patala-sidecar
 //!
 //! The universal polyglot path for `patala-core` (`PATALA.md` §5): a thin
-//! local HTTP server exposing `quote`/`charge`/`verify` as JSON, for any
-//! language that can make an HTTP call — no FFI, no generated bindings, no
-//! `patala-py` required.
+//! local HTTP server exposing `quote`/`charge`/`verify`/`validate-destination`
+//! /`webhook` as JSON, for any language that can make an HTTP call — no FFI, no
+//! generated bindings, no `patala-py` required.
 //!
 //! ## Why a sidecar in addition to `patala-py`
 //!
@@ -62,6 +62,10 @@ pub fn app(registry: RailRegistry, token: SidecarToken) -> Router {
         .route("/v1/rails/:rail_id/quote", post(api::quote))
         .route("/v1/rails/:rail_id/charge", post(api::charge))
         .route("/v1/rails/:rail_id/verify", post(api::verify))
+        .route(
+            "/v1/rails/:rail_id/validate-destination",
+            post(api::validate_destination),
+        )
         .route("/v1/rails/:rail_id/webhook", post(api::webhook))
         .with_state(state)
         .route_layer(middleware::from_fn_with_state(token, auth::require_token));

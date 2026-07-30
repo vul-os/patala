@@ -45,12 +45,118 @@ pub struct TxRecord {
     pub envelope_xdr: String,
 }
 
+/// One `balances[]` entry from `GET /accounts/{id}`, reduced to what deciding
+/// "can this account actually receive this payment?" needs.
+///
+/// Amounts are **stroops** — the integer fixed-point units the ledger itself
+/// uses. Horizon renders them as decimal strings (`"1.2500000"`); [`parse_stroops`]
+/// converts with integer arithmetic only, never a float, so no balance
+/// comparison in this crate can be off by a rounding error.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssetHolding {
+    /// `true` for the native XLM balance, which has no code, no issuer and no
+    /// trustline (every account can always hold XLM).
+    pub is_native: bool,
+    /// The asset code (`"USDC"`), empty for the native balance.
+    pub asset_code: String,
+    /// The issuing account, StrKey `G…`, empty for the native balance.
+    pub asset_issuer: String,
+    /// Units currently held, in stroops.
+    pub balance_stroops: i64,
+    /// The trustline's limit, in stroops — the most of this asset the account
+    /// has agreed to hold. A payment that would push `balance` past `limit`
+    /// fails with `op_line_full`. `i64::MAX` for the native balance.
+    pub limit_stroops: i64,
+    /// Whether the issuer has authorized this trustline. An issuer with
+    /// `AUTH_REQUIRED` set must authorize each trustline; until it does, a
+    /// payment to it fails (`op_not_authorized`) even though the trustline
+    /// exists.
+    pub is_authorized: bool,
+}
+
+/// Convert one of Horizon's decimal amount strings (`"1.2500000"`, `"0"`,
+/// `"922337203685.4775807"`) to **stroops**, with integer arithmetic only.
+///
+/// Stellar amounts are `int64` counts of 10^-7, so every value Horizon prints
+/// is exactly representable: there is no rounding to do, and doing it in `f64`
+/// would silently lose precision above ~90 million units (a float has 53 bits
+/// of mantissa; these amounts need 63). This crate contains **no floating point
+/// arithmetic anywhere**, and this is the function that would otherwise be the
+/// exception.
+///
+/// More than 7 fractional digits is a refusal, not a truncation — a value the
+/// ledger cannot represent means this is not a ledger amount, and quietly
+/// dropping digits off a balance is exactly the class of bug that produces a
+/// wrong payment decision.
+///
+/// ```
+/// use patala_stellar::rpc::parse_stroops;
+///
+/// assert_eq!(parse_stroops("1").unwrap(), 10_000_000);
+/// assert_eq!(parse_stroops("1.25").unwrap(), 12_500_000);
+/// assert_eq!(parse_stroops("0.0000001").unwrap(), 1);
+/// assert_eq!(parse_stroops("922337203685.4775807").unwrap(), i64::MAX);
+/// assert!(parse_stroops("1.00000001").is_err(), "8 decimals is not a ledger amount");
+/// assert!(parse_stroops("").is_err());
+/// assert!(parse_stroops("1e7").is_err(), "no exponent notation, no float parsing");
+/// ```
+pub fn parse_stroops(s: &str) -> Result<i64, StellarError> {
+    let bad = || StellarError::Rpc(format!("not a stellar decimal amount: {s:?}"));
+    let (whole, frac) = match s.split_once('.') {
+        Some((w, f)) => (w, f),
+        None => (s, ""),
+    };
+    if whole.is_empty() && frac.is_empty() {
+        return Err(bad());
+    }
+    if !whole.bytes().all(|b| b.is_ascii_digit()) || !frac.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(bad());
+    }
+    if frac.len() > usize::from(crate::tx::USDC_DECIMALS) {
+        return Err(bad());
+    }
+    let whole: i128 = if whole.is_empty() {
+        0
+    } else {
+        whole.parse().map_err(|_| bad())?
+    };
+    let mut units: i128 = if frac.is_empty() {
+        0
+    } else {
+        frac.parse().map_err(|_| bad())?
+    };
+    // Scale the fraction up to exactly 7 digits, then add — all integer.
+    for _ in frac.len()..usize::from(crate::tx::USDC_DECIMALS) {
+        units *= 10;
+    }
+    let scale: i128 = 10i128.pow(u32::from(crate::tx::USDC_DECIMALS));
+    let total = whole
+        .checked_mul(scale)
+        .and_then(|w| w.checked_add(units))
+        .ok_or_else(bad)?;
+    i64::try_from(total).map_err(|_| bad())
+}
+
 /// Minimal Horizon surface used by the payment rail.
 #[async_trait]
 pub trait StellarRpc: Send + Sync {
     /// The account's current sequence number (`GET /accounts/{id}`,
     /// `sequence` field). The transaction to submit uses `sequence + 1`.
     async fn load_sequence(&self, account_strkey: &str) -> Result<i64, StellarError>;
+
+    /// What assets an account holds and on what terms (`GET /accounts/{id}`,
+    /// `balances` array) — the query behind
+    /// [`crate::StellarRail::check_trustlines`].
+    ///
+    /// `Ok(None)` means Horizon has no such account (404): on Stellar an
+    /// unfunded account does not exist, and a payment to it fails with
+    /// `op_no_destination`. `Err` means Horizon could not be reached or
+    /// answered garbage. **Both must fail closed at the call site** — "I could
+    /// not check" is never "the payee is ready".
+    async fn load_account_holdings(
+        &self,
+        account_strkey: &str,
+    ) -> Result<Option<Vec<AssetHolding>>, StellarError>;
 
     /// `POST /transactions` with a base64 XDR envelope.
     async fn submit_transaction(

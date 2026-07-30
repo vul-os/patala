@@ -359,6 +359,129 @@ impl From<patala_core::WebhookEvent> for WebhookEvent {
     }
 }
 
+/// Mirrors [`patala_core::DestinationStatus`] — all five variants, one for one.
+///
+/// **Never flattened to a bool at this boundary**, for the same reason
+/// [`WebhookStatus`] is not and [`RailClass`] is not: a caller has to render
+/// each of these differently. "you mistyped that", "that is a Stellar address
+/// and this is a Solana payout", "that is a contract, not a wallet", "this
+/// looks well-formed — now confirm you control it" and "this rail cannot tell
+/// you anything" are five different things to say to a person, and a binding
+/// that collapsed them would leave every non-Rust consumer unable to say any
+/// of them.
+///
+/// **No variant means "safe to send to."** See
+/// [`DestinationVerdict::human_must_confirm`] and
+/// [`patala_core::EXCHANGE_DEPOSIT_CAVEAT`].
+#[derive(uniffi::Enum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DestinationStatus {
+    /// Structurally invalid for this rail — wrong alphabet, length, checksum,
+    /// or empty. A refusal: do not charge to it.
+    Malformed,
+    /// Well-formed, but for a different network than this rail pays on. A
+    /// refusal: the money would land on a chain nobody is watching.
+    WrongNetwork,
+    /// Valid on this network but not a plain wallet — a program/contract
+    /// account, a Solana PDA, a token mint. A refusal: nobody holds a key for
+    /// it.
+    NotAWallet,
+    /// Every offline check this rail can make passed. **Not "valid", not
+    /// "safe"** — the absence of a decidable defect. A human still confirms.
+    StructurallyValid,
+    /// This rail cannot check this destination offline and says so rather than
+    /// guessing — the honest answer for a fiat rail, whose destination is an
+    /// opaque processor-side token. **Never treat this as valid.**
+    Unknown,
+}
+
+impl From<patala_core::DestinationStatus> for DestinationStatus {
+    fn from(s: patala_core::DestinationStatus) -> Self {
+        // Exhaustive, not a catch-all: a status added to the core enum must be
+        // mapped here deliberately rather than silently folding into one of
+        // these five at the FFI boundary.
+        match s {
+            patala_core::DestinationStatus::Malformed => DestinationStatus::Malformed,
+            patala_core::DestinationStatus::WrongNetwork => DestinationStatus::WrongNetwork,
+            patala_core::DestinationStatus::NotAWallet => DestinationStatus::NotAWallet,
+            patala_core::DestinationStatus::StructurallyValid => {
+                DestinationStatus::StructurallyValid
+            }
+            patala_core::DestinationStatus::Unknown => DestinationStatus::Unknown,
+        }
+    }
+}
+
+/// Mirrors [`patala_core::DestinationVerdict`] — what one rail could decide
+/// about one address, offline, plus what it could not.
+///
+/// The two boolean fields are the reason this is a Record with six fields and
+/// not just `(status, reason)`. `patala_core::DestinationVerdict` carries
+/// `is_refusal()` and `requires_human_confirmation()` as **Rust methods**, and
+/// a UniFFI record has no methods — so on the far side of this boundary they
+/// would not exist at all. Re-deriving them in each consuming language from
+/// `status` is exactly the wrong answer: a `switch` in Go or Python that has
+/// not heard of a status added later falls through to its default, and the
+/// default a caller writes is "not a refusal". So both cross as data, computed
+/// on the Rust side by the core type itself.
+#[derive(uniffi::Record, Clone, Debug)]
+pub struct DestinationVerdict {
+    /// The rail that formed this verdict (matches [`PatalaRail::id`]). A
+    /// verdict is only ever about the network *that* rail pays on.
+    pub rail_id: String,
+    /// What was established. See [`DestinationStatus`].
+    pub status: DestinationStatus,
+    /// Why, in one sentence, for a person to read. Never empty.
+    pub reason: String,
+    /// `true` for **every** status, including
+    /// [`DestinationStatus::StructurallyValid`]. There is no verdict this
+    /// binding can produce that lets a caller skip asking a human — see
+    /// [`Self::exchange_deposit_caveat`].
+    pub human_must_confirm: bool,
+    /// [`patala_core::EXCHANGE_DEPOSIT_CAVEAT`], verbatim, on every verdict:
+    /// the sentence a UI shows a person next to [`Self::reason`]. It travels
+    /// as data because the consumers that most need it — a Go merchant
+    /// backend, a Python script, a Swift app — cannot read Rust doc comments.
+    pub exchange_deposit_caveat: String,
+    /// `true` when this rail positively established a defect
+    /// ([`DestinationStatus::Malformed`], [`DestinationStatus::WrongNetwork`],
+    /// [`DestinationStatus::NotAWallet`]). Computed by
+    /// [`patala_core::DestinationVerdict::is_refusal`], never re-derived here.
+    ///
+    /// **Guards fail closed**: do not charge to a destination whose verdict is
+    /// a refusal, and do not offer a human the option to confirm it anyway.
+    /// `false` does *not* mean "go ahead" — it is also `false` for
+    /// [`DestinationStatus::Unknown`], where nothing was established.
+    pub is_refusal: bool,
+}
+
+impl From<patala_core::DestinationVerdict> for DestinationVerdict {
+    fn from(v: patala_core::DestinationVerdict) -> Self {
+        Self {
+            status: v.status.into(),
+            // Read from the core type's own methods rather than recomputed
+            // from `status` — see the struct docs.
+            is_refusal: v.is_refusal(),
+            human_must_confirm: v.human_must_confirm,
+            rail_id: v.rail_id,
+            reason: v.reason,
+            exchange_deposit_caveat: v.exchange_deposit_caveat,
+        }
+    }
+}
+
+/// [`patala_core::EXCHANGE_DEPOSIT_CAVEAT`] — the one thing no rail can decide
+/// offline, in a sentence a UI can show verbatim.
+///
+/// Every [`DestinationVerdict`] already carries this string, so a caller
+/// rendering a verdict does not need this function. It exists for the caller
+/// that wants the wording *before* there is a verdict to render — on the form
+/// where a customer is first asked for a payout address, which is the moment
+/// the warning is most useful.
+#[uniffi::export]
+pub fn exchange_deposit_caveat() -> String {
+    patala_core::EXCHANGE_DEPOSIT_CAVEAT.to_string()
+}
+
 /// Mirrors [`patala_core::Error`]. `verify` failing closed is expressed the
 /// same way it is in the core crate: as `Ok(false)`, never as a variant
 /// here — see `patala_core::error` module docs.
@@ -427,6 +550,47 @@ impl PatalaRail {
         })
     }
 
+    /// A [`patala_core::MockRail`] that reports
+    /// [`DestinationStatus::Unknown`] for every destination — the offline
+    /// stand-in for a rail that cannot check an address at all.
+    ///
+    /// This exists so `Unknown` is reachable from **outside Rust in the
+    /// default build**, and it is not a convenience. `Unknown` is the trait's
+    /// default verdict and the honest answer for every fiat rail, whose
+    /// `destination` is an opaque processor-side token; it is also the verdict
+    /// a consumer is most likely to get wrong, because the safe handling of it
+    /// ("a human must decide") looks nothing like the handling of
+    /// [`DestinationStatus::StructurallyValid`] and is easy to collapse into
+    /// "not a refusal, therefore fine".
+    ///
+    /// Without this constructor, a Go, Python, Swift or Kotlin consumer could
+    /// only produce an `Unknown` verdict by compiling in a feature-gated real
+    /// rail — so the branch of its payout UI that matters most could not be
+    /// tested in the offline default build at all. Same reasoning as
+    /// [`patala_core::MockRail::without_destination_checks`], which this wraps.
+    ///
+    /// Everything else about the returned rail matches [`Self::new_mock`]:
+    /// `quote`/`charge`/`verify` behave identically. Only the destination
+    /// verdict changes.
+    #[uniffi::constructor]
+    pub fn new_mock_without_destination_checks(
+        id: String,
+        class: RailClass,
+        currencies: Vec<String>,
+        fee_minor: u64,
+        failing: bool,
+    ) -> Arc<Self> {
+        let mut rail = MockRail::new(id, class.into(), currencies)
+            .with_fee_minor(fee_minor)
+            .without_destination_checks();
+        if failing {
+            rail = rail.failing();
+        }
+        Arc::new(Self {
+            inner: Arc::new(rail),
+        })
+    }
+
     /// Stable rail id — see [`patala_core::PaymentRail::id`].
     pub fn id(&self) -> String {
         self.inner.id().to_string()
@@ -487,6 +651,43 @@ impl PatalaRail {
             .block_on(self.inner.verify_webhook(&core_delivery))
             .map(WebhookEvent::from)
             .map_err(PatalaError::from)
+    }
+
+    /// Check a payout destination as far as this rail can, **offline**, before
+    /// any money moves — see
+    /// [`patala_core::PaymentRail::validate_destination`].
+    ///
+    /// This is the pre-flight half of the two-party payout flow: on a
+    /// `NonCustodialFinal` rail there is no reversal, so giving a customer
+    /// their money back is a second, independent [`Self::charge`] to an
+    /// address **the customer supplies** — never the address the payment came
+    /// from, which is very often an exchange withdrawal address where the
+    /// funds cannot be credited back to them. This call is what lets a
+    /// consumer tell a person "that is not a valid Solana address" at the
+    /// moment they type it rather than at charge time.
+    ///
+    /// # Three things a caller must not mistake
+    ///
+    /// - **It returns a [`DestinationVerdict`], never an error.** "I could not
+    ///   check" is [`DestinationStatus::Unknown`], a verdict, because a caller
+    ///   has to handle it as carefully as a refusal — raising there would let
+    ///   a `try`/`except` swallow it.
+    /// - **No verdict means "safe to send to."** `human_must_confirm` is
+    ///   `true` on every one of them, including
+    ///   [`DestinationStatus::StructurallyValid`]. patala does not detect
+    ///   exchange-owned addresses and will not guess: that needs commercial
+    ///   address-attribution data this workspace refuses to depend on, and a
+    ///   heuristic would be worse than nothing. Show
+    ///   `exchange_deposit_caveat` and make a human tick the box.
+    /// - **`is_refusal` is not a warning to click past.** Those three statuses
+    ///   are defects the rail *knows about*; stop there.
+    ///
+    /// Unlike every other method on this object, this one is genuinely pure:
+    /// no network, no clock, no filesystem, and it does not touch the internal
+    /// tokio runtime at all, so it is safe to call from a UI thread on every
+    /// keystroke.
+    pub fn validate_destination(&self, destination: String) -> DestinationVerdict {
+        DestinationVerdict::from(self.inner.validate_destination(&destination))
     }
 }
 
@@ -756,6 +957,208 @@ mod tests {
             .charge(req(100, "order-py-4"))
             .expect_err("this rail is configured to always fail");
         assert!(matches!(err, PatalaError::Rail { .. }));
+    }
+
+    // ── validate_destination across the FFI boundary ──────────────────────
+    //
+    // MockRail's synthetic `<network>:<kind>:<label>` grammar is what makes
+    // every DestinationStatus reachable with no chain and no feature flags, so
+    // the *binding* for each variant is tested in the default build rather
+    // than only when a real rail is compiled in.
+
+    fn mock_rail() -> Arc<PatalaRail> {
+        PatalaRail::new_mock(
+            "mock".into(),
+            RailClass::NonCustodialFinal,
+            vec!["USDC".into()],
+            0,
+            false,
+        )
+    }
+
+    #[test]
+    fn every_destination_status_survives_the_ffi_boundary_distinctly() {
+        // The whole point of task (a): a verdict that flattened to a bool here
+        // would defeat the design. Five inputs, five *different* statuses.
+        let rail = mock_rail();
+        let cases = [
+            ("mock:wallet:alice", DestinationStatus::StructurallyValid),
+            ("mock:program:vault", DestinationStatus::NotAWallet),
+            ("stellar:wallet:alice", DestinationStatus::WrongNetwork),
+            ("definitely-not-an-address", DestinationStatus::Malformed),
+            ("", DestinationStatus::Malformed),
+        ];
+        for (dest, want) in cases {
+            let v = rail.validate_destination(dest.to_string());
+            assert_eq!(v.status, want, "validate_destination({dest:?})");
+        }
+
+        // Unknown needs a rail that declines to check at all — the fiat shape.
+        // Built through the exported constructor, not by hand, so this covers
+        // the path a non-Rust consumer actually has.
+        let opaque = PatalaRail::new_mock_without_destination_checks(
+            "opaque".into(),
+            RailClass::CustodialReversible,
+            vec!["USD".into()],
+            0,
+            false,
+        );
+        assert_eq!(
+            opaque
+                .validate_destination("cus_opaque_processor_token".into())
+                .status,
+            DestinationStatus::Unknown
+        );
+        assert!(
+            !opaque
+                .validate_destination("cus_opaque_processor_token".into())
+                .is_refusal,
+            "Unknown is not a refusal — and is not a green light either"
+        );
+
+        // And the five are distinct values on this side, not aliases that
+        // happen to print differently.
+        let all = [
+            DestinationStatus::Malformed,
+            DestinationStatus::WrongNetwork,
+            DestinationStatus::NotAWallet,
+            DestinationStatus::StructurallyValid,
+            DestinationStatus::Unknown,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(a, b, "two DestinationStatus variants compare equal");
+            }
+        }
+    }
+
+    #[test]
+    fn every_verdict_carries_the_caveat_and_the_confirmation_flag_across_ffi() {
+        // These two fields exist *because* they have to survive this boundary:
+        // the core type's `requires_human_confirmation()` is a Rust method and
+        // does not exist in Python, Go, Swift or Kotlin.
+        let rail = mock_rail();
+        for dest in [
+            "mock:wallet:alice",
+            "mock:program:vault",
+            "stellar:wallet:alice",
+            "junk",
+            "",
+        ] {
+            let v = rail.validate_destination(dest.to_string());
+            assert!(
+                v.human_must_confirm,
+                "{dest:?} must still require a human to confirm"
+            );
+            assert_eq!(
+                v.exchange_deposit_caveat,
+                patala_core::EXCHANGE_DEPOSIT_CAVEAT,
+                "{dest:?} must carry the caveat verbatim"
+            );
+            assert!(
+                !v.reason.trim().is_empty(),
+                "{dest:?} needs a reason a UI can show"
+            );
+            assert_eq!(v.rail_id, "mock", "a verdict names whose opinion it is");
+        }
+    }
+
+    #[test]
+    fn is_refusal_crosses_as_data_and_matches_the_core_types_own_answer() {
+        // A consumer must never have to re-derive this from `status`: a `switch`
+        // that has not heard of a status added later defaults to "not a
+        // refusal", which fails OPEN. So it is computed in Rust and compared
+        // here against the core method it is computed from.
+        let rail = mock_rail();
+        let core = MockRail::new(
+            "mock",
+            CoreRailClass::NonCustodialFinal,
+            vec!["USDC".into()],
+        );
+        for dest in [
+            "mock:wallet:alice",
+            "mock:program:vault",
+            "stellar:wallet:alice",
+            "junk",
+            "",
+        ] {
+            let ffi = rail.validate_destination(dest.to_string());
+            assert_eq!(
+                ffi.is_refusal,
+                core.validate_destination(dest).is_refusal(),
+                "is_refusal disagrees with patala_core for {dest:?}"
+            );
+        }
+
+        // Spelled out, so the mapping is pinned and not merely self-consistent.
+        assert!(rail.validate_destination("junk".into()).is_refusal);
+        assert!(
+            rail.validate_destination("mock:program:vault".into())
+                .is_refusal
+        );
+        assert!(
+            rail.validate_destination("stellar:wallet:alice".into())
+                .is_refusal
+        );
+        assert!(
+            !rail
+                .validate_destination("mock:wallet:alice".into())
+                .is_refusal
+        );
+    }
+
+    #[test]
+    fn validate_destination_is_pure_across_the_boundary() {
+        // The contract that lets this be called on a UI thread on every
+        // keystroke, in a browser, and on a gate device with no uplink.
+        let rail = mock_rail();
+        let once = rail.validate_destination("mock:wallet:alice".into());
+        let twice = rail.validate_destination("mock:wallet:alice".into());
+        assert_eq!(once.status, twice.status);
+        assert_eq!(once.reason, twice.reason);
+        assert_eq!(once.is_refusal, twice.is_refusal);
+    }
+
+    #[test]
+    fn the_caveat_is_reachable_before_there_is_a_verdict_to_render() {
+        // The free function exists for the form where a customer is first asked
+        // for an address — the moment the warning matters most.
+        assert_eq!(
+            exchange_deposit_caveat(),
+            patala_core::EXCHANGE_DEPOSIT_CAVEAT
+        );
+        assert!(exchange_deposit_caveat().contains("exchange"));
+    }
+
+    #[test]
+    fn refund_is_still_unreachable_here_and_that_is_deliberate() {
+        // Audited, not changed. `PatalaRail` exposes no `refund` method, and
+        // this asserts the reason is honest rather than an oversight: the
+        // underlying MockRail is NonCustodialFinal and its `refund` is
+        // Unsupported, so a binding method would only ever raise. Paying a
+        // customer back on such a rail is a compensating `charge` to a
+        // validated, customer-supplied destination — see
+        // `validate_destination`'s docs and docs/compensating-payments.md.
+        let rail = MockRail::new(
+            "mock",
+            CoreRailClass::NonCustodialFinal,
+            vec!["USDC".into()],
+        );
+        runtime().block_on(async {
+            let receipt = rail
+                .charge(&CorePayRequest {
+                    amount_minor: 500,
+                    currency: "USDC".into(),
+                    destination: "dest".into(),
+                    reference: "order-py-refund".into(),
+                })
+                .await
+                .expect("charge");
+            assert!(matches!(
+                rail.refund(&receipt).await,
+                Err(CoreError::Unsupported("refund"))
+            ));
+        });
     }
 
     // The three tests below exercise the real-rail constructors added for

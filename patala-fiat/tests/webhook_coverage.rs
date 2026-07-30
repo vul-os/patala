@@ -1,5 +1,12 @@
-//! Every feature-gated adapter must answer [`PaymentRail::verify_webhook`],
-//! and answer it fail-closed.
+//! Every feature-gated adapter must answer [`PaymentRail::verify_webhook`] and
+//! [`PaymentRail::validate_destination`], and answer both fail-closed.
+//!
+//! Those are the two methods on the trait with a *default* — which means they
+//! are the two an adapter can silently fail to implement while still
+//! compiling, and the two whose absence is invisible until a consumer hits it
+//! in production. That shared failure mode, and the adapter list below, is why
+//! both live in one file. (The name is historical: webhook coverage came
+//! first. See `# validate_destination coverage` further down.)
 //!
 //! This file exists because of a measured defect: webhook verification lived
 //! in free functions outside the trait and outside the UniFFI surface, so no
@@ -23,6 +30,11 @@
 //!    (plain header, header + replay window, static-token header, config-URL
 //!    plus header, query parameter), asserting the `WebhookEvent` a consumer
 //!    actually receives.
+//! 5. `every_compiled_adapter_overrides_validate_destination` and the four
+//!    tests after it — a new adapter that forgets `validate_destination`
+//!    inherits the trait default and fails here; and no adapter, on any input,
+//!    may ever report `StructurallyValid`, which would claim a redirect URL or
+//!    a buyer's email had been vetted as somewhere to send a customer's money.
 //!
 //! **Skips are loud.** The adapters are Cargo features; running without
 //! `--all-features` compiles only some of them in. The harness prints exactly
@@ -34,7 +46,7 @@
 
 #![allow(clippy::vec_init_then_push)]
 
-use patala_core::{Error, PaymentRail, WebhookDelivery};
+use patala_core::{DestinationStatus, Error, PaymentRail, WebhookDelivery};
 
 /// Fixed "now" for every replay-window check here — never the system clock.
 const NOW: u64 = 1_700_000_000;
@@ -799,4 +811,224 @@ async fn lnbits_reads_its_secret_from_the_query_string_not_a_header() {
     // Wrong secret.
     let wrong = WebhookDelivery::new(body, NOW).with_query_param("secret", "nope");
     assert!(rail.verify_webhook(&wrong).await.is_err());
+}
+
+// ── validate_destination coverage ────────────────────────────────────────────
+//
+// The second trait method a rail can silently fail to implement. `PaymentRail`
+// gives `validate_destination` a default that answers `Unknown` for anything
+// non-empty, which is the right default (it never blesses a token no one
+// checked) but the wrong answer for a rail that knows what its own
+// `destination` field is. These tests are what stops a new adapter shipping
+// with that default, and — more importantly — what stops one ever claiming
+// `StructurallyValid`, a status that means "a well-formed address for the
+// network this rail pays on" and that no custodial fiat rail can truthfully
+// report, because its `destination` is not an address at all.
+
+/// What a given rail's `destination` actually is. Mirrors the table in
+/// `patala_fiat::destination`'s module docs; a rail wired to the wrong helper
+/// fails the assertions below.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum DestShape {
+    /// The post-checkout URL the buyer's browser returns to.
+    RedirectUrl,
+    /// The buyer's email address.
+    BuyerEmail,
+    /// Nothing — the rail never reads the field.
+    Ignored,
+}
+
+/// Deliberately exhaustive with a panicking fallback rather than a `_ =>` arm:
+/// a new adapter must be classified here on purpose. Falling through to some
+/// default would let it ship with an unexamined destination contract, which is
+/// exactly the failure this file exists to prevent.
+fn dest_shape(name: &str) -> DestShape {
+    match name {
+        "adyen" | "checkoutcom" | "iyzico" | "mercadopago" | "mollie" | "payfast" | "paypal"
+        | "square" | "stripe" | "xendit" | "yoco" => DestShape::RedirectUrl,
+        "flutterwave" | "midtrans" | "paystack" | "payu" => DestShape::BuyerEmail,
+        "btcpay" | "coinbasecommerce" | "lnbits" | "opennode" | "razorpay" => DestShape::Ignored,
+        other => panic!(
+            "adapter {other:?} has no entry in dest_shape(). Decide what its \
+             PayRequest::destination actually is (a redirect URL, the buyer's email, or \
+             nothing), wire validate_destination to the matching patala_fiat::destination \
+             helper, and add it here."
+        ),
+    }
+}
+
+/// One real address per chain — the cross-rail pastes these checks exist for.
+const FOREIGN_ADDRESSES: &[(&str, &str)] = &[
+    ("6dNVeXf5rQrTVAvpjTv2oyeHiWMCGSCUuUkxYCK6bZTs", "Solana"),
+    (
+        "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+        "Stellar",
+    ),
+    ("0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", "Ethereum"),
+    ("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", "Bitcoin"),
+];
+
+#[test]
+fn every_compiled_adapter_overrides_validate_destination() {
+    let compiled = covered_or_loudly_skip("every_compiled_adapter_overrides_validate_destination");
+    for adapter in &compiled {
+        let shape = dest_shape(adapter.name);
+        match shape {
+            // The trait default answers `Unknown` for any non-empty string and
+            // can never produce `WrongNetwork`, so this positively proves the
+            // rail implemented the method rather than inheriting it.
+            DestShape::RedirectUrl | DestShape::BuyerEmail => {
+                let v = adapter.rail.validate_destination(FOREIGN_ADDRESSES[0].0);
+                assert_eq!(
+                    v.status,
+                    DestinationStatus::WrongNetwork,
+                    "{} inherits PaymentRail::validate_destination's default instead of saying \
+                     what its own `destination` field is — wire it to the matching \
+                     patala_fiat::destination helper.",
+                    adapter.name
+                );
+            }
+            // An ignoring rail correctly answers `Unknown` like the default
+            // does, so it is identified by its reason instead.
+            DestShape::Ignored => {
+                let v = adapter.rail.validate_destination("unused-placeholder");
+                assert_eq!(v.status, DestinationStatus::Unknown, "{}", adapter.name);
+                assert!(
+                    v.reason.contains("never reads"),
+                    "{} inherits the trait default's generic reason instead of saying that it \
+                     never reads `destination`: {}",
+                    adapter.name,
+                    v.reason
+                );
+            }
+        }
+        // A verdict must name the rail that formed it: `mock`'s opinion of a
+        // Stripe token is worth nothing, and neither is Stripe's of a Solana
+        // address.
+        assert_eq!(
+            adapter.rail.validate_destination("anything").rail_id,
+            adapter.name,
+            "a verdict must say whose opinion it is"
+        );
+    }
+}
+
+#[test]
+fn no_compiled_adapter_ever_claims_a_destination_is_structurally_valid() {
+    // The single most important property here. `StructurallyValid` means "a
+    // well-formed address for the network this rail pays on"; a custodial
+    // fiat rail has no such network and no such address, so there is no input
+    // for which that status is a true statement.
+    let compiled = covered_or_loudly_skip(
+        "no_compiled_adapter_ever_claims_a_destination_is_structurally_valid",
+    );
+    let inputs = [
+        "https://shop.example.com/thanks",
+        "buyer@example.com",
+        "unused-placeholder",
+        "cs_test_a1B2c3D4e5F6g7H8i9J0",
+        FOREIGN_ADDRESSES[0].0,
+        FOREIGN_ADDRESSES[1].0,
+        "",
+        "   ",
+        "nonsense",
+    ];
+    for adapter in &compiled {
+        for input in inputs {
+            let v = adapter.rail.validate_destination(input);
+            assert_ne!(
+                v.status,
+                DestinationStatus::StructurallyValid,
+                "{} claimed {input:?} is a structurally valid destination. It cannot be: this \
+                 rail's `destination` is not a payout address.",
+                adapter.name
+            );
+            // Every verdict, on every rail, carries both of these.
+            assert!(v.human_must_confirm, "{} / {input:?}", adapter.name);
+            assert_eq!(
+                v.exchange_deposit_caveat,
+                patala_core::EXCHANGE_DEPOSIT_CAVEAT,
+                "{} / {input:?}",
+                adapter.name
+            );
+            assert!(
+                !v.reason.trim().is_empty(),
+                "{} / {input:?} — a refusal a UI cannot explain is barely a refusal",
+                adapter.name
+            );
+        }
+    }
+}
+
+#[test]
+fn every_compiled_adapter_fails_closed_on_a_blank_destination() {
+    let compiled =
+        covered_or_loudly_skip("every_compiled_adapter_fails_closed_on_a_blank_destination");
+    for adapter in &compiled {
+        for blank in ["", " ", "\t\n"] {
+            let v = adapter.rail.validate_destination(blank);
+            assert_eq!(
+                v.status,
+                DestinationStatus::Malformed,
+                "{} / {blank:?} — a blank destination is a refusal, never a shrug",
+                adapter.name
+            );
+            assert!(v.is_refusal(), "{} / {blank:?}", adapter.name);
+        }
+    }
+}
+
+#[test]
+fn adapters_that_read_destination_refuse_every_other_rails_address_by_name() {
+    // The cross-rail case: the message has to name what was pasted. "Invalid"
+    // sends someone back to re-type the same wrong thing.
+    let compiled = covered_or_loudly_skip(
+        "adapters_that_read_destination_refuse_every_other_rails_address_by_name",
+    );
+    for adapter in &compiled {
+        if dest_shape(adapter.name) == DestShape::Ignored {
+            continue;
+        }
+        for (address, chain) in FOREIGN_ADDRESSES {
+            let v = adapter.rail.validate_destination(address);
+            assert_eq!(
+                v.status,
+                DestinationStatus::WrongNetwork,
+                "{} / {chain}",
+                adapter.name
+            );
+            assert!(v.is_refusal(), "{} / {chain}", adapter.name);
+            assert!(
+                v.reason.contains(chain),
+                "{} must name {chain} rather than say 'invalid': {}",
+                adapter.name,
+                v.reason
+            );
+        }
+    }
+}
+
+#[test]
+fn adapters_accept_the_format_their_own_processor_documents() {
+    // The other direction: the format checks above must not be refusing the
+    // thing the rail actually wants. A guard that fires on correct input is
+    // worse than none.
+    let compiled =
+        covered_or_loudly_skip("adapters_accept_the_format_their_own_processor_documents");
+    for adapter in &compiled {
+        let good = match dest_shape(adapter.name) {
+            DestShape::RedirectUrl => "https://shop.example.com/orders/1234/thanks",
+            DestShape::BuyerEmail => "buyer@example.com",
+            DestShape::Ignored => "unused-placeholder",
+        };
+        let v = adapter.rail.validate_destination(good);
+        assert_eq!(
+            v.status,
+            DestinationStatus::Unknown,
+            "{} refused {good:?}, which is exactly what its processor documents this field as: {}",
+            adapter.name,
+            v.reason
+        );
+        assert!(!v.is_refusal(), "{}", adapter.name);
+    }
 }

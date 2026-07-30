@@ -272,6 +272,24 @@ impl PaymentRail for ManualRail {
         &self.capabilities
     }
 
+    /// Check this rail's `destination` offline — delegated to
+    /// [`crate::destination::ignored`], because the `manual` rail never reads
+    /// `destination` at all (see this module's docs above). The field exists
+    /// on the request only because `PayRequest::validate()` requires a
+    /// non-empty one on every rail.
+    ///
+    /// The verdict is therefore always
+    /// [`patala_core::DestinationStatus::Unknown`] for a non-empty string:
+    /// there is no format to be right or wrong about, so no format check is
+    /// invented — including no refusal of a wallet address, which is
+    /// genuinely harmless in a field nothing reads. What the reason says
+    /// instead is the thing a caller needs to know: setting this steers
+    /// nothing, and giving a customer their money back on this rail is the
+    /// processor's refund path, never a charge to a destination.
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        crate::destination::ignored(self.id(), dest)
+    }
+
     async fn quote(&self, req: &PayRequest) -> Result<Quote> {
         req.validate()?;
         crate::currency::validate(&req.currency)
@@ -397,6 +415,49 @@ mod tests {
             currency: currency.into(),
             destination: "unused-for-manual".into(),
             reference: reference.into(),
+        }
+    }
+
+    /// The `manual` rail is not one of the feature-gated adapter directories,
+    /// so `tests/webhook_coverage.rs`'s destination sweep never reaches it.
+    /// It gets the same assertions here instead — the always-on default rail
+    /// is the last one that should be the exception.
+    #[test]
+    fn validate_destination_says_the_field_steers_nothing_and_never_blesses_it() {
+        use patala_core::DestinationStatus;
+
+        let rail = ManualRail::default();
+
+        let v = rail.validate_destination("unused-for-manual");
+        assert_eq!(v.status, DestinationStatus::Unknown);
+        assert!(!v.is_refusal());
+        assert_eq!(v.rail_id, RAIL_ID_MANUAL);
+        assert!(v.reason.contains("never reads"), "{}", v.reason);
+
+        // A blank one is still a refusal: `PayRequest::validate()` rejects it,
+        // so accepting it here would make the two disagree.
+        for blank in ["", " ", "\t\n"] {
+            let v = rail.validate_destination(blank);
+            assert_eq!(v.status, DestinationStatus::Malformed, "{blank:?}");
+            assert!(v.is_refusal(), "{blank:?}");
+        }
+
+        // And no input ever reaches `StructurallyValid` — `manual` settles
+        // cash in a hand, and has no address to call well-formed.
+        for dest in [
+            "unused-for-manual",
+            "6dNVeXf5rQrTVAvpjTv2oyeHiWMCGSCUuUkxYCK6bZTs",
+            "https://example.com/thanks",
+            "",
+        ] {
+            let v = rail.validate_destination(dest);
+            assert_ne!(v.status, DestinationStatus::StructurallyValid, "{dest:?}");
+            assert!(v.human_must_confirm, "{dest:?}");
+            assert_eq!(
+                v.exchange_deposit_caveat,
+                patala_core::EXCHANGE_DEPOSIT_CAVEAT,
+                "{dest:?}"
+            );
         }
     }
 

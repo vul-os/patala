@@ -39,23 +39,34 @@ GATE := $(CURDIR)/scripts/go-test-gate.sh
 # them, removing or silently excluding one does. The --require names are the
 # money-critical ones — the WebhookStatus mapping cackle gates entitlement on
 # (patala-core/src/webhook.rs: Unconfirmed is PENDING-equivalent and must
-# NEVER be read as Settled), and the fail-closed verify contract.
-GATE_MIN := 12
+# NEVER be read as Settled), the fail-closed verify contract, and the
+# destination pre-flight surface (patala-core/src/destination.rs), whose
+# failure mode is a customer's refund sent to an address the rail already knew
+# was wrong.
+GATE_MIN := 19
 GATE_REQUIRE := \
 	--require TestWebhookStatusDiscriminantsArePinned \
 	--require TestOnlySettledMeansPaid \
 	--require TestGeneratedWebhookStatusVariantsAreExactlyThree \
 	--require TestVerifyFailsClosedOnTamperedReceipt \
-	--require TestMockRailReportsWebhookUnsupported
+	--require TestMockRailReportsWebhookUnsupported \
+	--require TestEveryDestinationStatusRoundTripsToGo \
+	--require TestDestinationStatusDiscriminantsArePinned \
+	--require TestNoVerdictWaivesTheHumanConfirmation \
+	--require TestRefusalsAreExactlyTheThreeEstablishedDefects \
+	--require TestCompensatingPaymentFlowEndToEndFromGo
 
-GATE_MIN_FIAT := 24
+GATE_MIN_FIAT := 34
 GATE_REQUIRE_FIAT := $(GATE_REQUIRE) \
 	--require TestBTCPayWebhookIsUnconfirmedNeverSettled \
 	--require TestStripeWebhookPaidSessionIsSettled \
 	--require TestStripeWebhookUnpaidSessionIsNotSettled \
 	--require TestEveryWebhookStatusVariantIsReachedByARealDelivery \
 	--require TestStripeWebhookFailsClosed \
-	--require TestFiatProviderCoverage
+	--require TestFiatProviderCoverage \
+	--require TestFiatRailsNeverClaimAStructurallyValidDestination \
+	--require TestFiatRailStillRefusesAnEmptyDestination \
+	--require TestFiatDestinationSurfaceIsReachableFromGo
 
 ifeq ($(UNAME_S),Darwin)
 	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.dylib

@@ -25,13 +25,95 @@ import json
 import sys
 
 from patala_py import (
+    DestinationStatus,
     PatalaError,
     PatalaRail,
     PayRequest,
     RailClass,
     WebhookDelivery,
     WebhookStatus,
+    exchange_deposit_caveat,
 )
+
+
+def check_destination_surface() -> None:
+    """Drive `validate_destination` from Python — every verdict, offline.
+
+    This is the pre-flight half of the two-party payout flow (see
+    `docs/compensating-payments.md`): on a final rail there is no reversal, so
+    paying a customer back is a second, independent `charge()` to an address
+    the **customer** supplies — never the address the payment came from, which
+    is very often an exchange withdrawal address where the funds cannot be
+    credited back to them.
+
+    Never skipped: MockRail's synthetic `<network>:<kind>:<label>` grammar
+    makes all five verdicts reachable with no chain, no processor and no
+    feature flags, so this runs on every build.
+    """
+    rail = PatalaRail.new_mock(
+        id="mock",
+        _class=RailClass.NON_CUSTODIAL_FINAL,
+        currencies=["USDC"],
+        fee_minor=0,
+        failing=False,
+    )
+    # The offline stand-in for a rail that cannot check at all — the shape of
+    # every fiat rail, whose destination is an opaque processor-side token.
+    opaque = PatalaRail.new_mock_without_destination_checks(
+        id="opaque",
+        _class=RailClass.CUSTODIAL_REVERSIBLE,
+        currencies=["USD"],
+        fee_minor=0,
+        failing=False,
+    )
+
+    cases = [
+        (rail, "mock:wallet:alice", DestinationStatus.STRUCTURALLY_VALID, False),
+        (rail, "mock:program:vault", DestinationStatus.NOT_A_WALLET, True),
+        (rail, "stellar:wallet:alice", DestinationStatus.WRONG_NETWORK, True),
+        (rail, "definitely-not-an-address", DestinationStatus.MALFORMED, True),
+        # Guards fail closed: the one defect decidable with no rail knowledge.
+        (rail, "", DestinationStatus.MALFORMED, True),
+        (opaque, "cus_opaque_token", DestinationStatus.UNKNOWN, False),
+    ]
+
+    seen = set()
+    for which, dest, want_status, want_refusal in cases:
+        verdict = which.validate_destination(dest)
+        assert verdict.status == want_status, (
+            f"validate_destination({dest!r}) status={verdict.status!r}, want {want_status!r}"
+        )
+        assert verdict.is_refusal is want_refusal, (
+            f"validate_destination({dest!r}) is_refusal={verdict.is_refusal!r}, want {want_refusal!r}"
+        )
+        assert verdict.rail_id == which.id(), "a verdict must name the rail that formed it"
+        assert verdict.reason.strip(), f"{dest!r} produced a verdict with nothing to show a person"
+        # On EVERY verdict, including the most positive one. patala cannot tell
+        # whether an address belongs to an exchange and will not guess, so the
+        # human confirmation step is unconditional.
+        assert verdict.human_must_confirm is True, (
+            f"{dest!r} must still require a human to confirm"
+        )
+        assert "exchange" in verdict.exchange_deposit_caveat, (
+            f"{dest!r} must carry the exchange-deposit caveat verbatim"
+        )
+        seen.add(verdict.status)
+
+    assert len(seen) == 5, (
+        f"only {len(seen)} distinct verdicts reached Python; all five must survive "
+        "the FFI boundary as distinct values, or the design is flattened"
+    )
+
+    # The caveat is reachable before there is a verdict to render — for the form
+    # where a customer is first asked for a payout address.
+    assert exchange_deposit_caveat() == rail.validate_destination("mock:wallet:alice").exchange_deposit_caveat, (
+        "the standalone caveat and the one on a verdict must be the same text"
+    )
+
+    print(
+        f"validate_destination OK: all 5 verdicts reached Python distinctly "
+        f"({', '.join(sorted(s.name for s in seen))}); every one requires human confirmation"
+    )
 
 
 def check_webhook_surface() -> bool:
@@ -296,6 +378,8 @@ def main() -> None:
         raise AssertionError("MockRail has no webhook surface and must say so")
     except PatalaError.Unsupported:
         print("webhook OK: MockRail reports unsupported rather than faking an event")
+
+    check_destination_surface()
 
     if not check_webhook_surface():
         print(

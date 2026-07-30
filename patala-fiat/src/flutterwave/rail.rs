@@ -222,6 +222,26 @@ impl PaymentRail for FlutterwaveRail {
         &self.capabilities
     }
 
+    /// Check this rail's `destination` offline — delegated to
+    /// [`crate::destination::buyer_email`], because on the `flutterwave` rail
+    /// `destination` is not a payout address: it is the **buyer's** email
+    /// address, sent as Flutterwave's `customer.email` (see this module's docs above).
+    ///
+    /// So the honest ceiling here is
+    /// [`patala_core::DestinationStatus::Unknown`], never
+    /// `StructurallyValid` — an email identifies a person, not a place money
+    /// goes, and whether the mailbox exists or is the right one is not
+    /// decidable offline. What *is* decided: a string that is plainly not an
+    /// email address is refused, and a blockchain address or a private key
+    /// pasted here is refused **by name**.
+    ///
+    /// Giving a customer their money back on this `CustodialReversible` rail
+    /// is [`PaymentRail::refund`] — back the way it came, no destination
+    /// involved — not a charge to a customer-supplied address.
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        crate::destination::buyer_email(self.id(), dest)
+    }
+
     async fn quote(&self, req: &PayRequest) -> Result<Quote> {
         req.validate()?;
         self.check_currency(&req.currency)?;

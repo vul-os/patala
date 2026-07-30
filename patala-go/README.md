@@ -65,7 +65,8 @@ instead of Python:
   `AllRailsFailed`). `Verify` failing closed is still `(false, nil)`, never an
   error — same contract as the core trait and the Python binding.
 - `PatalaRail` — the one type Go code touches: `Id()`, `Capabilities()`,
-  `Quote()`, `Charge()`, `Verify()`. Today its only constructor is
+  `Quote()`, `Charge()`, `Verify()`, `VerifyWebhook()`, `ValidateDestination()`.
+  Today its only feature-free constructor is
   `PatalaRailNewMock(...)`, built on `patala_core::MockRail`. When a real rail
   (`patala-solana`/`patala-stellar`/`patala-hyperswitch`) grows a constructor
   in `patala-py`, that constructor becomes reachable here too, the next time
@@ -78,6 +79,26 @@ instead of Python:
   `--features fiat` (see "`patala-fiat` (20 processor adapters)" below —
   this is generated Go, not hand-written, from the exact same
   `#[uniffi::export]` surface `patala-py`'s own `src/fiat.rs` defines).
+- `DestinationStatus` (`Malformed` / `WrongNetwork` / `NotAWallet` /
+  `StructurallyValid` / `Unknown`) and `DestinationVerdict` — the offline
+  pre-flight check, `rail.ValidateDestination(addr)`. Five variants, never
+  flattened to a bool: a UI renders each differently. `DestinationVerdict`
+  carries `Reason` (never empty, written to be shown to a person),
+  `HumanMustConfirm` (**true on every verdict, including
+  `StructurallyValid`**), `ExchangeDepositCaveat`, and `IsRefusal`.
+  `IsRefusal` is a *field* and not something you derive from `Status`,
+  because a `switch` that has not heard of a status added later falls through
+  to "not a refusal" — failing open. Returns no error: "I cannot check" is the
+  `Unknown` verdict, not an `err`. See `docs/compensating-payments.md` for the
+  flow this belongs to.
+- `PatalaRailNewMockWithoutDestinationChecks(...)` — a `MockRail` that answers
+  `Unknown` for every destination, so the fiat-shaped "a human must decide"
+  branch of a payout UI is testable from Go in the default, feature-free build
+  rather than only when a real rail is compiled in.
+- `ExchangeDepositCaveat() string` — the same caveat text every verdict
+  carries, for the form where a customer is first asked for a payout address
+  (before there is a verdict to render). patala does **not** detect whether an
+  address belongs to an exchange, and this string is how it says so.
 - `PatalaFiatProviders() []string` — every fiat provider name reachable via
   `PatalaRailNewFiat` in THIS specific build (a free function, not a
   `PatalaRail` method — UniFFI does not currently support exporting a plain
@@ -172,7 +193,8 @@ binding over the sidecar means:
 (`/Users/pc/code/vulos/cackle`) is the concrete example in this suite — do
 not reach for `patala-go`.** Use **[`patala-sidecar`](../patala-sidecar/)**
 instead: a loopback-only HTTP server over the exact same `patala-core`
-surface (`quote`/`charge`/`verify`/`webhook` as JSON, token-authenticated,
+surface (`quote`/`charge`/`verify`/`validate-destination`/`webhook` as JSON,
+token-authenticated,
 `127.0.0.1`-only — see its README's threat model). A Go program talks to it
 with `net/http` and `encoding/json` from the standard library, zero cgo, zero
 FFI, and the calling binary stays pure Go and fully static. The trade is
@@ -322,6 +344,8 @@ poor choice for the one binding no gate covered.
 | `bindingtest/binding_test.go` | — | `PatalaRailNewMock`, `Id`, `Capabilities`, `Quote`/`Charge`/`Verify`, fail-closed verify against four kinds of tampering, `RailClass` discriminants, the typed error variants, and `VerifyWebhook` reporting `Unsupported` on a rail with no push delivery |
 | `bindingtest/webhook_status_test.go` | — | every `WebhookStatus` variant's wire value, that **only** `Settled` may be read as payment, that the zero value is not payment, and — by scanning the generated source — that the variant *set* is exactly the three known ones |
 | `bindingtest/fiat_webhook_test.go` | `fiat` | `PatalaRailNewFiat`, provider coverage against `patala-fiat/src/`, and `VerifyWebhook` driven against genuinely signed Stripe and BTCPay deliveries so each `WebhookStatus` variant is reached by a real delivery, plus five fail-closed cases per scheme |
+| `bindingtest/destination_test.go` | — | `ValidateDestination`: all five `DestinationStatus` variants produced by real calls and arriving as five **distinct** values, the discriminants pinned, `HumanMustConfirm` true on every verdict (including `StructurallyValid`), `ExchangeDepositCaveat` present and identical to `ExchangeDepositCaveat()`, `IsRefusal` crossing as data, purity across 25 calls and across instances, and the whole compensating-payment flow walked end to end from Go |
+| `bindingtest/destination_fiat_test.go` | `fiat` | that **real** fiat rails (not the mock stand-in) answer `Unknown` rather than claiming a check they cannot perform, across every provider the cdylib was built with, and that a blank destination is still a `Malformed` refusal |
 
 ### Why the `WebhookStatus` pinning is the important part
 
@@ -533,4 +557,5 @@ charges/verifies `manual` (which never touches the network at all).
   trade-off. If cackle needs to stay `CGO_ENABLED=0`/pure-static,
   `patala-sidecar` (once it grows the same by-name fiat endpoint) remains
   the alternative path, not this one. The sidecar does already expose the
-  webhook surface — `POST /v1/rails/:rail_id/webhook`.
+  webhook surface — `POST /v1/rails/:rail_id/webhook` — and the destination
+  pre-flight check, `POST /v1/rails/:rail_id/validate-destination`.

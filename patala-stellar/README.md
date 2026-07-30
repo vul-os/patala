@@ -111,6 +111,65 @@ parameter to configure.
    failure to even check, per `patala_core::PaymentRail::verify`'s own
    contract — never as an implied "verified".
 
+## Paying a customer back: `validate_destination`
+
+Settlement here is final, so `refund()` is `Error::Unsupported("refund")` and
+stays that way. Giving the money back is a **compensating payment** instead: a
+second, independent `charge` to an address the *customer* supplies — never the
+address the payment came from, which is very often an exchange **withdrawal**
+address where the funds cannot be credited back to them.
+
+`destination::validate` is the offline, pure check to run on that address.
+**Stellar can decide more offline than most chains**, because StrKey is
+`[version byte][payload][CRC16-XMODEM]` in base32 rather than raw bytes in
+base58:
+
+* **A bad checksum is unambiguous.** A single mistyped character in a Solana
+  address usually produces *another perfectly well-formed address*; here it is
+  caught, and reported as "the checksum does not match, re-copy the whole
+  address" rather than as "invalid".
+* **The version byte encodes the type**, so `G…` (account), `M…` (muxed),
+  `C…` (Soroban contract), `T…`/`X…`/`P…` (signer types) and `S…` (**secret
+  seed**) are told apart from the string alone.
+
+| Verdict | When |
+|---|---|
+| `Malformed` | Bad CRC16, wrong length for the type, a character outside base32 (the `0`/`O`, `1`/`I`, `8`/`B`, `9`/`G` look-alikes are named), whitespace-wrapped, empty, or not a StrKey at all. A pasted **secret seed** lands here with its own loud refusal — see below. |
+| `WrongNetwork` | A well-formed address for another chain, **named**: a Solana base58 address, an Ethereum/EVM `0x…`, a Sui/Aptos `0x…`, a Bitcoin address in either era. |
+| `NotAWallet` | A valid StrKey that is not an account this rail can pay: a **muxed account** (`M…` — this crate builds only plain Ed25519 payment destinations, so it would drop the 64-bit subaccount id and the money would land uncredited in a custodian's omnibus account), a Soroban **contract** (`C…`), a **signer** type (`T…`/`X…`/`P…`), or a checksum-valid `G…` whose payload is not on the ed25519 curve. |
+| `StructurallyValid` | Version byte says account, CRC verifies, payload is a real ed25519 public key. **Not** "valid" and **not** "safe" — see below. |
+
+### A seed is a disclosure, not a typo
+
+`S…` gets its own refusal naming what happened and what to do — create a new
+account, move everything the old key controls, never use it again — and that
+check runs **before** the checksum is consulted, so a *mistyped* seed is still
+reported as a leaked key rather than sent back to be re-copied. The verdict
+never repeats the value.
+
+### Who decides
+
+`stellar-strkey` — the Stellar Development Foundation's own crate, the same one
+`keys` already uses — is the sole authority on whether a string is a valid
+StrKey. This crate never accepts an address on its own; when that decoder says
+no, it works out *why* so the refusal can be explained. A second checksum
+implementation here could disagree with the first, and the one place two
+validators must never disagree is the one deciding where money goes. (One
+consequence, pinned by a test: that decoder is **case-insensitive**, so a
+lowercased address really does resolve to the same account and really is paid —
+refusing it would refuse money that would have arrived.)
+
+### What this cannot decide
+
+Whether the account **exists** and is funded above the base reserve, and
+whether it holds a **USDC trustline** — without one the payment is rejected
+with `op_no_trust`, the most common way a Stellar payment fails. Both need
+Horizon, so both are a different method than this one. And **whether the
+address belongs to an exchange**: patala does not and will not guess at that.
+Every verdict — including `StructurallyValid` — carries
+`EXCHANGE_DEPOSIT_CAVEAT` and `human_must_confirm: true`. There is no verdict
+this rail can produce that means "safe to send to".
+
 ## Honesty (`PATALA.md` §8) — READ THIS — UNVERIFIED AGAINST LIVE
 
 **This crate has not been run against a live Stellar network — testnet or
@@ -118,7 +177,7 @@ mainnet — from this environment**, because this environment cannot reach
 Horizon. Nothing in this crate's behavior against a real network has been
 confirmed.
 
-What **is** checked, offline, in `src/tests.rs` (29 tests, all passing, no
+What **is** checked, offline, in `src/tests.rs` (23 tests, all passing, no
 network):
 
 - A scripted fake Horizon (`FakeRpc`) that decodes and re-hashes whatever

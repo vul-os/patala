@@ -126,6 +126,57 @@ They are reachable three ways, and every way is the same trait:
 - **Nothing is fabricated** — no receipt, balance or success a processor did
   not return.
 
+## `destination` is not a payout address on any rail here
+
+The thing callers most often assume wrongly. `patala_core::PayRequest`
+documents `destination` as "a wallet address for a crypto rail, or an **opaque
+processor-side destination token** for a fiat rail", and every rail in this
+crate is the second kind. Concretely it is one of exactly three things:
+
+| Shape | Rails | What the string actually is |
+|---|---|---|
+| Redirect URL | adyen, checkoutcom, iyzico, mercadopago, mollie, payfast, paypal, square, stripe, xendit, yoco | The URL the **buyer's browser** returns to after the hosted checkout — Stripe's `success_url`, Adyen's `returnUrl`, Mollie's `redirectUrl`, Square's `checkout_options.redirect_url`, Xendit's `success_redirect_url`, … |
+| Buyer email | flutterwave, midtrans, paystack, payu | The **buyer's** email address, which these processors require to open a transaction. |
+| Unread | btcpay, coinbasecommerce, lnbits, manual, opennode, razorpay | Nothing. The rail never reads it; `PayRequest::validate()` merely requires it be non-empty. |
+
+None of the three is a place money goes, so **no rail in this crate ever
+reports `DestinationStatus::StructurallyValid`** — that status means "a
+well-formed address for the network this rail pays on", and claiming it would
+tell a caller a `success_url` had been vetted as somewhere to send a customer's
+money. The honest ceiling is `Unknown`: "a human must decide".
+
+What `validate_destination` *does* still decide, offline, in
+`patala_fiat::destination`:
+
+* A redirect-URL rail refuses anything that is not an absolute `http(s)` URL
+  with a host, and flags plain `http://` without refusing it (processors accept
+  it in test mode; refusing it would refuse a payment that would have worked).
+* A buyer-email rail refuses anything plainly not an email address.
+* Either refuses a **blockchain address by name** — "this looks like a Solana
+  address, and this rail's `destination` is the URL the buyer returns to" —
+  because "invalid" sends someone back to re-type the same wrong thing.
+* Either refuses a pasted **Stellar secret seed** as a private-key disclosure,
+  without repeating the value. A leaked key is leaked whatever field it went
+  into.
+* An unread-destination rail invents no format check at all, including no
+  refusal of a wallet address: it is genuinely harmless in a field nothing
+  reads, and a guard firing at a non-defect is its own kind of dishonesty.
+* Every rail refuses a blank destination, matching `PayRequest::validate()`.
+
+`tests/webhook_coverage.rs` enforces this across every compiled-in adapter: a
+new adapter that inherits the trait default fails, one that ever reports
+`StructurallyValid` fails, and `scripts/check-features.sh` fails the build if
+an adapter directory exists that its `dest_shape()` table does not classify.
+
+### Giving a customer their money back
+
+Not a compensating payment to a customer-supplied address — that is the crypto
+rails' pattern. Every rail here is `CustodialReversible`, so use
+`PaymentRail::refund`: the money goes back the way it came and **no destination
+is involved**. The rails whose processor scheme has no refund API return
+`Error::Unsupported("refund")` and say so; there, the refund happens in the
+processor's own dashboard.
+
 ## Webhooks
 
 Inbound webhook verification is on the trait, as

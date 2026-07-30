@@ -219,6 +219,24 @@ impl PaymentRail for OpenNodeRail {
         &self.capabilities
     }
 
+    /// Check this rail's `destination` offline — delegated to
+    /// [`crate::destination::ignored`], because the `opennode` rail never reads
+    /// `destination` at all (see this module's docs above). The field exists
+    /// on the request only because `PayRequest::validate()` requires a
+    /// non-empty one on every rail.
+    ///
+    /// The verdict is therefore always
+    /// [`patala_core::DestinationStatus::Unknown`] for a non-empty string:
+    /// there is no format to be right or wrong about, so no format check is
+    /// invented — including no refusal of a wallet address, which is
+    /// genuinely harmless in a field nothing reads. What the reason says
+    /// instead is the thing a caller needs to know: setting this steers
+    /// nothing, and giving a customer their money back on this rail is the
+    /// processor's refund path, never a charge to a destination.
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        crate::destination::ignored(self.id(), dest)
+    }
+
     async fn quote(&self, req: &PayRequest) -> Result<Quote> {
         req.validate()?;
         self.check_currency(&req.currency)?;

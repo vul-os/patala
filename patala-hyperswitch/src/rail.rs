@@ -182,6 +182,65 @@ impl PaymentRail for HyperswitchRail {
         &self.capabilities
     }
 
+    /// Check a destination offline — and on this rail that honestly means
+    /// answering [`patala_core::DestinationStatus::Unknown`] and saying why,
+    /// rather than inventing a check.
+    ///
+    /// `patala-core` documents `PayRequest::destination` on a fiat rail as "an
+    /// opaque processor-side destination token", and here it is exactly that:
+    /// this crate passes it through as Hyperswitch's `payment_token`, a
+    /// reference to a payment method the caller tokenized out of band via
+    /// Hyperswitch's own client-side SDK (see `models::PaymentsCreateRequest`,
+    /// where that mapping is itself flagged NEEDS-CONFIRMATION). Two
+    /// consequences, both of which point the same way:
+    ///
+    /// * **It is not a payout address.** Nothing is sent *to* a
+    ///   `payment_token`; it names the payment method money is taken *from*.
+    ///   So `StructurallyValid` — "a well-formed address for the network this
+    ///   rail pays on" — is not a status this rail could ever truthfully
+    ///   report, and it never does.
+    /// * **Its format is Hyperswitch's to define, not patala's.**
+    ///   Hyperswitch's OpenAPI spec types `payment_token` as a plain string
+    ///   with no documented grammar, and a self-hosted instance may be running
+    ///   any version against any connector. There is therefore nothing here
+    ///   that could be checked without guessing, and a guess that rejected a
+    ///   token a live instance would have accepted is worse than no check —
+    ///   so, deliberately, none is made. Unlike the rails in `patala-fiat`,
+    ///   this one cannot even refuse a pasted wallet address: it has no
+    ///   documented format to say that address fails to match.
+    ///
+    /// A blank destination is still [`patala_core::DestinationStatus::Malformed`]
+    /// — undeliverable on every rail, and `PayRequest::validate()` rejects it
+    /// too, so accepting it here would make the two disagree.
+    ///
+    /// Giving a customer their money back on this `CustodialReversible` rail
+    /// is [`PaymentRail::refund`], which goes back the way it came and needs
+    /// no destination at all.
+    fn validate_destination(&self, dest: &str) -> patala_core::DestinationVerdict {
+        if dest.trim().is_empty() {
+            return patala_core::DestinationVerdict::malformed(
+                self.id(),
+                "an empty destination is not a usable Hyperswitch payment_token, and \
+                 `PayRequest::validate()` refuses one on every rail",
+            );
+        }
+        patala_core::DestinationVerdict::unknown(
+            self.id(),
+            format!(
+                "the {} rail passes `destination` through as Hyperswitch's `payment_token` — a \
+                 reference to a payment method tokenized out of band, NOT an address money is \
+                 sent to. Its format is defined by the self-hosted Hyperswitch instance and its \
+                 connector, not by patala, and Hyperswitch's own OpenAPI spec gives it no \
+                 grammar to check against; so this rail deliberately makes no format check \
+                 rather than guess one and refuse a token a live instance would have accepted. \
+                 A human, or the instance itself, must confirm this token. Note also that money \
+                 does not travel to this string: to give a customer their money back on this \
+                 rail, call `refund`.",
+                self.id()
+            ),
+        )
+    }
+
     async fn quote(&self, req: &PayRequest) -> Result<Quote> {
         req.validate()?;
         self.check_currency(&req.currency)?;
@@ -416,6 +475,90 @@ mod tests {
             destination: destination.into(),
             reference: reference.into(),
         }
+    }
+
+    /// `validate_destination` here is almost entirely a refusal to guess, and
+    /// these tests pin that it stays one — in both directions. Claiming a
+    /// check would be dishonest; quietly dropping the blank-destination
+    /// refusal, or ever reporting `StructurallyValid`, would be unsafe.
+    #[test]
+    fn validate_destination_is_honestly_unknown_and_never_claims_a_check() {
+        use patala_core::DestinationStatus;
+
+        let rail = HyperswitchRail::new(config_for("http://127.0.0.1:1".into())).unwrap();
+
+        // A payment_token is opaque, so anything non-empty is Unknown — and
+        // the reason has to say WHY nothing was checked, not just that
+        // nothing was.
+        let v = rail.validate_destination("tok_1a2b3c4d5e6f");
+        assert_eq!(v.status, DestinationStatus::Unknown);
+        assert!(!v.is_refusal());
+        assert!(v.human_must_confirm);
+        assert_eq!(v.rail_id, rail.id());
+        assert!(v.reason.contains("payment_token"), "{}", v.reason);
+        assert!(v.reason.contains("NOT an address"), "{}", v.reason);
+        assert!(
+            v.reason.contains("no grammar to check against"),
+            "{}",
+            v.reason
+        );
+        assert!(v.reason.contains("refund"), "{}", v.reason);
+
+        // Blank fails closed — `PayRequest::validate()` refuses one too, so
+        // accepting it here would put the two checks in disagreement.
+        for blank in ["", " ", "\t\n"] {
+            let v = rail.validate_destination(blank);
+            assert_eq!(v.status, DestinationStatus::Malformed, "{blank:?}");
+            assert!(v.is_refusal(), "{blank:?}");
+        }
+    }
+
+    #[test]
+    fn validate_destination_never_reports_structurally_valid() {
+        use patala_core::DestinationStatus;
+
+        // A custodial fiat rail has no network of its own and no address to
+        // call well-formed, so there is no input for which that status is a
+        // true statement.
+        let rail = HyperswitchRail::new(config_for("http://127.0.0.1:1".into())).unwrap();
+        for dest in [
+            "tok_1a2b3c4d5e6f",
+            "6dNVeXf5rQrTVAvpjTv2oyeHiWMCGSCUuUkxYCK6bZTs",
+            "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN7",
+            "https://example.com/return",
+            "",
+        ] {
+            let v = rail.validate_destination(dest);
+            assert_ne!(v.status, DestinationStatus::StructurallyValid, "{dest:?}");
+            assert!(v.human_must_confirm, "{dest:?}");
+            assert_eq!(
+                v.exchange_deposit_caveat,
+                patala_core::EXCHANGE_DEPOSIT_CAVEAT,
+                "{dest:?}"
+            );
+            assert!(!v.reason.trim().is_empty(), "{dest:?}");
+        }
+    }
+
+    #[test]
+    fn validate_destination_does_not_pretend_to_recognize_a_wallet_address() {
+        use patala_core::DestinationStatus;
+
+        // Deliberate difference from every rail in patala-fiat, and the
+        // honest one. Those rails refuse a pasted wallet address because their
+        // `destination` has a documented format (a URL, an email) that the
+        // address demonstrably is not. Hyperswitch's `payment_token` has NO
+        // documented grammar, so this rail has no ground to stand on to call
+        // any string wrong — and inventing one could refuse a token a live
+        // instance would have accepted.
+        let rail = HyperswitchRail::new(config_for("http://127.0.0.1:1".into())).unwrap();
+        let v = rail.validate_destination("6dNVeXf5rQrTVAvpjTv2oyeHiWMCGSCUuUkxYCK6bZTs");
+        assert_eq!(
+            v.status,
+            DestinationStatus::Unknown,
+            "this rail must not claim a format check it cannot justify"
+        );
+        assert!(!v.is_refusal());
     }
 
     fn config_for(base_url: String) -> HyperswitchConfig {

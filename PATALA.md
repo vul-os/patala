@@ -77,6 +77,14 @@ pub trait PaymentRail {
     async fn quote(&self, req: &PayRequest) -> Result<Quote>;      // fees, fx, expiry
     async fn charge(&self, req: &PayRequest) -> Result<Receipt>;   // initiate/settle a payment
     async fn verify(&self, receipt: &Receipt) -> Result<bool>;     // fail-closed
+    // Pre-flight, PURE and OFFLINE: what this rail can honestly say about a
+    // destination address before any money moves. Never a Result — "I cannot
+    // check" is a VERDICT (`Unknown`), because a caller must handle it as
+    // carefully as a refusal. Never a bool — five states, each rendered
+    // differently by a UI. The default answers `Unknown`, never
+    // `StructurallyValid`, so a rail can never accidentally claim a check it
+    // does not perform. See §3a.
+    fn validate_destination(&self, dest: &str) -> DestinationVerdict { /* Unknown */ }
     // Optional (a rail that can't do it returns Unsupported, does NOT fake it):
     async fn refund(&self, receipt: &Receipt) -> Result<Receipt> { Err(Error::Unsupported) }
     // The push path (added after the pull-only shape above shipped): the
@@ -97,6 +105,52 @@ pub trait PaymentRail {
 - **`MockRail`** — the offline default. Deterministic, no network, so CI and the default build need
   no chain and no processor. Every rail beyond mock is feature-gated (`--features solana`, etc.).
 - **Errors fail closed.** A receipt that cannot be verified is invalid, never assumed-valid.
+
+## 3a. Paying a customer back on a final rail (the compensating-payment flow)
+
+Full walkthrough, including the wording to show a customer:
+**[`docs/compensating-payments.md`](docs/compensating-payments.md)**. The binding
+decisions are here.
+
+`refund()` returns `Unsupported` on every `NonCustodialFinal` rail and **that stays true** —
+finality is the whole point of the class. Giving the money back there is a **compensating
+payment**: a second, independent `charge()` in the opposite direction, with its own transaction,
+its own fee, its own confirmation, its own fresh `reference`, and its own ability to fail. The
+original receipt is unchanged. Conflating the two would flatten exactly the distinction
+`RailClass` exists to preserve — so this flow ends in `charge()`, never in `refund()`.
+
+**NEVER send a refund to the address the payment came from.** BitPay, Coinbase Commerce and
+OpenNode all ask the customer for a destination instead, for one concrete reason: a *sending*
+address is very often an exchange **withdrawal** address, and an exchange does not credit funds
+arriving there to the customer who withdrew from it. The money is unrecoverable — by the customer,
+by the merchant, and by patala. Asking the customer is the correct design, not a fallback, and it
+makes the flow two-party: the merchant initiates, the **customer** supplies an address they
+control, a human confirms, the merchant approves.
+
+**patala does NOT detect exchange addresses, and must not learn to.** That needs commercial
+address-attribution data (Chainalysis, TRM) — hosted services, which would break the rule that
+nothing here depends on a third party and which the offline default build exists to avoid. A
+*heuristic* would be worse than nothing: a host who trusts "looks safe" and loses a customer's
+money is worse off than one told plainly that this cannot be known. So `validate_destination`
+decides what is decidable and surfaces the rest as a warning a human must confirm:
+
+- Every `DestinationVerdict` carries `human_must_confirm: true` — **including the most positive
+  verdict** — and `exchange_deposit_caveat`, verbatim, for a UI to show. There is no verdict that
+  waives the human step and no API to skip it.
+- The best status is `StructurallyValid`, not `Valid`: it is the *absence of a decidable defect*,
+  not a safety claim. There is deliberately no `is_valid()`/`is_safe()` on the type, because there
+  is no answer this crate can give that means "safe to send to".
+- `Malformed` / `WrongNetwork` / `NotAWallet` are **refusals** — defects the rail knows about.
+  Guards fail closed: do not offer a human the option to confirm past one.
+- `Unknown` means nothing was established. **Never treat it as valid**, and never as a refusal
+  either — "checked and clean" and "could not check" are different answers.
+
+It is a **trait method**, not a free function beside each rail, for the same reason
+`verify_webhook` is: a free function is unreachable from every non-Rust consumer, since the UniFFI
+surface and the sidecar both dispatch through `dyn PaymentRail`. It is exposed on both
+(`PatalaRail.validate_destination`, `POST /v1/rails/:rail_id/validate-destination`), with every
+verdict variant and its reason string intact — a verdict that flattened to a bool at a boundary
+would defeat the design.
 
 ## 4. Rails to ship (in order)
 

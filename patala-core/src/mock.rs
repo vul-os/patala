@@ -11,10 +11,17 @@
 //! mutated one. A real rail (Solana, Stellar, Hyperswitch, ...) proves its
 //! receipts with the actual signature scheme of its chain or processor;
 //! nothing downstream should ever mistake this mock's digest for that.
+//!
+//! The same applies to this rail's *addresses*:
+//! [`MockRail::validate_destination`] decides a small synthetic grammar
+//! (`"<network>:<kind>:<label>"`) which is not any real chain's format, and
+//! exists so that every [`crate::DestinationStatus`] a UI has to render can be
+//! produced offline, with no chain and no processor reachable.
 
 use async_trait::async_trait;
 
 use crate::capabilities::{RailCapabilities, RailClass, Settlement};
+use crate::destination::DestinationVerdict;
 use crate::error::{Error, Result};
 use crate::rail::{PayRequest, PaymentRail, Quote, Receipt};
 
@@ -65,6 +72,7 @@ pub struct MockRail {
     key: [u8; KEY_LEN],
     fee_minor: u64,
     fail: bool,
+    checks_destinations: bool,
 }
 
 impl MockRail {
@@ -98,6 +106,7 @@ impl MockRail {
             key,
             fee_minor: 0,
             fail: false,
+            checks_destinations: true,
         }
     }
 
@@ -112,6 +121,20 @@ impl MockRail {
     /// second `PaymentRail` implementation to already exist.
     pub fn failing(mut self) -> Self {
         self.fail = true;
+        self
+    }
+
+    /// Stand in for a rail that cannot check a destination offline at all — a
+    /// fiat rail, whose `destination` is an opaque processor-side token that
+    /// means nothing outside that processor.
+    ///
+    /// [`PaymentRail::validate_destination`] then answers
+    /// [`crate::DestinationStatus::Unknown`] for anything non-empty, exactly as
+    /// the trait's default does, so the "a human must confirm" path a real
+    /// deployment depends on is exercised by the offline default rail rather
+    /// than only by rails that are not in the default build.
+    pub fn without_destination_checks(mut self) -> Self {
+        self.checks_destinations = false;
         self
     }
 
@@ -188,11 +211,114 @@ impl PaymentRail for MockRail {
         let expected = keyed_digest(&self.key, &signing_bytes(&self.id, receipt));
         Ok(expected.as_slice() == receipt.proof.as_slice())
     }
+
+    /// Every [`crate::DestinationStatus`], offline, against a synthetic address
+    /// grammar — so a consumer can build and test its whole
+    /// customer-supplies-an-address payout flow (`patala-core`'s
+    /// [`crate::destination`] docs) before a real rail is compiled in.
+    ///
+    /// The grammar is `"<network>:<kind>:<label>"`, with `<kind>` one of
+    /// `wallet` or `program`:
+    ///
+    /// | Destination (on a rail whose `id` is `mock`) | Verdict |
+    /// |---|---|
+    /// | `mock:wallet:alice` | [`crate::DestinationStatus::StructurallyValid`] |
+    /// | `mock:program:vault` | [`crate::DestinationStatus::NotAWallet`] |
+    /// | `stellar:wallet:alice` | [`crate::DestinationStatus::WrongNetwork`] |
+    /// | `nonsense`, `mock:frog:x`, `""` | [`crate::DestinationStatus::Malformed`] |
+    /// | anything, on [`MockRail::without_destination_checks`] | [`crate::DestinationStatus::Unknown`] |
+    ///
+    /// **It is not any real chain's address format**, in the same way and for
+    /// the same reason this rail's `proof` is not a real signature (see the
+    /// module docs): it is deterministic and total, so a caller's rendering of
+    /// each verdict can be tested with no chain reachable. A real rail decodes
+    /// its own alphabet, length and checksum instead —
+    /// `pubkey_from_base58`/`is_on_curve` for Solana, StrKey for Stellar.
+    ///
+    /// `charge` deliberately does **not** enforce this grammar: `MockRail`
+    /// stands in for both settlement classes and every existing consumer hands
+    /// it arbitrary destination strings, so tying settlement to a made-up
+    /// address format would make the mock less general without making anything
+    /// safer. On a real rail the parser is the same code path in both places.
+    fn validate_destination(&self, dest: &str) -> DestinationVerdict {
+        let dest = dest.trim();
+        if dest.is_empty() {
+            return DestinationVerdict::malformed(
+                &self.id,
+                "an empty destination is not an address on any rail",
+            );
+        }
+        if !self.checks_destinations {
+            return DestinationVerdict::unknown(
+                &self.id,
+                format!(
+                    "mock rail {} is configured without destination checks, standing in for a \
+                     rail whose destination is an opaque processor-side token; a human who \
+                     controls the receiving account must confirm this one",
+                    self.id
+                ),
+            );
+        }
+
+        let parts: Vec<&str> = dest.split(':').collect();
+        if parts.len() != 3 || parts.iter().any(|p| p.trim().is_empty()) {
+            return DestinationVerdict::malformed(
+                &self.id,
+                format!(
+                    "{dest:?} is not a mock address: expected exactly \
+                     \"<network>:<kind>:<label>\" with no empty part, e.g. \"{}:wallet:alice\"",
+                    self.id
+                ),
+            );
+        }
+        let (network, kind, label) = (parts[0], parts[1], parts[2]);
+
+        if network != self.id {
+            return DestinationVerdict::wrong_network(
+                &self.id,
+                format!(
+                    "this is a well-formed address for network {network:?}, but this rail pays on \
+                     {:?}; money sent to it would land on the wrong network and would not be \
+                     recoverable",
+                    self.id
+                ),
+            );
+        }
+
+        match kind {
+            "wallet" => DestinationVerdict::structurally_valid(
+                &self.id,
+                format!(
+                    "{label:?} is a well-formed {} wallet address; every check this rail can make \
+                     offline passed, which is not the same as knowing the recipient can receive \
+                     on it",
+                    self.id
+                ),
+            ),
+            "program" => DestinationVerdict::not_a_wallet(
+                &self.id,
+                format!(
+                    "{label:?} is a valid {} address but a program account, not a wallet — nobody \
+                     holds a key for it, so funds sent there are typically unrecoverable",
+                    self.id
+                ),
+            ),
+            other => DestinationVerdict::malformed(
+                &self.id,
+                format!(
+                    "{other:?} is not a mock address kind: expected \"wallet\" or \"program\", \
+                     as in \"{}:wallet:alice\"",
+                    self.id
+                ),
+            ),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::destination::DestinationStatus;
 
     fn req(amount: u64, currency: &str, reference: &str) -> PayRequest {
         PayRequest {
@@ -292,5 +418,146 @@ mod tests {
         let rail =
             MockRail::new("mock", RailClass::NonCustodialFinal, vec!["USDC".into()]).failing();
         assert!(rail.charge(&req(100, "USDC", "order-8")).await.is_err());
+    }
+
+    // ── validate_destination: every verdict, offline ─────────────────────────
+
+    fn mock() -> MockRail {
+        MockRail::new("mock", RailClass::NonCustodialFinal, vec!["USDC".into()])
+    }
+
+    #[test]
+    fn every_verdict_variant_is_reachable_offline() {
+        let rail = mock();
+
+        // The five states a UI has to render differently, each from a real call
+        // rather than a hand-built verdict.
+        assert_eq!(
+            rail.validate_destination("mock:wallet:alice").status,
+            DestinationStatus::StructurallyValid
+        );
+        assert_eq!(
+            rail.validate_destination("mock:program:vault").status,
+            DestinationStatus::NotAWallet
+        );
+        assert_eq!(
+            rail.validate_destination("stellar:wallet:alice").status,
+            DestinationStatus::WrongNetwork
+        );
+        assert_eq!(
+            rail.validate_destination("definitely-not-an-address")
+                .status,
+            DestinationStatus::Malformed
+        );
+        assert_eq!(
+            mock()
+                .without_destination_checks()
+                .validate_destination("cus_opaque_processor_token")
+                .status,
+            DestinationStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn structural_defects_are_refusals_and_the_other_two_are_not() {
+        let rail = mock();
+
+        // Guards fail closed: each of these is something the rail *knows*, so
+        // it is a refusal a caller must not let a human click past.
+        for bad in [
+            "",
+            "   ",
+            "definitely-not-an-address",
+            "mock:wallet",             // too few parts
+            "mock:wallet:alice:extra", // too many
+            "mock::alice",             // empty kind
+            ":wallet:alice",           // empty network
+            "mock:frog:alice",         // unknown kind
+            "stellar:wallet:alice",    // right shape, wrong network
+            "mock:program:vault",      // valid, but nobody holds a key
+        ] {
+            let v = rail.validate_destination(bad);
+            assert!(v.is_refusal(), "{bad:?} must be refused, got {v:?}");
+        }
+
+        // Neither of the non-refusals is a green light either — both still
+        // demand a human, which is what the next test pins.
+        assert!(!rail.validate_destination("mock:wallet:alice").is_refusal());
+        assert!(!mock()
+            .without_destination_checks()
+            .validate_destination("mock:wallet:alice")
+            .is_refusal());
+    }
+
+    #[test]
+    fn no_destination_this_rail_accepts_is_ever_marked_safe_to_send_to() {
+        // The property that matters most: even the most positive verdict this
+        // rail can produce carries the exchange-deposit caveat and demands a
+        // human confirmation, so a caller cannot read "structurally valid" as
+        // "safe".
+        let rail = mock();
+        for dest in [
+            "mock:wallet:alice",
+            "mock:program:vault",
+            "stellar:wallet:alice",
+            "junk",
+            "",
+        ] {
+            let v = rail.validate_destination(dest);
+            assert!(v.human_must_confirm, "{dest:?}");
+            assert!(v.requires_human_confirmation(), "{dest:?}");
+            assert_eq!(
+                v.exchange_deposit_caveat,
+                crate::EXCHANGE_DEPOSIT_CAVEAT,
+                "{dest:?}"
+            );
+            assert!(!v.reason.trim().is_empty(), "{dest:?}");
+            assert_eq!(v.rail_id, "mock", "{dest:?}");
+        }
+    }
+
+    #[test]
+    fn wrong_network_is_decided_against_this_rails_own_id() {
+        // The Stellar-address-into-a-Solana-payout mistake, in miniature: the
+        // same string is fine on one rail and a refusal on the other, and
+        // neither rail speaks for the other.
+        let a = MockRail::new("mock-a", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+        let b = MockRail::new("mock-b", RailClass::NonCustodialFinal, vec!["USDC".into()]);
+
+        let dest = "mock-a:wallet:alice";
+        assert_eq!(
+            a.validate_destination(dest).status,
+            DestinationStatus::StructurallyValid
+        );
+        let cross = b.validate_destination(dest);
+        assert_eq!(cross.status, DestinationStatus::WrongNetwork);
+        assert!(
+            cross.reason.contains("mock-a") && cross.reason.contains("mock-b"),
+            "the reason must name both networks so a person can see the mix-up: {}",
+            cross.reason
+        );
+    }
+
+    #[test]
+    fn validate_destination_is_pure_and_ignores_surrounding_whitespace() {
+        // Pure: same input, same verdict, no clock and no I/O anywhere in it —
+        // this has to hold in a browser and on an offline gate device.
+        let rail = mock();
+        let once = rail.validate_destination(" mock:wallet:alice ");
+        let twice = rail.validate_destination("mock:wallet:alice");
+        assert_eq!(once, twice);
+        assert_eq!(once.status, DestinationStatus::StructurallyValid);
+    }
+
+    #[tokio::test]
+    async fn charge_does_not_enforce_the_mock_address_grammar() {
+        // Documented on `validate_destination`: MockRail stands in for both
+        // settlement classes and consumers hand it arbitrary destination
+        // strings, so the synthetic grammar governs the verdict only. A real
+        // rail parses in both places.
+        let rail = mock();
+        let r = rail.charge(&req(100, "USDC", "order-9")).await.unwrap();
+        assert!(rail.verify(&r).await.unwrap());
+        assert!(rail.validate_destination("dest-anything").is_refusal());
     }
 }

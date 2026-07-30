@@ -15,7 +15,7 @@
 //! process has never heard of it. Per-rail registration is **unwritten**.
 //!
 //! What *is* real is everything around it: the loopback bind, the fail-closed
-//! token gate, the error mapping, all five endpoints, and their round-trips
+//! token gate, the error mapping, all six endpoints, and their round-trips
 //! over a real socket in `tests/`. Those are exercised against `MockRail`, and
 //! `MockRail` is a genuine [`patala_core::PaymentRail`] with a genuine
 //! fail-closed `verify` — so the HTTP surface is proven, and the rail set

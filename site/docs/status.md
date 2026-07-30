@@ -3,11 +3,11 @@
 ## Foundational — built and unit-tested, rails unverified against live networks
 
 The core, the rails and the polyglot layer are all in the repo. `make check`
-runs two passes and both are gates: **168 offline tests** in the default
-workspace build, and **547 more** once every processor feature is compiled in
-(`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
---features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
-chain and no processor.
+runs two passes and both are gates: **249 offline tests** across the seven
+landed crates in the default workspace build, and **572 more** once every
+processor feature is compiled in (`cargo test -p patala-fiat --all-features` +
+`cargo test -p patala-py --features fiat-all`). Clippy-clean, fmt-clean; the
+default build pulls no chain and no processor.
 
 What that does *not* mean: no rail has been run against a live network or a
 live merchant account from here — each says so plainly in its own README, and
@@ -23,16 +23,81 @@ and a real socket.
 
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
-| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam | — | 19 + 1 doctest | offline by design |
-| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 533 (all features) | no — no live merchant account |
-| `patala-solana` | SPL-USDC on Solana, ported from an earlier in-house implementation | non-custodial, final | 41 (+1 gated) + 1 doctest | no — testnet step in its README |
-| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 29 (+1 gated) + 1 doctest | no — testnet step in its README |
-| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 20 | no — needs a live instance |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 14 Rust + 24 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
-| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 9 (6 HTTP round-trips + 3 unit) | executed |
+| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 35 + 2 doctests | offline by design |
+| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 552 (all features) | no — no live merchant account |
+| `patala-solana` | SPL-USDC on Solana, ported from an earlier in-house implementation | non-custodial, final | 56 (+1 gated) + 2 doctests | no — testnet step in its README |
+| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 47 (+1 gated) + 2 doctests | no — testnet step in its README |
+| `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | no — needs a live instance |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 34 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
+
+## Destination validation by rail
+
+`PaymentRail::validate_destination` answers, **offline and purely**, what a rail
+can honestly say about a payout address before any money moves. It is the
+pre-flight step of the compensating-payment flow in
+[`docs/compensating-payments.md`](https://github.com/vul-os/patala/blob/main/docs/compensating-payments.md).
+Every row below is a claim you can check against the cited file.
+
+The two crypto rails pay to a real address, so they can reach the top of the
+scale. Everything else has a `destination` that is **not a place money goes**,
+so its honest ceiling is `Unknown`.
+
+| Rail | What `destination` is | Checks it performs offline | Can return | Never returns |
+|---|---|---|---|---|
+| **Solana** (`patala-solana/src/destination.rs`) | a wallet address | base58 alphabet (naming the look-alike character that was probably meant), 32-byte decoded length, whether the bytes are an on-curve Ed25519 point (an off-curve account is a PDA — including every canonical associated token account — and cannot sign), and a table of well-known programs and mints | `Malformed`, `WrongNetwork`, `NotAWallet`, `StructurallyValid` | `Unknown` — this rail always has an answer |
+| **Stellar** (`patala-stellar/src/destination.rs`) | a wallet address | StrKey decode: version byte, base32 alphabet, length, CRC-16 checksum; then the key *type* — `G…` account vs `M…` muxed, `C…` contract, and the other StrKey kinds | `Malformed`, `WrongNetwork`, `NotAWallet`, `StructurallyValid` | `Unknown` — this rail always has an answer |
+| **Mock** (`patala-core/src/mock.rs`) | a synthetic `<network>:<kind>:<label>` grammar — **not** any real chain's format | exists so a consumer can build and test its whole payout UI, every verdict included, with no chain reachable | all five (`Unknown` via `MockRail::without_destination_checks`) | — |
+| **Fiat — 11 redirect-URL rails** (`patala-fiat`: adyen, checkoutcom, iyzico, mercadopago, mollie, payfast, paypal, square, stripe, xendit, yoco) | the URL the **buyer's browser** returns to after hosted checkout | absolute-URL format (every one of these processors documents the field that way), plus a pasted private key or wallet address refused **by name** | `Malformed`, `WrongNetwork`, `Unknown` | **`StructurallyValid`**, `NotAWallet` |
+| **Fiat — 4 buyer-email rails** (`patala-fiat`: flutterwave, midtrans, paystack, payu) | the **buyer's email address** | email format, plus the same private-key / wallet-address refusals | `Malformed`, `WrongNetwork`, `Unknown` | **`StructurallyValid`**, `NotAWallet` |
+| **Fiat — 6 ignore-it rails** (`patala-fiat`: btcpay, coinbasecommerce, lnbits, opennode, razorpay, manual) | **nothing** — the rail never reads it; `PayRequest::validate()` merely requires it be non-empty | blank only | `Malformed` (blank), `Unknown` | **`StructurallyValid`**, `WrongNetwork`, `NotAWallet` |
+| **Hyperswitch** (`patala-hyperswitch/src/rail.rs`) | Hyperswitch's `payment_token` — a reference to a payment method tokenized out of band | blank only | `Malformed` (blank), `Unknown` | **`StructurallyValid`**, `WrongNetwork`, `NotAWallet` |
+
+The fiat and Hyperswitch rows are not a gap, and their `Unknown` ceiling is the
+point rather than a limitation. `StructurallyValid` means "this is a well-formed
+address for the network this rail pays on". A fiat rail pays on no network and
+its `destination` is a redirect URL, an email, or a string it ignores — so
+claiming that verdict would tell a caller a `success_url` had been vetted as
+somewhere to send a customer's money. It has not, and it is not. Those rails
+still check what *is* decidable about their own field, so a wallet address or a
+Stellar secret seed pasted into a Stripe `success_url` is refused by name at the
+moment someone types it rather than becoming a charge the processor rejects.
+
+Giving a customer their money back differs by class, and the table above is why:
+on the **fiat** rails (all `CustodialReversible`) it is `refund` — the money goes
+back the way it came and no destination is involved. On the **crypto** rails
+(`NonCustodialFinal`) `refund` is `Unsupported` and it is the compensating
+payment described above.
+
+`patala-core`'s trait default — inherited by any rail that has not written a
+parser — is `Unknown` for anything non-empty and `Malformed` for a blank string.
+It is deliberately not `StructurallyValid`: a permissive default would silently
+bless every parser-less rail. Guards fail closed, so a blank destination is a
+refusal on every rail in the table.
+
+**No rail — including Solana and Stellar — reports that an address is safe.**
+The best available status is `StructurallyValid`, which means *no decidable
+defect was found*, not *this is safe to send to*. patala does not detect whether
+an address belongs to an exchange and will not: that needs commercial
+address-attribution data (Chainalysis, TRM) this workspace refuses to depend on,
+and a heuristic would be worse than nothing. Every verdict from every rail
+therefore carries `human_must_confirm: true` and the same
+`exchange_deposit_caveat` string, and there is no API to skip that step.
+
+Reachability, which is the part that has been silently missing before in this
+repo: the check is a **trait method**, so it is reachable through
+`PatalaRail.validate_destination` on the UniFFI surface (Python, Go, Swift,
+Kotlin) and through `POST /v1/rails/:rail_id/validate-destination` on the
+sidecar, with all five verdict variants and their reason strings intact. All
+five are asserted to survive each boundary distinctly — `patala-py`'s Rust
+tests, `patala-go/bindingtest/destination_test.go`,
+`patala-sidecar/tests/validate_destination.rs`, and the Python smoke test.
+
+`patala-sui` is in the tree but not yet landed; it is excluded from the counts
+and rows above rather than described from its unfinished state.
 
 One caveat that table would otherwise hide: **the sidecar's rail registry is
-still mock-only.** The server, its auth, its error mapping and all five
+still mock-only.** The server, its auth, its error mapping and all six
 endpoints are real and exercised over a real socket, but `default_registry()`
 registers exactly one rail — `"mock"`. Reaching a Solana, Stellar, Hyperswitch
 or fiat rail *through the sidecar* needs the per-rail registration its

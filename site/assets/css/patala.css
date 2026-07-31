@@ -263,6 +263,11 @@ html.js .rv.in{opacity:1;transform:none}
 }
 
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
+/* A second, wider measure. The two sections that carry a real table — the
+   rail ledger and the evidence ladder — get it, so the page has a change of
+   SCALE between argument and data rather than nine sections at one width.
+   Prose inside them keeps its own max-width, so the measure never widens. */
+.wrap.wide{max-width:1320px}
 @media(max-width:480px){.wrap{padding:0 18px}}
 
 .disp{font-family:var(--disp);font-weight:700}
@@ -394,6 +399,7 @@ footer.site .fwrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:spa
    credit link to their left), so — same 44px hit-area rule as the header's
    .nlinks a.nl — each gets a real tap target via inline-flex + min-height,
    not just its 13px visible text line. */
+footer.site .suite{display:block;margin-top:6px;color:var(--ink-faint)}
 footer.site .flinks{display:flex;gap:8px;flex-wrap:wrap}
 /* Real 44×44 hit areas, not just 44px tall: "Docs" is only 31px of glyphs, so
    the target is grown with padding (and the visual rhythm restored by shrinking

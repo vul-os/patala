@@ -55,8 +55,8 @@
    nothing beyond this origin is ever requested.
    ═══════════════════════════════════════════════════════════════════════════ */
   /* Docs shell */
-  .docs-shell{display:grid;grid-template-columns:236px 1fr;gap:var(--sp-6);align-items:start;padding:var(--sp-5) 0 80px}
-  @media(max-width:860px){.docs-shell{grid-template-columns:1fr;padding-top:var(--sp-4)}}
+  .docs-shell{display:grid;grid-template-columns:236px minmax(0,1fr);gap:var(--sp-6);align-items:start;padding:var(--sp-5) 0 80px}
+  @media(max-width:860px){.docs-shell{grid-template-columns:minmax(0,1fr);padding-top:var(--sp-4)}}
   .docs-nav{position:sticky;top:84px;border:1px solid var(--hair);background:var(--surface);padding:6px}
   @media(max-width:860px){.docs-nav{position:static;margin-bottom:var(--sp-2)}}
   .docs-nav .label{

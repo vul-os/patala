@@ -134,6 +134,30 @@
 <script src="./assets/vendor/highlight.core.js"></script>
 </head>
 <body>
+<!-- Language glyphs — the same original, achromatic, non-trademark marks the
+     landing defines; see the long note beside the copy in index.html. -->
+<svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <g id="lg-base" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></g>
+  </defs>
+  <symbol id="lg-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.6 12 16.3 19.45H7.7L3.4 12 7.7 4.55h8.6Z"/><circle cx="12" cy="12" r="3.4"/>
+  </symbol>
+  <symbol id="lg-python" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.2 4.6H9.5a4.3 4.3 0 0 0 0 8.6h5"/>
+    <path d="M9.8 19.4h4.7a4.3 4.3 0 0 0 0-8.6h-5"/>
+  </symbol>
+  <symbol id="lg-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.6 5.8v12.4"/><path d="M8.2 6.6 13.6 12l-5.4 5.4"/><path d="M14.4 6.6 19.8 12l-5.4 5.4"/>
+  </symbol>
+  <symbol id="lg-toml" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.6 5.2H5.6v13.6h3"/><path d="M15.4 5.2h3v13.6h-3"/>
+    <path d="M10 9.9h4"/><path d="M10 14.1h2.4"/>
+  </symbol>
+  <symbol id="lg-shell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.4 7.2 10.9 12l-4.5 4.8"/><path d="M12.8 16.8h5"/>
+  </symbol>
+</svg>
 <nav class="top"><div class="wrap">
   <a class="brand" href="./index.html">
     <img class="cowrie" src="./assets/logo.svg" alt="" width="24" height="24">
@@ -242,7 +266,24 @@ function dressContent(){
     box.className = 'codeblock';
     var head = document.createElement('div');
     head.className = 'cb-head';
-    head.innerHTML = '<span class="dots"><span></span><span></span><span></span></span><span>'+lang+'</span>';
+    // The same header the landing hand-writes: an achromatic language chip
+    // with an original glyph, then a copy control that really copies. Only the
+    // five languages this site actually ships have a drawn glyph; anything
+    // else falls back to the chip's word alone rather than a wrong picture.
+    var GLYPH = { rust:'rust', python:'python', py:'python', go:'go',
+                  golang:'go', toml:'toml', ini:'toml', bash:'shell',
+                  sh:'shell', shell:'shell', console:'shell' };
+    var sym = GLYPH[lang];
+    head.innerHTML =
+      '<span class="lang">' +
+        (sym ? '<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-'+sym+'"/></svg>' : '') +
+        lang +
+      '</span>' +
+      '<span class="cb-path"></span>' +
+      '<button class="cb-copy" type="button" aria-label="Copy this code">' +
+        '<span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span>' +
+        '<span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span>' +
+      '</button>';
     pre.parentNode.insertBefore(box, pre);
     box.appendChild(head);
     box.appendChild(pre);
@@ -319,6 +360,43 @@ load(current());
     sync();
   });
 })();
+// Copy-to-clipboard on every code block. Wired from the DOM rather than
+// hard-coded per block, so docs.html's generated blocks get it too by simply
+// including this file's twin. Reads the ORIGINAL text via textContent, which
+// is the un-highlighted source (highlight.js only wraps it in spans), so what
+// lands on the clipboard is exactly what is on screen and nothing else.
+// execCommand is kept as the fallback path because navigator.clipboard is
+// unavailable on a plain http:// origin in some browsers, and a copy button
+// that silently does nothing is worse than no copy button.
+(function(){
+  function copy(text){
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise(function(res, rej){
+      var ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly','');
+      ta.style.cssText='position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(ta);
+      ok?res():rej(new Error('copy failed'));
+    });
+  }
+  document.addEventListener('click', function(ev){
+    var btn=ev.target.closest ? ev.target.closest('.cb-copy') : null;
+    if(!btn) return;
+    var block=btn.closest('.codeblock');
+    var code=block && block.querySelector('pre code');
+    if(!code) return;
+    copy(code.textContent).then(function(){
+      btn.setAttribute('data-state','done');
+      clearTimeout(btn._t);
+      btn._t=setTimeout(function(){ btn.removeAttribute('data-state'); }, 1600);
+    }).catch(function(){
+      btn.setAttribute('aria-label','Copy failed — select the code and copy manually');
+    });
+  });
+})();
+
 </script>
 </body>
 </html>

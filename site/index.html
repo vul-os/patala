@@ -568,15 +568,24 @@
   }
 
   .cb-panel{margin-top:34px}
-  .lang-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  /* The tab strip is a ruled selector, not a row of pills: one hairline runs
+     under the whole strip and the selected tab sits on a vermilion underscore.
+     It reads as an index into one artifact rather than four separate buttons,
+     which is what the four panes actually are. */
+  .lang-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--hair-strong);margin-bottom:0}
   .lang-tab{
-    font-family:var(--mono);font-size:12px;padding:7px 15px;border-radius:5px;border:1px solid var(--hair-strong);
-    background:var(--surface);color:var(--ink-dim);cursor:pointer;transition:.15s;min-height:44px;min-width:44px;
+    display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;padding:0 14px;
+    border:0;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:4px 4px 0 0;
+    background:transparent;color:var(--ink-faint);cursor:pointer;transition:.15s;min-height:44px;
   }
-  .lang-tab:hover{color:var(--ink);border-color:var(--ink-faint)}
-  .lang-tab[aria-selected="true"]{background:var(--vermilion);border-color:var(--vermilion);color:var(--vermilion-ink);font-weight:500}
-  .lang-pane{display:none}
+  .lang-tab svg{width:16px;height:16px;flex:none;display:block}
+  .lang-tab:hover{color:var(--ink-dim);background:var(--surface)}
+  .lang-tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--vermilion-deep);font-weight:500}
+  .lang-pane{display:none;padding-top:18px}
   .lang-pane.active{display:block}
+  .cb-note{margin-top:12px;font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:70ch}
+  .cb-note b{color:var(--ink);font-weight:600}
+  .cb-note code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
 
   /* ══ 06 · PROOF (instrument band) ══════════════════════════════════════ */
   .proof-note{font-size:13px;color:var(--ink-faint);margin-top:8px;display:block}
@@ -631,6 +640,47 @@
 </style>
 </head>
 <body>
+<!-- ═══ LANGUAGE GLYPHS ═══════════════════════════════════════════════════
+     Five marks in one visual family (24-box, 1.8 stroke, round caps/joins —
+     the same family as the rail icons above), drawn here specifically for this
+     page. NONE of them is a reproduction of a language's real logo: the Python,
+     Go and Rust marks are trademarks of the PSF, Google and the Rust
+     Foundation respectively, and several of those trademark policies forbid
+     redistributing or modifying the mark at all. So none is used, hotlinked or
+     redrawn. These are neutral, original glyphs standing for an IDEA the
+     language is known by, and each is paired with the language's plain name in
+     text so recognition never depends on the drawing alone:
+       rust   a machined hex nut       — the engineered-metal register, and
+                                         explicitly NOT the Rust gear-and-R
+       python two interlocking coils   — intertwined snakes, drawn as one
+                                         open stroke each, no eyes, no blocks
+       go     a fixed origin bar and two chevrons — dispatch, speed, goroutines
+       toml   two brackets round a key/value pair — a [section] of config
+       shell  a prompt chevron and an input rule  — universal, owned by nobody
+     They are also ACHROMATIC by design: on this page hue is reserved for
+     settlement class and evidence level, and a language is neither. -->
+<svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <g id="lg-base" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></g>
+  </defs>
+  <symbol id="lg-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20.6 12 16.3 19.45H7.7L3.4 12 7.7 4.55h8.6Z"/><circle cx="12" cy="12" r="3.4"/>
+  </symbol>
+  <symbol id="lg-python" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14.2 4.6H9.5a4.3 4.3 0 0 0 0 8.6h5"/>
+    <path d="M9.8 19.4h4.7a4.3 4.3 0 0 0 0-8.6h-5"/>
+  </symbol>
+  <symbol id="lg-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3.6 5.8v12.4"/><path d="M8.2 6.6 13.6 12l-5.4 5.4"/><path d="M14.4 6.6 19.8 12l-5.4 5.4"/>
+  </symbol>
+  <symbol id="lg-toml" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.6 5.2H5.6v13.6h3"/><path d="M15.4 5.2h3v13.6h-3"/>
+    <path d="M10 9.9h4"/><path d="M10 14.1h2.4"/>
+  </symbol>
+  <symbol id="lg-shell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.4 7.2 10.9 12l-4.5 4.8"/><path d="M12.8 16.8h5"/>
+  </symbol>
+</svg>
 <nav class="top"><div class="wrap">
   <a class="brand" href="#top">
     <img class="cowrie" src="./assets/logo.svg" alt="" width="24" height="24">
@@ -795,7 +845,7 @@
         <div class="host-foot"><b>One key, one process.</b> Every other process in a polyglot stack reaches the substrate over loopback HTTP — none of them ever holds the key, and nothing off this host can reach the sidecar at all.</div>
       </div>
       <div class="codeblock" style="margin-top:22px">
-        <div class="cb-head"><span class="dots"><span></span><span></span><span></span></span><span>~/patala</span></div>
+        <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-shell"/></svg>shell</span><span class="cb-path">~/patala</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
         <pre><code class="language-bash">$ ls
 patala-core/         patala-hyperswitch/   patala-sidecar/
 patala-fiat/         patala-py/            patala-solana/
@@ -1057,15 +1107,15 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
 
   <div class="cb-panel">
     <div class="lang-tabs" role="tablist" aria-label="The same charge round trip, in four languages">
-      <button class="lang-tab" role="tab" type="button" data-pane="rust" aria-selected="true">Rust</button>
-      <button class="lang-tab" role="tab" type="button" data-pane="python" aria-selected="false">Python</button>
-      <button class="lang-tab" role="tab" type="button" data-pane="go" aria-selected="false">Go</button>
-      <button class="lang-tab" role="tab" type="button" data-pane="toml" aria-selected="false">Cargo.toml</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="rust" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-rust"/></svg>Rust</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="python" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-python"/></svg>Python</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="go" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-go"/></svg>Go</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="toml" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-toml"/></svg>Cargo.toml</button>
     </div>
 
     <div class="lang-pane active" data-pane="rust">
       <div class="codeblock">
-        <div class="cb-head"><span>patala-core — the seam</span><span>src/lib.rs</span></div>
+        <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-rust"/></svg>rust</span><span class="cb-path">patala-core/src/lib.rs</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
         <pre><code class="language-rust">// The settlement class lives in the type — never flattened to a bool.
 pub enum RailClass { CustodialReversible, NonCustodialFinal }
 
@@ -1079,11 +1129,12 @@ pub trait PaymentRail {
     async fn verify_webhook(&amp;self, d: &amp;WebhookDelivery) -&gt; Result&lt;WebhookEvent&gt;;
 }</code></pre>
       </div>
+      <p class="cb-note">The seam itself — one trait, six methods. Everything else in this repo is an implementation of it.</p>
     </div>
 
     <div class="lang-pane" data-pane="python">
       <div class="codeblock">
-        <div class="cb-head"><span>patala-py — the same round trip</span><span>examples/smoke_test.py</span></div>
+        <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-python"/></svg>python</span><span class="cb-path">patala-py/examples/smoke_test.py</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
         <pre><code class="language-python">from patala_py import PatalaRail, PayRequest, RailClass
 
 rail = PatalaRail.new_mock(
@@ -1104,11 +1155,12 @@ req = PayRequest(
 receipt = rail.charge(req)
 assert rail.verify(receipt) is True   # fail-closed: a tampered receipt verifies False</code></pre>
       </div>
+      <p class="cb-note">The same charge round trip as the Rust above, over UniFFI — synchronous, no <code>asyncio</code> loop.</p>
     </div>
 
     <div class="lang-pane" data-pane="go">
       <div class="codeblock">
-        <div class="cb-head"><span>patala-go — the same round trip</span><span>examples/roundtrip/main.go</span></div>
+        <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-go"/></svg>go</span><span class="cb-path">patala-go/examples/roundtrip/main.go</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
         <pre><code class="language-go">import patala "github.com/vul-os/patala/patala-go/bindings/patala"
 
 rail := patala.PatalaRailNewMock(
@@ -1125,16 +1177,18 @@ req := patala.PayRequest{
 receipt := must(rail.Charge(req))
 valid := must(rail.Verify(receipt)) // fail-closed: a tampered receipt verifies false</code></pre>
       </div>
+      <p class="cb-note">The same charge round trip again, over cgo — the same generated UniFFI surface.</p>
     </div>
 
     <div class="lang-pane" data-pane="toml">
       <div class="codeblock">
-        <div class="cb-head"><span>Vendoring it — nothing is published on crates.io</span><span>Cargo.toml</span></div>
+        <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-toml"/></svg>toml</span><span class="cb-path">Cargo.toml</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
         <pre><code class="language-ini">[dependencies]
 # SECURITY.md: patala publishes no artifacts today — vendor by path or git.
 patala-core    = { git = "https://github.com/vul-os/patala" }
 patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail</code></pre>
       </div>
+      <p class="cb-note">Vendoring it: <b>nothing is published on crates.io</b>. Depend by path or by git, and opt into rails one feature at a time.</p>
     </div>
   </div>
 </div></section>
@@ -1229,6 +1283,43 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
   if (window.hljs) {
     document.querySelectorAll('pre code').forEach(function(el){ hljs.highlightElement(el); });
   }
+})();
+
+// Copy-to-clipboard on every code block. Wired from the DOM rather than
+// hard-coded per block, so docs.html's generated blocks get it too by simply
+// including this file's twin. Reads the ORIGINAL text via textContent, which
+// is the un-highlighted source (highlight.js only wraps it in spans), so what
+// lands on the clipboard is exactly what is on screen and nothing else.
+// execCommand is kept as the fallback path because navigator.clipboard is
+// unavailable on a plain http:// origin in some browsers, and a copy button
+// that silently does nothing is worse than no copy button.
+(function(){
+  function copy(text){
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
+    return new Promise(function(res, rej){
+      var ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly','');
+      ta.style.cssText='position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+      document.body.removeChild(ta);
+      ok?res():rej(new Error('copy failed'));
+    });
+  }
+  document.addEventListener('click', function(ev){
+    var btn=ev.target.closest ? ev.target.closest('.cb-copy') : null;
+    if(!btn) return;
+    var block=btn.closest('.codeblock');
+    var code=block && block.querySelector('pre code');
+    if(!code) return;
+    copy(code.textContent).then(function(){
+      btn.setAttribute('data-state','done');
+      clearTimeout(btn._t);
+      btn._t=setTimeout(function(){ btn.removeAttribute('data-state'); }, 1600);
+    }).catch(function(){
+      btn.setAttribute('aria-label','Copy failed — select the code and copy manually');
+    });
+  });
 })();
 
 // Language tabs for the "same round trip, four languages" panel.

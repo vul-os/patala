@@ -449,78 +449,110 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 .term pre .ok{color:var(--settled)}
 
 /* ---- syntax highlighting (highlight.js core, vendored — see ../vendor/) ----
-   The code SURFACE is fixed dark in BOTH page themes, deliberately: real
-   editors and terminals don't repaint for a "paper" mode, and a shared,
-   always-dark code block is what makes screenshots, docs and this theme read
-   as one family across every Vulos project. Only the CHROME around a block
-   (the panel border, the filename bar) follows --hair/--surface as normal.
 
-   Palette — shared across the Vulos suite so Rust/Go/Python/TOML read as one
-   system wherever they appear. Every value is checked against the surface,
-   #0C1116, with the WCAG relative-luminance contrast formula:
-     default text  #C8D4E3  12.63:1
-     comment       #6B7C93   4.45:1  <- measured short of the 4.5:1 floor by
-                                         0.05; kept verbatim because it is the
-                                         shared cross-project token (changing
-                                         it here would desync this page from
-                                         its siblings) and reserved for the
-                                         lowest-stakes class (comments); flagged
-                                         for the family, not silently patched.
-     keyword       #C4B5FD  10.27:1
-     string        #5EEAD4  12.82:1
-     number        #FBBF24  11.36:1
-     function      #7DD3FC  11.37:1
-     property      #93C5FD  10.52:1
-     variable      #FDA4AF  10.03:1
-     meta          #FDBA74  11.24:1
-     punctuation   #8195AC   6.17:1
+   THE SURFACE NOW FOLLOWS THE PAGE THEME, and that is a reversal of the
+   previous rule ("a terminal doesn't repaint for paper mode"). The reversal is
+   deliberate: this page draws a hard line between the INSTRUMENT and the
+   REGISTER, and these blocks are not terminals — they are SOURCE, which is
+   register. The genuinely captured terminal output still never repaints: every
+   .webp in section 06 is a dark pane and it lives inside .band, which stays a
+   dark instrument panel in both themes. So the rule the page actually keeps is
+   "captured output is always the instrument; source you would read is always
+   the paper", which is stricter than the old one and produces a light theme
+   that is designed rather than one carrying a black slab through it.
 
-   Class inventory — every hljs-* scope actually emitted by the five vendored
-   grammars (rust, go, python, ini/toml, bash) plus json, over the code this
-   site actually ships, is mapped below by hand; nothing is left to inherit
-   the default colour by accident:
-     .hljs-comment                          -> comment (italic)
-     .hljs-doctag                           -> comment (bold, upright — a
-                                                 tag *inside* a comment, e.g.
-                                                 TODO/SAFETY, needs to stand
-                                                 out from the prose around it)
-     .hljs-keyword, .hljs-keyword.control_  -> keyword
-     .hljs-string, .hljs-meta-string        -> string
-     .hljs-number, .hljs-literal            -> number (incl. true/false/None/nil)
-     .hljs-title (+ .function_/.class_/.invoke__ sub-scopes, .hljs-name)
-                                             -> function (fn/method/command
-                                                 names, TOML [section] headers,
-                                                 struct/enum titles)
-     .hljs-section                          -> function (TOML/INI headers
-                                                 are titles for their block)
-     .hljs-type                             -> property (type annotations —
-                                                 kept distinct from a title so
-                                                 `struct Foo` and `foo: Type`
-                                                 don't collapse to one colour)
-     .hljs-attr, .hljs-property             -> property (TOML/object keys)
-     .hljs-variable, .hljs-params           -> variable (bindings, fn params,
-                                                 $SHELL_VARS)
+   TWO PALETTES, BOTH MEASURED. Every value below is checked with the WCAG
+   relative-luminance formula against its own theme's code surface. The floor
+   is 4.5:1 and nothing is under it — including comments, which under the
+   previous shared palette sat at 4.45:1 and were knowingly shipped short.
+
+   The previous palette's real defect was not hue, it was VALUE: eight tokens
+   all landing between 10.0:1 and 12.8:1, so keyword, string, number, function
+   and property had near-identical weight and the eye could not rank them. The
+   palette below is built as a hierarchy instead, so a block reads before it is
+   parsed — payload brightest, names next, structure below that, and the two
+   classes that carry no meaning (comments, punctuation) dimmest:
+
+   DARK  code surface #0A0E1A          LIGHT code surface #F4F7FD
+     text      #C9D4E5  12.87:1          text      #182238  14.77:1
+     type/attr #6FD2EC  11.10:1          keyword   #6D28C4   7.11:1
+     number    #EFAE4E   9.93:1          function  #134FB0   7.06:1
+     string    #3FCEAA   9.74:1          meta      #8A3E12   7.04:1
+     meta      #EFA06B   9.09:1          type/attr #0B5C76   6.97:1
+     variable  #F58FA4   8.57:1          variable  #A32348   6.77:1
+     function  #63B0F2   8.27:1          number    #8A4B00   6.34:1
+     keyword   #BC8CF5   7.53:1          string    #046A5A   6.09:1
+     chrome    #8592AC   6.15:1          chrome    #5A6683   5.34:1
+     comment   #7F8CA8   5.70:1          comment   #5A6683   5.34:1
+     punct     #77849F   5.12:1          punct     #58647E   5.11:1
+
+   Seven hues, not ten: `type`, `attr` and `property` are one colour, because
+   all three are declared NAMES and splitting them into two near-identical
+   blues was the single biggest source of the old palette's mush.
+
+   Class inventory — every hljs-* scope the five vendored grammars (rust, go,
+   python, ini/toml, bash) plus json actually emit over the code this site
+   ships is mapped by hand below; nothing inherits the default by accident.
+     .hljs-comment                     -> comment (italic)
+     .hljs-doctag                      -> comment, upright + bold (a TODO or
+                                            SAFETY tag inside a comment must
+                                            stand out from the prose round it)
+     .hljs-keyword, .keyword.control_  -> keyword       (structure)
+     .hljs-string, .hljs-meta-string   -> string        (payload)
+     .hljs-number, .hljs-literal       -> number        (payload; true/false/
+                                            None/nil are literals)
+     .hljs-title (+ .function_/.class_/.invoke__), .hljs-name, .hljs-section
+                                       -> function      (names you call, and
+                                            TOML [section] headers, which are
+                                            the title of their block)
+     .hljs-type, .hljs-attr, .hljs-property
+                                       -> type          (names you declare)
+     .hljs-variable, .hljs-params      -> variable      (bindings, params,
+                                            $SHELL_VARS)
      .hljs-meta, .hljs-built_in, .hljs-symbol
-                                             -> meta (attributes/derives,
-                                                 macros, built-in fns/types,
-                                                 lifetimes — the palette's own
-                                                 "meta" bucket names all four)
-     .hljs-punctuation, .hljs-operator      -> punctuation
-     .hljs-subst                            -> default text (an interpolated
-                                                 expression inside a string is
-                                                 still just code, not a string)
+                                       -> meta          (attributes/derives,
+                                            macros, built-ins, lifetimes)
+     .hljs-punctuation, .hljs-operator -> punct
+     .hljs-subst                       -> default text (an interpolated
+                                            expression inside a string is code)
+
+   NOTE ON HUE AND THE SCHEMA. Everywhere else on this page hue carries exactly
+   two variables (settlement class, evidence level) and vermilion is reserved
+   for patala itself. Inside a code block hue means something different, so the
+   block is fenced off from the schema in two ways: it is the only object on
+   the page with its own ground, and the LANGUAGE CHIPS in its header are
+   deliberately ACHROMATIC — a language is not a settlement class and not an
+   evidence level, so it is not allowed a colour. Language identity is carried
+   by an original drawn glyph plus the language's name, never by hue.
    ---------------------------------------------------------------------- */
 :root{
-  --code-surface:#0C1116; --code-text:#C8D4E3; --code-comment:#6B7C93;
-  --code-keyword:#C4B5FD; --code-string:#5EEAD4; --code-number:#FBBF24;
-  --code-function:#7DD3FC; --code-property:#93C5FD; --code-variable:#FDA4AF;
-  --code-meta:#FDBA74; --code-punct:#8195AC;
-  /* The block's own chrome (filename bar) is NOT a code token and must not
-     borrow --code-comment: that value is the shared cross-project token,
-     pinned at 4.45:1 (see above) and reserved for the lowest-stakes class.
-     A filename is real UI text, so it gets its own value, measured 5.52:1 on
-     the same #0C1116 surface. */
-  --code-chrome:#7A8CA3;
+  --code-surface:#0A0E1A; --code-edge:rgba(238,241,248,.13); --code-bar:rgba(238,241,248,.03);
+  --code-text:#C9D4E5; --code-comment:#7F8CA8; --code-punct:#77849F;
+  --code-keyword:#BC8CF5; --code-string:#3FCEAA; --code-number:#EFAE4E;
+  --code-function:#63B0F2; --code-type:#6FD2EC;
+  --code-variable:#F58FA4; --code-meta:#EFA06B;
+  /* The block's own chrome (file path, chip) is UI text, not a code token, so
+     it never borrows --code-comment. Measured on its own ground. */
+  --code-chrome:#8592AC; --code-chip:#96A3BD;
+}
+:root[data-theme="light"]{
+  --code-surface:#F4F7FD; --code-edge:rgba(20,26,46,.16); --code-bar:rgba(20,26,46,.028);
+  --code-text:#182238; --code-comment:#5A6683; --code-punct:#58647E;
+  --code-keyword:#6D28C4; --code-string:#046A5A; --code-number:#8A4B00;
+  --code-function:#134FB0; --code-type:#0B5C76;
+  --code-variable:#A32348; --code-meta:#8A3E12;
+  --code-chrome:#5A6683; --code-chip:#4A5673;
+}
+/* Inside the instrument band the PAGE may be light but the ground is not, so
+   the block re-declares the dark palette on itself. Without this a light-theme
+   reader gets a paper code block sitting on a near-black panel. */
+.band{
+  --code-surface:#080C16; --code-edge:rgba(238,241,248,.13); --code-bar:rgba(238,241,248,.03);
+  --code-text:#C9D4E5; --code-comment:#7F8CA8; --code-punct:#77849F;
+  --code-keyword:#BC8CF5; --code-string:#3FCEAA; --code-number:#EFAE4E;
+  --code-function:#63B0F2; --code-type:#6FD2EC;
+  --code-variable:#F58FA4; --code-meta:#EFA06B;
+  --code-chrome:#8592AC; --code-chip:#96A3BD;
 }
 .hljs{display:block;color:var(--code-text);background:transparent}
 .hljs-comment{color:var(--code-comment);font-style:italic}
@@ -528,30 +560,71 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 .hljs-keyword,.hljs-keyword.control_{color:var(--code-keyword)}
 .hljs-string,.hljs-meta-string{color:var(--code-string)}
 .hljs-number,.hljs-literal{color:var(--code-number)}
-.hljs-title,.hljs-title.class_,.hljs-title.function_,.hljs-title.function_.invoke__,.hljs-name{color:var(--code-function)}
-.hljs-section{color:var(--code-function);font-weight:600}
-.hljs-type{color:var(--code-property)}
-.hljs-attr,.hljs-property{color:var(--code-property)}
+.hljs-title,.hljs-title.class_,.hljs-title.function_,.hljs-title.function_.invoke__,
+.hljs-name,.hljs-section{color:var(--code-function)}
+.hljs-section{font-weight:600}
+.hljs-type,.hljs-attr,.hljs-property{color:var(--code-type)}
 .hljs-variable,.hljs-params{color:var(--code-variable)}
 .hljs-meta,.hljs-built_in,.hljs-symbol{color:var(--code-meta)}
 .hljs-punctuation,.hljs-operator{color:var(--code-punct)}
 .hljs-subst{color:var(--code-text)}
 
-/* ---- shared code-block chrome — the one component both pages hand a
-   fenced/hard-coded snippet to, so the docs viewer and the landing's own
-   examples are visibly the same object. Fixed dark surface (see above);
-   only the frame follows the page theme. ---- */
-.codeblock{border:1px solid var(--hair-strong);background:var(--code-surface);border-radius:3px;overflow:hidden;min-width:0}
-.codeblock .cb-head{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 16px;
-  border-bottom:1px solid rgba(238,241,248,.09);background:rgba(238,241,248,.025);
-  font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--code-chrome);
+/* ---- the code block: one component, both pages ---------------------------
+   A block is presented as an ARTIFACT, not a paragraph: it has a header that
+   names the language with a drawn glyph, states where the code lives, and
+   offers a copy control that actually copies. The header is a real flex row
+   that wraps rather than truncating, so at 320px the path drops to its own
+   line instead of being clipped or pushing the block wide. */
+.codeblock{
+  border:1px solid var(--code-edge);background:var(--code-surface);border-radius:6px;
+  overflow:hidden;min-width:0;
 }
-.codeblock .cb-head .dots{display:flex;gap:5px;flex:none}
-.codeblock .cb-head .dots span{width:7px;height:7px;border-radius:50%;background:rgba(238,241,248,.14);display:block}
-.codeblock pre{margin:0;padding:18px 20px;overflow-x:auto;overscroll-behavior-x:contain;font-family:var(--mono);font-size:13px;line-height:1.72;color:var(--code-text)}
+.codeblock .cb-head{
+  display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:9px 12px 9px 13px;
+  border-bottom:1px solid var(--code-edge);background:var(--code-bar);
+  font-family:var(--mono);font-size:12px;color:var(--code-chrome);min-width:0;
+}
+/* The language chip. ACHROMATIC on purpose — see the schema note above. The
+   glyph is an original drawing in the page's own 24-box icon family; it is
+   never a reproduction of a language's trademarked logo. */
+.codeblock .lang{
+  display:inline-flex;align-items:center;gap:7px;flex:none;
+  color:var(--code-chip);font-size:12px;font-weight:500;letter-spacing:.06em;
+  padding:3px 9px 3px 7px;border:1px solid var(--code-edge);border-radius:20px;
+}
+.codeblock .lang svg{width:15px;height:15px;flex:none;display:block}
+.codeblock .cb-path{
+  flex:1 1 120px;min-width:0;text-align:right;letter-spacing:.02em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.codeblock .cb-copy{
+  flex:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:32px;padding:0 10px;border-radius:6px;cursor:pointer;
+  border:1px solid var(--code-edge);background:transparent;color:var(--code-chrome);
+  font-family:var(--mono);font-size:12px;letter-spacing:.04em;transition:.15s;
+}
+.codeblock .cb-copy svg{width:14px;height:14px;flex:none}
+.codeblock .cb-copy:hover{color:var(--code-text);border-color:var(--code-chrome)}
+.codeblock .cb-copy[data-state="done"]{color:var(--code-string);border-color:var(--code-string)}
+.codeblock .cb-copy .done{display:none}
+.codeblock .cb-copy[data-state="done"] .idle{display:none}
+.codeblock .cb-copy[data-state="done"] .done{display:inline-flex}
+/* Tap target: the visible chip stays 32px so it does not dominate a 9px-padded
+   bar, but the hit area is grown to the 44px floor with a pseudo-element. */
+.codeblock .cb-copy{position:relative}
+.codeblock .cb-copy::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
+.codeblock pre{
+  margin:0;padding:18px 20px;overflow-x:auto;overscroll-behavior-x:contain;
+  font-family:var(--mono);font-size:13px;line-height:1.72;color:var(--code-text);
+}
 .codeblock code{background:none;padding:0;font-size:1em;color:inherit;font-family:inherit}
-@media(max-width:600px){.codeblock pre{padding:15px 16px;font-size:12.5px}}
+@media(max-width:600px){
+  .codeblock pre{padding:15px 16px;font-size:12.5px}
+  .codeblock .cb-head{padding:8px 10px}
+  /* Below 600px the path is the first thing to go: it is context, the chip and
+     the copy control are function. It reappears on its own full-width line. */
+  .codeblock .cb-path{flex-basis:100%;text-align:left;order:3}
+}
 
 /* A ledger that has to be squinted at defeats the point of the aesthetic.
    Below 600px these tables were shrinking to fit rather than scrolling — the

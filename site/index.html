@@ -588,38 +588,50 @@
   /* Deliberately UNEQUAL. The right-hand shape is the one this repo argues for,
    so it is given the larger half; the left-hand shape is the thing being
    rejected and is drawn smaller. Composition carries the argument. */
-  .mxn{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);gap:22px;margin-bottom:36px;align-items:start}
+  .mxn{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);gap:22px;margin-bottom:26px;align-items:start}
   @media(max-width:760px){.mxn{grid-template-columns:minmax(0,1fr)}}
-  .mxn figure{border:1px solid var(--hair-strong);border-radius:4px;padding:20px;background:var(--surface);margin:0}
+  .mxn figure{border:1px solid var(--hair-strong);border-radius:4px;padding:16px;background:var(--surface);margin:0}
   .mxn figure.win{border-color:var(--vermilion-deep)}
-  .mxn .ttl{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .mxn .ttl{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:11px}
   .mxn .ttl b{font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.04em;color:var(--ink)}
   .mxn figure.win .ttl b{color:var(--vermilion-deep)}
   .mxn .ttl span{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
-  .mxn svg{width:100%;height:auto;display:block}
+  /* The pair was 633px tall at 1440 — the single tallest object in §05 and
+     taller than the argument it illustrates. Two changes, both scale, no
+     redraw of what the diagram SAYS:
+       · the viewBox is flattened (174 -> 110 tall) so the nodes sit closer
+         vertically. Twenty edges crossing a shorter span read as MORE of a
+         tangle, not less, so the argument survives the flattening intact.
+       · max-height caps how large the wide figure may scale. Width is 100%,
+         so per the CSS sizing rules a max-height violation rescales the
+         WIDTH proportionally rather than squashing it — the shape is never
+         distorted, it just stops growing, and margin auto re-centres it.
+     Together the two figures land at nearly equal height while keeping their
+     deliberately unequal WIDTH, which is what carries the composition. */
+  .mxn svg{width:100%;height:auto;max-height:230px;margin:0 auto;display:block}
   .mxn .edge{stroke:var(--ev-fail);stroke-width:1;fill:none;opacity:.55}
   .mxn .edge-ok{stroke:var(--cls-final);stroke-width:1.4;fill:none;opacity:.9}
   .mxn .nd{fill:var(--ink-faint)}
   .mxn .nd-core{fill:none;stroke:var(--vermilion-deep);stroke-width:2}
-  .mxn figcaption{margin-top:14px;padding-top:12px;border-top:1px solid var(--hair);font-size:13px;color:var(--ink-dim);line-height:1.6}
+  .mxn figcaption{margin-top:11px;padding-top:10px;border-top:1px solid var(--hair);font-size:13px;color:var(--ink-dim);line-height:1.55}
   .mxn figcaption b{color:var(--ink);font-weight:600}
-  .mxn .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin-top:8px}
+  .mxn .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);margin-top:6px}
 
   .stations{border-top:1px solid var(--hair-strong)}
   /* Not four identical cards. Only the first is direct — the other three each
    cross a language boundary (UniFFI, cgo, loopback HTTP) — so the first
    track is wider and the three that follow are marked as a group. */
   .stations-grid{display:grid;grid-template-columns:minmax(0,1.34fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
-  .station{padding:22px 20px 0 20px;border-left:1px solid var(--hair);position:relative;min-width:0}
+  .station{padding:16px 18px 0 18px;border-left:1px solid var(--hair);position:relative;min-width:0}
   .station::before{
     content:"";position:absolute;top:-5px;left:19px;width:9px;height:9px;border-radius:50%;
     background:var(--vermilion-deep);
   }
   .station:first-child{border-left:none;padding-left:0}
   .station:first-child::before{left:0}
-  .station .kick{margin-bottom:10px}
-  .station h3{font-family:var(--disp);font-weight:700;font-size:16px;margin-bottom:8px;color:var(--ink)}
-  .station p{font-size:13px;color:var(--ink-dim);line-height:1.6;padding-bottom:22px}
+  .station .kick{margin-bottom:7px}
+  .station h3{font-family:var(--disp);font-weight:700;font-size:16px;margin-bottom:6px;color:var(--ink)}
+  .station p{font-size:13px;color:var(--ink-dim);line-height:1.55;padding-bottom:16px}
   .station code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
   @media(max-width:920px){
     .stations-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -628,12 +640,12 @@
   }
   @media(max-width:560px){
     .stations-grid{grid-template-columns:minmax(0,1fr)}
-    .station{border-left:none;border-top:1px solid var(--hair);padding:20px 0 0}
+    .station{border-left:none;border-top:1px solid var(--hair);padding:16px 0 0}
     .station::before{left:0}
     .station:first-child{border-top:none}
   }
 
-  .cb-panel{margin-top:34px}
+  .cb-panel{margin-top:24px}
   /* The tab strip is a ruled selector, not a row of pills: one hairline runs
      under the whole strip and the selected tab sits on a vermilion underscore.
      It reads as an index into one artifact rather than four separate buttons,
@@ -660,7 +672,7 @@
   .lang-pane{display:block;padding-top:14px}
   html.js .lang-pane{display:none}
   html.js .lang-pane.active{display:block}
-  .cb-note{margin-top:12px;font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:70ch}
+  .cb-note{margin-top:10px;font-size:13.5px;color:var(--ink-dim);line-height:1.6;max-width:70ch}
   .cb-note b{color:var(--ink);font-weight:600}
   .cb-note code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
 
@@ -720,14 +732,14 @@
      column claimed the free space, the actions wrapped below it, and the close
      ended as a wide box with an empty right half. */
   .final-cta{
-    border:1px solid var(--hair-strong);border-top:3px solid var(--vermilion-deep);padding:40px 36px;
+    border:1px solid var(--hair-strong);border-top:3px solid var(--vermilion-deep);padding:30px 32px;
     display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px 40px;align-items:center;background:var(--surface);
   }
   @media(max-width:820px){.final-cta{grid-template-columns:minmax(0,1fr);gap:22px}}
-  @media(max-width:600px){.final-cta{padding:28px 22px}}
+  @media(max-width:600px){.final-cta{padding:22px 20px}}
   /* Explicit line break, and no breaking inside "Self-host": left to itself
      the browser hyphen-broke it as "Self- / host" mid-headline. */
-  .final-cta h2{font-family:var(--disp);font-weight:800;font-size:clamp(23px,3.2vw,34px);letter-spacing:-.024em;margin-bottom:12px;color:var(--ink)}
+  .final-cta h2{font-family:var(--disp);font-weight:800;font-size:clamp(23px,3.2vw,32px);letter-spacing:-.024em;margin-bottom:9px;color:var(--ink)}
   .final-cta h2 span{white-space:nowrap}
   .final-cta p{color:var(--ink-dim);font-size:14.5px;max-width:54ch}
   .final-cta .cta-row{flex-direction:column;align-items:stretch;gap:10px}
@@ -1163,18 +1175,18 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
   <div class="mxn rv">
     <figure>
       <div class="ttl"><b>M &times; N</b><span>the usual shape</span></div>
-      <svg viewBox="0 0 220 174" role="img" aria-labelledby="mxnT mxnD">
+      <svg viewBox="0 0 220 110" role="img" aria-labelledby="mxnT mxnD">
         <title id="mxnT">M by N: twenty separate rail implementations</title>
         <desc id="mxnD">Four consumer nodes on the left, each connected to all five rail nodes on the right — twenty crossing edges, one per language-and-rail pair.</desc>
         <g class="edge">
-          <path d="M24 30 200 15M24 30 200 51M24 30 200 87M24 30 200 123M24 30 200 159"/>
-          <path d="M24 66 200 15M24 66 200 51M24 66 200 87M24 66 200 123M24 66 200 159"/>
-          <path d="M24 102 200 15M24 102 200 51M24 102 200 87M24 102 200 123M24 102 200 159"/>
-          <path d="M24 138 200 15M24 138 200 51M24 138 200 87M24 138 200 123M24 138 200 159"/>
+          <path d="M24 16 200 7M24 16 200 31M24 16 200 55M24 16 200 79M24 16 200 103"/>
+          <path d="M24 42 200 7M24 42 200 31M24 42 200 55M24 42 200 79M24 42 200 103"/>
+          <path d="M24 68 200 7M24 68 200 31M24 68 200 55M24 68 200 79M24 68 200 103"/>
+          <path d="M24 94 200 7M24 94 200 31M24 94 200 55M24 94 200 79M24 94 200 103"/>
         </g>
         <g class="nd">
-          <circle cx="24" cy="30" r="4"/><circle cx="24" cy="66" r="4"/><circle cx="24" cy="102" r="4"/><circle cx="24" cy="138" r="4"/>
-          <circle cx="200" cy="15" r="4"/><circle cx="200" cy="51" r="4"/><circle cx="200" cy="87" r="4"/><circle cx="200" cy="123" r="4"/><circle cx="200" cy="159" r="4"/>
+          <circle cx="24" cy="16" r="4"/><circle cx="24" cy="42" r="4"/><circle cx="24" cy="68" r="4"/><circle cx="24" cy="94" r="4"/>
+          <circle cx="200" cy="7" r="4"/><circle cx="200" cy="31" r="4"/><circle cx="200" cy="55" r="4"/><circle cx="200" cy="79" r="4"/><circle cx="200" cy="103" r="4"/>
         </g>
       </svg>
       <div class="axis"><span>4 consumers</span><span>5 rails</span></div>
@@ -1182,17 +1194,17 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
     </figure>
     <figure class="win">
       <div class="ttl"><b>M &times; 1</b><span>patala</span></div>
-      <svg viewBox="0 0 220 174" role="img" aria-labelledby="mx1T mx1D">
+      <svg viewBox="0 0 220 110" role="img" aria-labelledby="mx1T mx1D">
         <title id="mx1T">M by 1: one core, five adapters</title>
         <desc id="mx1D">Four consumer nodes on the left all converge on a single core node in the middle, which fans out to five rail nodes on the right — nine edges in total, and each rail implemented exactly once.</desc>
         <g class="edge-ok">
-          <path d="M24 30 96 87M24 66 96 87M24 102 96 87M24 138 96 87"/>
-          <path d="M128 87 200 15M128 87 200 51M128 87 200 87M128 87 200 123M128 87 200 159"/>
+          <path d="M24 16 96 55M24 42 96 55M24 68 96 55M24 94 96 55"/>
+          <path d="M128 55 200 7M128 55 200 31M128 55 200 55M128 55 200 79M128 55 200 103"/>
         </g>
-        <rect class="nd-core" x="96" y="72" width="32" height="30" rx="5"/>
+        <rect class="nd-core" x="96" y="43" width="32" height="24" rx="5"/>
         <g class="nd">
-          <circle cx="24" cy="30" r="4"/><circle cx="24" cy="66" r="4"/><circle cx="24" cy="102" r="4"/><circle cx="24" cy="138" r="4"/>
-          <circle cx="200" cy="15" r="4"/><circle cx="200" cy="51" r="4"/><circle cx="200" cy="87" r="4"/><circle cx="200" cy="123" r="4"/><circle cx="200" cy="159" r="4"/>
+          <circle cx="24" cy="16" r="4"/><circle cx="24" cy="42" r="4"/><circle cx="24" cy="68" r="4"/><circle cx="24" cy="94" r="4"/>
+          <circle cx="200" cy="7" r="4"/><circle cx="200" cy="31" r="4"/><circle cx="200" cy="55" r="4"/><circle cx="200" cy="79" r="4"/><circle cx="200" cy="103" r="4"/>
         </g>
       </svg>
       <div class="axis"><span>4 consumers</span><span>patala-core</span><span>5 rails</span></div>

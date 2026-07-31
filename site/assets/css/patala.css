@@ -627,12 +627,12 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 .codeblock .cb-copy{position:relative}
 .codeblock .cb-copy::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
 .codeblock pre{
-  margin:0;padding:18px 20px;overflow-x:auto;overscroll-behavior-x:contain;
-  font-family:var(--mono);font-size:13px;line-height:1.72;color:var(--code-text);
+  margin:0;padding:15px 18px;overflow-x:auto;overscroll-behavior-x:contain;
+  font-family:var(--mono);font-size:13px;line-height:1.62;color:var(--code-text);
 }
 .codeblock code{background:none;padding:0;font-size:1em;color:inherit;font-family:inherit}
 @media(max-width:600px){
-  .codeblock pre{padding:15px 16px;font-size:12.5px}
+  .codeblock pre{padding:13px 14px;font-size:12.5px}
   .codeblock .cb-head{padding:8px 10px}
   /* Below 600px the path is the first thing to go: it is context, the chip and
      the copy control are function. It reappears on its own full-width line. */

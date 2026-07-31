@@ -1,24 +1,27 @@
 /* patala — shared design system for the landing page and the docs viewer.
    Self-contained: no @import, no remote url(), fonts vendored in ../fonts/. */
 
-/* Syne — the display face. Sculptural, wide-set, unapologetically geometric;
-   chosen for the cowrie/substrate idea (a shell is a hard, faceted object)
-   and deliberately NOT what a sibling Vulos landing already picked
-   (gitstate: Bricolage Grotesque, cackle: Figtree) — Inter is dropped
-   entirely, it was the one generic choice on offer. Static weights (600/700/
-   800) rather than the variable axis: only three weights are ever used, so
-   three ~14KB files beat one larger variable one. */
+/* Archivo — the display face. SIL OFL 1.1, Omnibus-Type; the licence ships
+   beside the file as LICENSE-archivo.txt.
+
+   It REPLACES Syne, which was the wrong register for this page and is gone:
+   Syne is a wide, rounded, sculptural geometric — a poster face. On a page
+   whose whole thesis is "instrument panel beside a paper register" it read as
+   a fashion mark, and its width forced every section heading onto three or
+   four lines ("There is no GUI, and that is a security property" wrapped four
+   times at 1440). Archivo is a grotesque drawn for high-performance print and
+   UI out of American gothic signage — the register of a statement, a ticket,
+   a control panel. It sets the same headline on ONE line where Syne needed
+   two, and its figures are the point: this page's argument is carried by
+   numerals (293 / 572 / 2 / 0) and Archivo's are unmannered and tabular where
+   Syne's were decorative.
+
+   Not what any sibling landing uses either (gitstate and evermesh: Bricolage
+   Grotesque, cackle: Figtree, lilmail: Fraunces). One variable file across
+   wght 100-900 replaces the three static Syne files it retires. */
 @font-face{
-  font-family:'Syne';font-style:normal;font-weight:600;font-display:swap;
-  src:url('../fonts/syne-latin-600-normal.woff2') format('woff2');
-}
-@font-face{
-  font-family:'Syne';font-style:normal;font-weight:700;font-display:swap;
-  src:url('../fonts/syne-latin-700-normal.woff2') format('woff2');
-}
-@font-face{
-  font-family:'Syne';font-style:normal;font-weight:800;font-display:swap;
-  src:url('../fonts/syne-latin-800-normal.woff2') format('woff2');
+  font-family:'Archivo';font-style:normal;font-weight:100 900;font-display:swap;
+  src:url('../fonts/archivo-latin-wght-normal.woff2') format('woff2');
 }
 /* Schibsted Grotesk — the body face. A grotesque with real personality
    (flared terminals, a taller x-height than Inter) instead of the reflexive
@@ -90,7 +93,7 @@
   --rule-color:var(--vermilion);
   --surface:var(--indigo);--surface-raised:var(--overlay);
   --shadow:0 20px 60px -20px rgba(0,0,0,.55);
-  --disp:'Syne',system-ui,-apple-system,sans-serif;
+  --disp:'Archivo',system-ui,-apple-system,sans-serif;
   --body:'Schibsted Grotesk',system-ui,-apple-system,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
 }

@@ -6,13 +6,27 @@ infrastructure. patala itself is stateless and holds no secrets: a rail is
 constructed from config the *consumer* supplies each time (a fiat rail's API
 keys, a crypto rail's signer).
 
-## Three ways to consume it
+## Four ways to consume it
+
+Every adapter is written once, in Rust, in `patala-core` or a rail crate —
+never reimplemented per language (`PATALA.md` §5, "M×1, never M×N"). The same
+`charge` → `verify` round trip below is real code from this repo, shown in
+each of the four languages that can reach it.
 
 ### 1. As a Rust crate, direct
 
 Add `patala-core` (and whichever rail crates/features you need) as a
 dependency and program against the `PaymentRail` trait. The default build
 pulls no chain and no processor — you opt into a rail with its feature flag.
+**patala isn't on crates.io yet** (`SECURITY.md`: "no crate is published to
+crates.io") — vendor it by path or `git` until it is:
+
+```toml
+[dependencies]
+# Not on crates.io yet (SECURITY.md) — vendor by path or git until it publishes.
+patala-core    = { git = "https://github.com/vul-os/patala" }
+patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
+```
 
 ```bash
 cargo test -p patala-core
@@ -25,7 +39,61 @@ methods, so a one-shot script doesn't need to run an `asyncio` event loop
 just to call `charge()`. Each call blocks the calling thread on a
 lazily-created multi-thread `tokio::runtime::Runtime` under the hood.
 
-### 3. As a local sidecar (any language, no FFI)
+```python
+from patala_py import PatalaRail, PayRequest, RailClass
+
+rail = PatalaRail.new_mock(
+    id="mock",
+    _class=RailClass.NON_CUSTODIAL_FINAL,
+    currencies=["USDC"],
+    fee_minor=0,
+    failing=False,
+)
+
+req = PayRequest(
+    amount_minor=1_250,       # int, never a float
+    currency="USDC",
+    destination="dest-anything",
+    reference="order-1",
+)
+
+receipt = rail.charge(req)
+assert rail.verify(receipt) is True   # fail-closed: a tampered receipt verifies False
+```
+
+Adapted from `patala-py/examples/smoke_test.py`, which this same round trip
+runs for real under a real interpreter — see [Status](#status).
+
+### 3. As a Go binding
+
+`patala-go` generates a Go package from the exact same UniFFI surface
+`patala-py` exposes, via [`uniffi-bindgen-go`](https://github.com/NordSecurity/uniffi-bindgen-go)
+— not a second hand-written adapter. It uses cgo: if your Go project needs a
+pure-static, trivially cross-compiled binary, reach for the sidecar below
+instead (`patala-go/README.md` says so up front, not as a buried caveat).
+
+```go
+import patala "github.com/vul-os/patala/patala-go/bindings/patala"
+
+rail := patala.PatalaRailNewMock(
+    "mock", patala.RailClassNonCustodialFinal, []string{"USDC"}, 0, false,
+)
+
+req := patala.PayRequest{
+    AmountMinor: 1_250, // uint64, never a float
+    Currency:    "USDC",
+    Destination: "dest-anything",
+    Reference:   "order-1",
+}
+
+receipt := must(rail.Charge(req))
+valid := must(rail.Verify(receipt)) // fail-closed: a tampered receipt verifies false
+```
+
+Adapted from `patala-go/examples/roundtrip/main.go`, one of 19 top-level Go
+binding tests run over real cgo and CI-enforced — see [Status](#status).
+
+### 4. As a local sidecar (any language, no FFI)
 
 `patala-sidecar` runs `patala-core` behind a thin local HTTP API —
 `quote` / `charge` / `verify` as JSON over a loopback socket. Any language

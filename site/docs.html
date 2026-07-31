@@ -35,58 +35,99 @@
 })();
 </script>
 <style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   patala docs — same instrument as index.html, a reading view instead of a
+   pitch. The sidebar's active-item tick is the same open-circle-on-a-rail
+   mark used throughout the landing (.docs-nav a.active); every fenced code
+   block that marked.js renders gets wrapped, after the fact, in the same
+   .codeblock/.cb-head chrome the landing hand-writes, and then highlighted
+   with the same vendored highlight.js core (./assets/vendor/) — so a Rust
+   block quoted from PATALA.md reads identically whether it's here or on the
+   landing page, right down to the token colours (patala.css --code-*).
+
+   Rendering is genuinely static: this page fetches four local .md files
+   (./docs/*.md) with plain `fetch`, parses them with the vendored `marked`,
+   and highlights the result — no build step, no server-side anything, and
+   nothing beyond this origin is ever requested.
+   ═══════════════════════════════════════════════════════════════════════════ */
   /* Docs shell */
-  .docs-shell{display:grid;grid-template-columns:236px 1fr;gap:40px;align-items:start;padding:34px 0 80px}
-  @media(max-width:860px){.docs-shell{grid-template-columns:1fr;padding-top:22px}}
+  .docs-shell{display:grid;grid-template-columns:236px 1fr;gap:var(--sp-6);align-items:start;padding:var(--sp-5) 0 80px}
+  @media(max-width:860px){.docs-shell{grid-template-columns:1fr;padding-top:var(--sp-4)}}
   .docs-nav{position:sticky;top:84px;border:1px solid var(--hair);background:var(--surface);padding:6px}
-  @media(max-width:860px){.docs-nav{position:static;margin-bottom:8px}}
+  @media(max-width:860px){.docs-nav{position:static;margin-bottom:var(--sp-2)}}
   .docs-nav .label{
-    font-family:var(--mono);font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);
+    font-family:var(--mono);font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);
     padding:10px 12px 8px;
   }
   .docs-nav a{
-    display:block;padding:9px 12px;color:var(--ink-dim);font-size:13.5px;font-weight:500;
-    transition:.15s;border-left:2px solid transparent;border-radius:2px;
+    display:flex;align-items:center;gap:9px;padding:10px 12px;color:var(--ink-dim);font-size:13.5px;font-weight:500;
+    transition:.15s;border-left:2px solid transparent;border-radius:2px;min-height:22px;
+  }
+  .docs-nav a::before{
+    content:"";width:7px;height:7px;border-radius:50%;flex:none;border:1.6px solid var(--ink-faint);background:var(--canvas);
+    transition:.15s;
   }
   .docs-nav a:hover{background:var(--surface-raised);color:var(--ink)}
   .docs-nav a.active{background:var(--surface-raised);color:var(--ink);border-left-color:var(--vermilion)}
+  .docs-nav a.active::before{border-color:var(--vermilion);background:var(--vermilion)}
+  :root[data-theme="light"] .docs-nav a.active{border-left-color:var(--vermilion-deep)}
+  :root[data-theme="light"] .docs-nav a.active::before{border-color:var(--vermilion-deep);background:var(--vermilion-deep)}
   .docs-main{min-width:0}
-  .docs-title{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:14px}
+  .docs-title{font-family:var(--mono);font-size:var(--fs-micro);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:var(--sp-3)}
+  .docs-title .sep{margin:0 8px;color:var(--hair-strong)}
 
   .markdown{font-family:var(--body);font-size:16px;color:var(--ink-dim);max-width:74ch}
   .markdown>*:first-child{margin-top:0}
-  .markdown h1{font-family:var(--disp);font-weight:500;font-size:32px;letter-spacing:-.01em;margin:.2em 0 .55em;border-bottom:1px solid var(--hair);padding-bottom:.35em;color:var(--ink)}
-  .markdown h2{font-family:var(--disp);font-weight:500;font-size:22px;letter-spacing:-.005em;margin:1.7em 0 .6em;border-bottom:1px solid var(--hair);padding-bottom:.3em;color:var(--ink)}
-  .markdown h3{font-family:var(--disp);font-weight:500;font-size:17.5px;margin:1.5em 0 .5em;color:var(--ink)}
-  .markdown h4{font-size:15px;margin:1.3em 0 .4em;color:var(--ink);font-weight:600}
+  .markdown h1{font-family:var(--disp);font-weight:500;font-size:32px;letter-spacing:-.01em;margin:.2em 0 .6em;border-bottom:1px solid var(--hair);padding-bottom:.4em;color:var(--ink)}
+  .markdown h2{font-family:var(--disp);font-weight:500;font-size:22px;letter-spacing:-.005em;margin:1.9em 0 .7em;border-bottom:1px solid var(--hair);padding-bottom:.35em;color:var(--ink)}
+  .markdown h3{font-family:var(--disp);font-weight:500;font-size:17.5px;margin:1.6em 0 .55em;color:var(--ink)}
+  .markdown h4{font-size:15px;margin:1.4em 0 .45em;color:var(--ink);font-weight:600}
   .markdown p,.markdown li{color:var(--ink-dim);line-height:1.7}
-  .markdown p{margin:0 0 1em}
-  .markdown ul,.markdown ol{margin:0 0 1.2em;padding-left:1.4em}
-  .markdown li{margin-bottom:.35em}
+  .markdown p{margin:0 0 1.05em}
+  .markdown ul,.markdown ol{margin:0 0 1.3em;padding-left:1.4em}
+  .markdown li{margin-bottom:.4em}
   .markdown strong{color:var(--ink);font-weight:600}
   .markdown a{color:var(--vermilion-deep);text-decoration:none;border-bottom:1px solid currentColor}
   :root:not([data-theme="light"]) .markdown a{color:var(--vermilion)}
   .markdown a:hover{opacity:.82}
   .markdown code{font-family:var(--mono);font-size:.86em;background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink)}
-  .markdown pre{background:var(--surface);border:1px solid var(--hair-strong);padding:16px 18px;overflow:auto;border-radius:2px;margin:0 0 1.3em}
-  .markdown pre code{background:none;padding:0;font-size:13.5px;line-height:1.7;color:var(--ink-dim);border-radius:0}
-  .markdown blockquote{margin:1em 0;padding:.5em 1.1em;border-left:3px solid var(--pending);background:var(--surface);color:var(--ink-dim)}
-  .markdown table{border-collapse:collapse;width:100%;margin:1.3em 0;font-size:14px;display:block;overflow-x:auto}
-  .markdown th,.markdown td{border-bottom:1px solid var(--hair);padding:10px 13px;text-align:left;vertical-align:top}
+  /* Fenced code is re-parented into .codeblock by docs.html's script (see
+     below) — these rules are the fallback for the instant between paint and
+     that script running, and for the (rare, JS-off) case it never runs. */
+  .markdown pre{background:var(--code-surface);border:1px solid var(--hair-strong);padding:18px 20px;overflow:auto;overscroll-behavior-x:contain;border-radius:3px;margin:0 0 1.4em}
+  .markdown pre code{background:none;padding:0;font-size:13.5px;line-height:1.72;color:var(--code-text);border-radius:0;font-family:var(--mono)}
+  .markdown .codeblock{margin:0 0 1.4em}
+  .markdown .codeblock pre{margin:0;border:none}
+  .markdown blockquote{margin:1.1em 0;padding:.6em 1.15em;border-left:3px solid var(--pending);background:var(--surface);color:var(--ink-dim)}
+  .markdown table{border-collapse:collapse;width:100%;margin:1.4em 0;font-size:14px}
+  .markdown .table-scroll{overflow-x:auto;overscroll-behavior-x:contain;border:1px solid var(--hair);border-radius:2px;margin:1.4em 0}
+  .markdown .table-scroll table{margin:0;border:none}
+  .markdown th,.markdown td{border-bottom:1px solid var(--hair);padding:11px 14px;text-align:left;vertical-align:top}
   .markdown thead th{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--hair-strong);font-weight:500}
-  .markdown img{max-width:100%;border:1px solid var(--hair);margin:1em 0;border-radius:2px}
-  .markdown hr{border:none;height:1px;background:var(--hair);margin:2.2em 0}
+  .markdown img{max-width:100%;border:1px solid var(--hair);margin:1.1em 0;border-radius:2px}
+  .markdown hr{border:none;height:1px;background:var(--hair);margin:2.3em 0}
   .docs-error{
     color:var(--failed);background:color-mix(in srgb, var(--failed) 10%, transparent);
     border:1px solid color-mix(in srgb, var(--failed) 35%, transparent);padding:16px 18px;border-radius:2px;
   }
+  .docs-pager{display:flex;justify-content:space-between;gap:16px;margin-top:var(--sp-6);padding-top:var(--sp-4);border-top:1px solid var(--hair)}
+  .docs-pager a{
+    display:flex;flex-direction:column;gap:4px;padding:14px 16px;border:1px solid var(--hair-strong);border-radius:3px;
+    min-width:0;max-width:48%;transition:.15s;
+  }
+  .docs-pager a:hover{border-color:var(--ink-faint);background:var(--surface)}
+  .docs-pager a.next{margin-left:auto;text-align:right}
+  .docs-pager .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+  .docs-pager .ttl{font-family:var(--disp);font-weight:500;font-size:15px;color:var(--ink)}
   @media(max-width:600px){
     .markdown{font-size:15px}
     .markdown h1{font-size:26px}
     .markdown h2{font-size:20px}
+    .docs-pager a{max-width:100%}
   }
 </style>
 <script src="./assets/vendor/marked.umd.js"></script>
+<script src="./assets/vendor/highlight.core.js"></script>
 </head>
 <body>
 <nav class="top"><div class="wrap">
@@ -119,6 +160,7 @@
   <main class="docs-main">
     <div class="docs-title" id="crumb"></div>
     <article class="markdown" id="content">Loading…</article>
+    <nav class="docs-pager" id="pager" aria-label="Previous / next doc"></nav>
   </main>
 </div>
 
@@ -144,6 +186,7 @@ const bySlug = Object.fromEntries(DOCS.map(d=>[d.slug,d]));
 const byFile = Object.fromEntries(DOCS.map(d=>[d.path.split('/').pop().toLowerCase(),d]));
 const content = document.getElementById('content');
 const crumb = document.getElementById('crumb');
+const pager = document.getElementById('pager');
 
 if (window.marked && marked.setOptions) marked.setOptions({ gfm:true, breaks:false });
 
@@ -151,10 +194,61 @@ function setActive(slug){
   document.querySelectorAll('.docs-nav a').forEach(a=>a.classList.toggle('active', a.dataset.slug===slug));
 }
 
+// Every table marked.js renders gets its own horizontal scroller (never the
+// whole page) — same fix as .ledger-wrap on the landing, for the same reason
+// (PaymentRail's method table and the destination-status table are both
+// genuinely wide). Every fenced code block gets re-parented into the shared
+// .codeblock/.cb-head chrome and then highlighted for real.
+function dressContent(){
+  content.querySelectorAll('table').forEach(function(table){
+    if (table.closest('.table-scroll')) return;
+    var wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    table.parentNode.insertBefore(wrap, table);
+    wrap.appendChild(table);
+  });
+  content.querySelectorAll('pre').forEach(function(pre){
+    var code = pre.querySelector('code');
+    if (!code) return;
+    var m = (code.className||'').match(/language-([\w-]+)/);
+    var lang = m ? m[1] : 'text';
+    if (window.hljs){
+      try { hljs.highlightElement(code); } catch(e){}
+    }
+    var box = document.createElement('div');
+    box.className = 'codeblock';
+    var head = document.createElement('div');
+    head.className = 'cb-head';
+    head.innerHTML = '<span class="dots"><span></span><span></span><span></span></span><span>'+lang+'</span>';
+    pre.parentNode.insertBefore(box, pre);
+    box.appendChild(head);
+    box.appendChild(pre);
+  });
+}
+
+function renderPager(slug){
+  var i = DOCS.findIndex(function(d){ return d.slug===slug; });
+  pager.innerHTML = '';
+  if (i > 0){
+    var prev = DOCS[i-1];
+    var a = document.createElement('a');
+    a.className = 'prev'; a.href = '#'+prev.slug;
+    a.innerHTML = '<span class="lbl">&larr; previous</span><span class="ttl">'+prev.title+'</span>';
+    pager.appendChild(a);
+  }
+  if (i >= 0 && i < DOCS.length-1){
+    var next = DOCS[i+1];
+    var b = document.createElement('a');
+    b.className = 'next'; b.href = '#'+next.slug;
+    b.innerHTML = '<span class="lbl">next &rarr;</span><span class="ttl">'+next.title+'</span>';
+    pager.appendChild(b);
+  }
+}
+
 async function load(slug){
   const doc = bySlug[slug] || DOCS[0];
   setActive(doc.slug);
-  crumb.textContent = doc.title;
+  crumb.innerHTML = 'patala docs<span class="sep">/</span>'+doc.title;
   content.innerHTML = 'Loading…';
   try {
     const res = await fetch(doc.path, {cache:'no-cache'});
@@ -170,9 +264,12 @@ async function load(slug){
       if(target) a.setAttribute('href','#'+target.slug);
     });
     content.querySelectorAll('a[href^="http"]').forEach(a=>{a.target='_blank';a.rel='noopener';});
+    dressContent();
+    renderPager(doc.slug);
     window.scrollTo({top:0});
   } catch(err){
     content.innerHTML = '<div class="docs-error">Could not load <code>'+doc.path.split('/').pop()+'</code> — '+err.message+'</div>';
+    pager.innerHTML = '';
   }
 }
 

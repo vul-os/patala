@@ -11,12 +11,20 @@ default build pulls no chain and no processor.
 
 What that does *not* mean: no rail has been run against a live merchant
 account from here, and **only one rail** has been run against a live network
-at all — `patala-stellar`, once, on testnet, 2026-07-30 (a single-leg
-USDC-shaped payment built and submitted through the real `StellarRail::charge`
-API and confirmed by `StellarRail::verify` against Horizon; see its README for
-the transaction hash and the precise, narrow scope of that claim — mainnet
-is untouched, and atomic multi-party splits (`StellarRail::charge_split`/
-`verify_split`, B1, tested offline only) have never been run live). Every other rail — including
+at all — `patala-stellar`, twice, both on testnet, both 2026-07-30: a
+single-leg USDC-shaped payment built and submitted through the real
+`StellarRail::charge` API, independently confirmed by `StellarRail::verify`
+reading it back from Horizon, and separately, a 3-instalment
+recurring/pre-authorized schedule (`recurring::RecurringPlan`) that settled
+its first instalment immediately, had its second instalment genuinely
+**rejected by real Horizon** (`tx_bad_minseq_age_or_gap`) when resubmitted too
+early and then accepted once the pacing floor elapsed, and had its third,
+still-outstanding instalment permanently invalidated by a real on-chain
+cancellation (`tx_bad_seq` on resubmission) — transaction hashes and ledger
+sequences for both in `patala-stellar/README.md`. Read both narrowly — neither
+says anything about mainnet, and neither says anything about atomic
+multi-party splits (`StellarRail::charge_split`/`verify_split`, B1 — tested
+offline only, never run against a live network). Every other rail — including
 Stellar's own mainnet path — says plainly, in its own README, that it has not
 been run live, and the crypto rails name the exact step to validate (fund a
 testnet account, run the `#[ignore]`d, env-gated live test). Treat the rails
@@ -34,9 +42,9 @@ and a real socket.
 | `patala-core` | trait + capability model (incl. `atomic_multi_party`) + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 38 + 3 doctests | offline by design |
 | `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 552 (all features) | no — no live merchant account |
 | `patala-solana` | SPL-USDC on Solana, ported from an earlier in-house implementation | non-custodial, final | 56 (+1 gated) + 2 doctests | no — testnet step in its README |
-| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`), incl. atomic `charge_split`/`verify_split` (B1) | non-custodial, final | 63 (+2 gated) + 4 doctests | **testnet: yes, one single-leg payment (2026-07-30)** — mainnet no, splits untested live, see its README |
+| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`), incl. atomic `charge_split`/`verify_split` (B1) and `recurring::RecurringPlan` | non-custodial, final | 84 (+3 gated) + 5 doctests | **testnet: yes, twice (2026-07-30)** — a single-leg payment and a 3-instalment recurring schedule; mainnet no, splits untested live, see its README |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | no — needs a live instance |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 34 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
 | `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
 
 ## Destination validation by rail
@@ -100,9 +108,6 @@ sidecar, with all five verdict variants and their reason strings intact. All
 five are asserted to survive each boundary distinctly — `patala-py`'s Rust
 tests, `patala-go/bindingtest/destination_test.go`,
 `patala-sidecar/tests/validate_destination.rs`, and the Python smoke test.
-
-`patala-sui` is in the tree but not yet landed; it is excluded from the counts
-and rows above rather than described from its unfinished state.
 
 One caveat that table would otherwise hide: **the sidecar's rail registry is
 still mock-only.** The server, its auth, its error mapping and all six

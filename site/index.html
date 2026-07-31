@@ -639,6 +639,16 @@
      It reads as an index into one artifact rather than four separate buttons,
      which is what the four panes actually are. */
   .lang-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--hair-strong);margin-bottom:0}
+  /* PROGRESSIVE ENHANCEMENT, and it is load-bearing in §06.
+     A tab strip is useless without JS, and a pane hidden behind a dead tab is
+     content that simply does not exist. So the default state is "every pane
+     shown, no tab strip", and the tabbed state is opted into by `html.js`,
+     which the inline head script sets synchronously before first paint — so
+     there is no flash of the stacked layout. This is the same lesson the .rv
+     reveal already paid for (see patala.css). It matters most in §06, where
+     the panes are not decoration, they are the evidence. */
+  .lang-tabs{display:none}
+  html.js .lang-tabs{display:flex}
   .lang-tab{
     display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;padding:0 14px;
     border:0;border-bottom:2px solid transparent;margin-bottom:-1px;border-radius:4px 4px 0 0;
@@ -647,8 +657,9 @@
   .lang-tab svg{width:16px;height:16px;flex:none;display:block}
   .lang-tab:hover{color:var(--ink-dim);background:var(--surface)}
   .lang-tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--vermilion-deep);font-weight:500}
-  .lang-pane{display:none;padding-top:18px}
-  .lang-pane.active{display:block}
+  .lang-pane{display:block;padding-top:14px}
+  html.js .lang-pane{display:none}
+  html.js .lang-pane.active{display:block}
   .cb-note{margin-top:12px;font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:70ch}
   .cb-note b{color:var(--ink);font-weight:600}
   .cb-note code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
@@ -656,12 +667,31 @@
   /* ══ 06 · PROOF (instrument band) ══════════════════════════════════════ */
   .proof-note{font-size:13px;color:var(--ink-faint);margin-top:8px;display:block}
   .proof-note code{font-family:var(--mono);background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink-dim)}
-  .proof-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:24px;align-items:start}
+
+  /* ── THE PROOF VIEWER ───────────────────────────────────────────────────
+     This was a five-up mosaic of captured terminal panes, and at 1440 it was
+     2,011px — a fifth of the whole page, more than any argument on it. The
+     panes are the product's deliberate differentiator and not one of them may
+     be reduced to a claim, a link or a mockup, so what changed is the
+     PRESENTATION, not the evidence: the same five captures, at their true
+     capture width, behind the tab strip §05 already uses.
+
+     Three things the mosaic did worse, and this fixes:
+       · the two-column grid rendered every 720px capture at ~568px, so the
+         12.5px mono this section exists to prove was being DOWNSCALED. In one
+         column each pane sits at its natural width and the text is sharp.
+       · a run longer than the fold was cropped by a `.tall` cap in a grid
+         cell; here every over-long run scrolls inside its own pane, so the
+         full run is still reachable rather than merely implied.
+       · five panes at once meant none of them was being looked at.
+     Without JS the strip is hidden and all five stack, exactly as before. */
+  .proof-view{margin-top:4px}
   .proof-item{min-width:0;margin:0}
-  .proof-item.wide{grid-column:1/-1}
-  @media(max-width:820px){.proof-grid{grid-template-columns:minmax(0,1fr)}}
   .proof-item img{width:100%;max-width:720px;height:auto;display:block;border:1px solid var(--hair-strong);border-radius:2px}
-  .proof-item.wide img{max-width:920px}
+  .proof-item img.wide{max-width:920px}
+  /* Stacked (no JS), the five panes need air between them; tabbed, only one
+     is ever on screen and the rule would be drawing a line under nothing. */
+  html:not(.js) .proof-view .proof-item+.proof-item{margin-top:26px;padding-top:26px;border-top:1px solid var(--hair)}
   .proof-item figcaption{margin-top:11px;font-size:13px;color:var(--ink-dim);line-height:1.6;max-width:58ch}
   .proof-item figcaption b{color:var(--ink);font-weight:600}
   .proof-item figcaption code{font-family:var(--mono);font-size:1em;background:var(--surface-raised);padding:1px 5px;border-radius:3px;color:var(--ink)}
@@ -670,7 +700,7 @@
      to prove illegible — same reasoning as the ledger tables. So below 640px
      each pane keeps its true pixel width and scrolls horizontally. */
   .proof-scroll{position:relative;border-radius:2px;min-width:0}
-  .proof-scroll.tall{max-height:440px;overflow-y:auto}
+  .proof-scroll.tall{max-height:430px;overflow-y:auto}
   .proof-scroll img{border-radius:2px}
   .proof-scroll.tall::after{
     content:"";position:sticky;display:block;bottom:0;left:0;width:100%;height:34px;margin-top:-34px;
@@ -1195,7 +1225,7 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
     </div>
   </div>
 
-  <div class="cb-panel">
+  <div class="cb-panel" data-tabgroup>
     <div class="lang-tabs" role="tablist" aria-label="The same charge round trip, in four languages">
       <button class="lang-tab" role="tab" type="button" data-pane="rust" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-rust"/></svg>Rust</button>
       <button class="lang-tab" role="tab" type="button" data-pane="python" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-python"/></svg>Python</button>
@@ -1295,25 +1325,33 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
     <span class="proof-note">Reproduce it yourself: <code>scripts/capture-transcripts.sh &amp;&amp; node scripts/render-shots.mjs</code>.</span></p>
   </div>
 
-  <div class="proof-grid">
-    <figure class="proof-item">
-      <div class="proof-scroll"><img src="./assets/shots/sidecar-boot.webp" width="720" height="222" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
+  <div class="proof-view" data-tabgroup>
+    <div class="lang-tabs" role="tablist" aria-label="Five runs captured from this repo — pick one to view its full output">
+      <button class="lang-tab" role="tab" type="button" data-pane="proof-boot" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-shell"/></svg>sidecar boot</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="proof-http" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-shell"/></svg>curl round-trip</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="proof-tests" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-rust"/></svg>cargo test</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="proof-py" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-python"/></svg>python binding</button>
+      <button class="lang-tab" role="tab" type="button" data-pane="proof-go" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-go"/></svg>go binding</button>
+    </div>
+
+    <figure class="lang-pane proof-item active" data-pane="proof-boot">
+      <div class="proof-scroll tall"><img src="./assets/shots/sidecar-boot.webp" width="720" height="222" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
       <figcaption>The sidecar — <code>cargo run -p patala-sidecar</code>, actually booting.</figcaption>
     </figure>
-    <figure class="proof-item">
-      <div class="proof-scroll"><img src="./assets/shots/sidecar-roundtrip.webp" width="720" height="571" alt="Terminal: curl round-trips against the running sidecar — healthz returns ok, capabilities, a charge, verify returning valid true, and a 401 when the Authorization header is missing."></div>
+    <figure class="lang-pane proof-item" data-pane="proof-http">
+      <div class="proof-scroll tall"><img src="./assets/shots/sidecar-roundtrip.webp" width="720" height="571" alt="Terminal: curl round-trips against the running sidecar — healthz returns ok, capabilities, a charge, verify returning valid true, and a 401 when the Authorization header is missing."></div>
       <figcaption>Real HTTP round-trips against it: capabilities, charge, verify — and the fail-closed 401 when the token is missing.</figcaption>
     </figure>
-    <figure class="proof-item wide">
-      <div class="proof-scroll tall"><img src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
+    <figure class="lang-pane proof-item" data-pane="proof-tests">
+      <div class="proof-scroll tall"><img class="wide" src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
       <figcaption><code>cargo test --workspace</code> — the same <b>293</b> offline tests <a href="#status" style="color:var(--ev-exec);text-decoration:underline;text-underline-offset:2px">rung 02</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.</figcaption>
     </figure>
-    <figure class="proof-item">
-      <div class="proof-scroll"><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
+    <figure class="lang-pane proof-item" data-pane="proof-py">
+      <div class="proof-scroll tall"><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
       <figcaption>The Python binding, over a real interpreter — same MockRail round-trip, called from <code>patala-py</code>.</figcaption>
     </figure>
-    <figure class="proof-item">
-      <div class="proof-scroll tall"><img src="./assets/shots/binding-go.webp" width="720" height="1309" alt="Terminal: cd patala-go && make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
+    <figure class="lang-pane proof-item" data-pane="proof-go">
+      <div class="proof-scroll tall"><img src="./assets/shots/binding-go.webp" width="720" height="1309" alt="Terminal: cd patala-go &amp;&amp; make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
       <figcaption>The Go binding, over real cgo — the same UniFFI surface, generated for Go. Scroll for all 19 tests.</figcaption>
     </figure>
   </div>
@@ -1418,15 +1456,22 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
   });
 })();
 
-// Language tabs for the "same round trip, four languages" panel.
+// ONE tab mechanism, two panels: the "same round trip, four languages" code
+// panel in §05 and the captured-proof viewer in §06. It is SCOPED to its own
+// [data-tabgroup] container — the previous version selected every .lang-tab
+// and every .lang-pane in the document, so the moment a second group existed,
+// clicking a proof tab would have deselected the code tabs and hidden their
+// pane. Adding a group must never be able to reach into another one.
 (function(){
-  var tabs=document.querySelectorAll('.lang-tab');
-  var panes=document.querySelectorAll('.lang-pane');
-  tabs.forEach(function(tab){
-    tab.addEventListener('click', function(){
-      var target=tab.dataset.pane;
-      tabs.forEach(function(t){ t.setAttribute('aria-selected', String(t===tab)); });
-      panes.forEach(function(p){ p.classList.toggle('active', p.dataset.pane===target); });
+  document.querySelectorAll('[data-tabgroup]').forEach(function(group){
+    var tabs=group.querySelectorAll('.lang-tab');
+    var panes=group.querySelectorAll('.lang-pane');
+    tabs.forEach(function(tab){
+      tab.addEventListener('click', function(){
+        var target=tab.dataset.pane;
+        tabs.forEach(function(t){ t.setAttribute('aria-selected', String(t===tab)); });
+        panes.forEach(function(p){ p.classList.toggle('active', p.dataset.pane===target); });
+      });
     });
   });
 })();

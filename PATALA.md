@@ -245,9 +245,13 @@ patala/
   patala-solana/  (or core feature)   # moved from magnetite
   patala-stellar/ (or core feature)
   patala-hyperswitch/        # fiat adapter (HTTP client to self-hosted Hyperswitch)
+  patala-fiat/                # direct fiat-processor adapters + the ISO-4217 currency table + the offline `manual` rail
   patala-py/                 # Python binding (UniFFI/PyO3)
+  patala-go/                  # Go binding, generated via uniffi-bindgen-go from patala-py's UniFFI surface
   patala-sidecar/            # thin local HTTP server over the core
-  README.md  LICENSE(MIT)  PATALA.md
+  README.md  LICENSE-MIT  LICENSE-APACHE  PATALA.md
 ```
+
+(This list reflects §9's original wave-1 plan; `patala-fiat` and `patala-go` landed later and are real, not aspirational — see README.md's "What's built" table for what is actually shipped, tested and live-verified today.)
 Feature-gating vs separate crates is an implementation call — keep the DEFAULT build offline and
 dep-free either way.

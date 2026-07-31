@@ -1,12 +1,12 @@
 $ cargo test --workspace | tee test.log
      Running unittests src/lib.rs (target/debug/deps/patala_core-b2c2142c5e4b53a4)
-test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
      Running unittests src/lib.rs (target/debug/deps/patala_fiat-c13853f6706fdd85)
-test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
      Running tests/currency_table.rs (target/debug/deps/currency_table-a4dd1fe4d9b4fa7c)
 test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
      Running unittests src/lib.rs (target/debug/deps/patala_hyperswitch-1adea833b0bd7b6d)
-test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
      Running unittests src/lib.rs (target/debug/deps/patala_py-1638a170e4350081)
 test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
      Running unittests src/bin/uniffi_bindgen.rs (target/debug/deps/uniffi_bindgen-263e265d5d9d5f27)
@@ -20,25 +20,25 @@ test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
      Running tests/validate_destination.rs (target/debug/deps/validate_destination-637de1e085427a24)
 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
      Running tests/webhook.rs (target/debug/deps/webhook-b2ab3d92a8dc81e3)
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
      Running unittests src/lib.rs (target/debug/deps/patala_solana-801baee30af778f7)
 test result: ok. 56 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s
      Running unittests src/lib.rs (target/debug/deps/patala_stellar-aca8e53ff574e9f3)
-test result: ok. 56 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+test result: ok. 84 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.03s
    Doc-tests patala_core
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.06s
    Doc-tests patala_fiat
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
    Doc-tests patala_hyperswitch
-test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
    Doc-tests patala_py
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
    Doc-tests patala_sidecar
-test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.09s
    Doc-tests patala_solana
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.51s
    Doc-tests patala_stellar
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.50s
 
 $ awk '/^test result: ok\./{n=$4; gsub(/[^0-9]/,"",n); sum+=n} END{print "TOTAL PASSED:", sum}' test.log
-TOTAL PASSED: 260
+TOTAL PASSED: 293

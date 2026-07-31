@@ -26,7 +26,7 @@ either a crate, a trait, or a process you run next to your own app.
 ## Status: foundational — built and unit-tested; one rail has one live testnet result
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
-runs two passes and both are gates: **260 offline tests** across the seven
+runs two passes and both are gates: **293 offline tests** across the seven
 landed crates in the default workspace build, and **572 more** once every
 processor feature is compiled in
 (`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
@@ -136,12 +136,12 @@ never does. There is no balance table, no payout queue, no ledger.
 
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
-| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 35 + 2 doctests | offline by design |
+| `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 38 + 3 doctests | offline by design |
 | `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 552 (all features) | **no — no live merchant account** |
 | `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 56 (+1 gated) + 2 doctests | **no — testnet step in its README** |
-| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 47 (+1 gated) + 2 doctests | **no — testnet step in its README** |
+| `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 84 (+3 gated) + 5 doctests | **no — testnet step in its README** |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 34 Go binding tests (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
 | `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still

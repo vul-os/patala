@@ -3,13 +3,13 @@ ok
 
 $ curl -s http://127.0.0.1:8420/v1/rails/mock \
     -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN"
-{"class":"NonCustodialFinal","reversible":false,"requires_kyc":false,"holds_funds":false,"currencies":["USDC","USD"],"settlement":"Instant"}
+{"class":"NonCustodialFinal","reversible":false,"requires_kyc":false,"holds_funds":false,"currencies":["USDC","USD"],"settlement":"Instant","atomic_multi_party":false}
 
 $ RECEIPT=$(curl -s http://127.0.0.1:8420/v1/rails/mock/charge \
     -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN" \
     -d '{"amount_minor":1250,"currency":"USDC","destination":"dest-wallet-abc123","reference":"order-42"}')
 $ echo "$RECEIPT"
-{"rail_id":"mock","amount_minor":1250,"currency":"USDC","reference":"order-42","proof":[116,225,248,10,10,238,129,3,57,234,151,78,132,110,18,14,206,145,0,100,248,69,6,191,11,249,199,70,117,165,89,19],"settled_at_unix":1785429339}
+{"rail_id":"mock","amount_minor":1250,"currency":"USDC","reference":"order-42","proof":[189,123,112,208,40,20,188,174,220,187,130,158,178,33,182,12,91,159,134,158,114,199,212,141,130,33,4,98,155,191,123,7],"settled_at_unix":1785464062}
 
 
 $ curl -s http://127.0.0.1:8420/v1/rails/mock/verify \

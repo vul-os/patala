@@ -4,27 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>patala — one interface to move value, holds no funds</title>
-<meta name="description" content="patala is a sovereign, centreless payment-rail substrate. One interface to move value — fiat or crypto — that any product can vendor and self-host. It holds no funds, takes no cut, and no one owns the network. Foundational status: unit-tested, not yet run against a live network.">
+<meta name="description" content="patala is a sovereign, centreless payment-rail substrate. One interface to move value — fiat or crypto — that any product can vendor and self-host. It holds no funds, takes no cut, and no one owns the network. Foundational status: unit-tested, with two Stellar testnet runs and no mainnet run at all.">
   <link rel="canonical" href="https://vulos.org/projects/patala/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="patala">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="patala — one interface to move value, holds no funds">
-  <meta name="twitter:description" content="patala is a sovereign, centreless payment-rail substrate. One interface to move value — fiat or crypto — that any product can vendor and self-host. It holds no funds, takes no cut, and no one owns the network. Foundational status: unit-tested, not yet run against a live network.">
+  <meta name="twitter:description" content="patala is a sovereign, centreless payment-rail substrate. One interface to move value — fiat or crypto — that any product can vendor and self-host. It holds no funds, takes no cut, and no one owns the network. Foundational status: unit-tested, with two Stellar testnet runs and no mainnet run at all.">
   <meta property="og:image" content="https://vulos.org/projects/patala/assets/og-card.png">
   <meta property="og:image:type" content="image/png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="patala — patala is a sovereign, centreless payment-rail substrate. One interface to move value — fiat or crypto — that any product can vendor and self-host. It holds no ">
+  <meta property="og:image:alt" content="patala — patala is a sovereign, centreless payment-rail substrate. One interface to move value — fiat or crypto — that any product can vendor and self-host. It holds no funds, takes no cut, and no one owns the network.">
   <meta name="twitter:image" content="https://vulos.org/projects/patala/assets/og-card.png">
 <meta name="color-scheme" content="dark light">
 <meta property="og:title" content="patala — move value, hold none of it">
-<meta property="og:description" content="A sovereign, centreless payment-rail substrate. Holds no funds, takes no cut, no one owns it. Foundational: built and unit-tested, unverified against a live network.">
+<meta property="og:description" content="A sovereign, centreless payment-rail substrate. Holds no funds, takes no cut, no one owns it. Foundational: built and unit-tested, two Stellar testnet runs, mainnet untouched.">
 <meta property="og:url" content="https://vulos.org/projects/patala/">
 <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="./assets/fonts/syne-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="./assets/fonts/schibsted-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="./assets/css/patala.css">
 <script>
 (function(){
+  // Mark the document script-capable BEFORE first paint, so the reveal
+  // animation (html.js .rv, patala.css) only ever hides content that some
+  // JavaScript is actually going to bring back.
+  document.documentElement.classList.add('js');
   try{
     var KEY='patala-theme';
     var stored=localStorage.getItem(KEY);
@@ -36,236 +42,557 @@
 </script>
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
-   patala landing — "the seam, not the hub".
+   patala landing — "the instrument and its register".
 
-   THE MOTIF: a rail diagram, literally. Five horizontal lines run the full
-   width of the hero — one per rail this repo ships — each unbroken from a
-   payer glyph to a destination glyph. They never bend toward a centre and
-   never merge into one line, because there isn't one to merge into: patala
-   is centreless by construction. A single open aperture (the cowrie's own
-   toothed opening, from brand/logo.svg, drawn hollow — stroke only, no fill)
-   sits ABOVE the stack on a thin dashed drop-line that only touches each rail
-   at a small ungrafted tick. That is the whole argument, drawn once: the
-   interface *watches* every rail — quotes it, charges it, verifies it — and
-   is never IN the line value actually moves on. Nothing pools at the joint
-   because the joint is drawn open, not filled. The same open-aperture tick
-   reappears at every section boundary (.tooth-rule, inherited from
-   patala.css) and again as the marker on the "promise" and "polyglot" rail
-   spines further down, so the whole page reads as one instrument rather than
-   a hero image plus unrelated card grids.
+   THE THESIS, in one line: this is a thing that moves other people's money,
+   so the page is built as an instrument panel with a paper register beside
+   it, and colour is the schema rather than the mood.
 
-   Dash style carries the settlement class (PATALA.md §3) even with colour
-   off: solid = NonCustodialFinal, dashed = CustodialReversible, dotted =
-   the offline mock. The real legend is real HTML text beside the diagram,
-   never baked into the SVG as tiny type — a lesson the sibling landings
-   (cackle, gitstate) already paid for: text that must stay legible at 390px
-   belongs in the DOM, not scaled down inside a viewBox.
+   1. COLOUR MEANS SOMETHING. The whole palette is defined and MEASURED in
+      patala.css; the short version is that hue carries exactly two variables
+      and nothing else — settlement CLASS (jade = non-custodial/final, violet
+      = custodial/reversible, slate = the classless offline mock) and
+      EVIDENCE (slate = nothing run, blue = offline by design, green =
+      a real process executed, amber = a real live network but TESTNET ONLY,
+      rose = a genuine rejection). There is no mainnet hue because nothing has
+      reached mainnet. Vermilion is reserved for patala itself — the seam, the
+      aperture, the primary action — so brand colour and data colour can never
+      be mistaken for one another. Every colour is a WORD first: the class
+      chips and status pips all spell themselves out, and each class also
+      carries a distinct dash pattern and pip shape, so the schema survives
+      greyscale and colour blindness.
+
+   2. STRUCTURE. Sections alternate REGISTER (paper: the argument, the
+      ledgers, the code) with INSTRUMENT (.band, a deep indigo panel that
+      stays dark in both page themes: the guarantees, the captured proof).
+      Every section opens with the same statement rule — a mono folio number
+      in the section's own hue, the section name, a hairline, and that
+      section's live count on the right — so the page reads as one continuous
+      statement rather than nine stacked cards.
+
+   3. THE ILLUSTRATIONS. Four, each rebuilt or newly drawn for this pass, and
+      each has to explain something a paragraph would explain worse:
+        · THE SEAM (hero) — five rails as five labelled tracks, coloured and
+          dashed by settlement class, running payer -> destination, with
+          patala's open aperture above them on a dashed drop-line that touches
+          each track at an open tick and never breaks it. Built from real DOM
+          text and CSS rather than one scaled SVG, because the rail names and
+          destinations must stay legible at 390px — a lesson the sibling
+          landings already paid for.
+        · KEY CUSTODY — three processes that hold no signing key, one that
+          does, drawn as a bounded host with a real bracket.
+        · M×N vs M×1 — the only place a bare SVG earns its keep, because the
+          argument IS the shape: twenty crossing edges beside nine.
+        · THE EVIDENCE LADDER — five rungs, left to right, with each crate on
+          the highest rung it has actually reached and the mainnet rung drawn
+          visibly, deliberately EMPTY. That is the most important true thing
+          on this page and it is the largest graphic on it.
 
    Code is real, highlighted code — highlight.js (vendored, ./assets/vendor/,
-   BSD-3, see the LICENSE beside it), not hand-painted spans. Every colour in
-   both the UI and the code theme is CSS custom properties, so light/dark is
-   never a second pass; the code surface itself (--code-*) stays fixed dark
-   in both page themes on purpose — see patala.css for the full rationale and
-   the measured contrast ratios.
+   BSD-3, see the LICENSE beside it), not hand-painted spans. The code surface
+   itself (--code-*) stays fixed dark in both page themes on purpose; see
+   patala.css for the rationale and the measured ratios.
 
    Self-contained: no CDN, no remote font, no remote image, no analytics.
+   Responsive is a stated requirement, not a side effect: verified at
+   1440/1024/768/390 by measuring every element's getBoundingClientRect().right
+   against the viewport. Nothing grows past the viewport; wide tables and code
+   blocks scroll inside their own container.
    ═══════════════════════════════════════════════════════════════════════════ */
-  .hero{padding:72px 0 0;position:relative;overflow:hidden}
-  .hero-grid{display:grid;grid-template-columns:1.08fr .92fr;gap:56px;align-items:center;padding-bottom:52px}
-  @media(max-width:960px){.hero-grid{grid-template-columns:1fr;gap:40px}}
-  .badge{
-    display:inline-flex;align-items:center;gap:9px;border:1px solid var(--hair-strong);padding:7px 14px 7px 10px;
-    border-radius:20px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
-    color:var(--ink-dim);margin-bottom:26px;
+
+  /* The header is sticky, so an in-page jump must leave room for it or the
+     heading it lands on is hidden underneath. */
+  [id]{scroll-margin-top:84px}
+
+  /* ── the statement rule: every section opens the same way ──────────────── */
+  .srule{display:flex;align-items:center;gap:14px;margin-bottom:26px}
+  .srule .n{
+    font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.1em;flex:none;
+    color:var(--hue,var(--vermilion-deep));border:1px solid currentColor;border-radius:3px;padding:3px 8px;
   }
-  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--pending);flex:none}
+  .srule .t{
+    font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--ink-faint);flex:none;
+  }
+  .srule .r{flex:1;height:1px;background:var(--hair-strong);min-width:12px}
+  .srule .f{font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-faint);flex:none;text-align:right}
+  .srule .f b{color:var(--ink-dim);font-weight:500}
+  @media(max-width:620px){.srule{flex-wrap:wrap;gap:10px}.srule .r{display:none}.srule .f{width:100%;text-align:left}}
+
+  .sec-head{max-width:720px;margin-bottom:34px}
+  .sec-head h2{
+    font-family:var(--disp);font-weight:800;font-size:clamp(27px,4.1vw,44px);line-height:1.06;
+    letter-spacing:-.02em;margin:0 0 14px;color:var(--ink);text-wrap:balance;
+  }
+  .sec-head h2 em{font-style:normal;color:var(--hue,var(--vermilion-deep))}
+  .sec-head p{color:var(--ink-dim);font-size:15.5px;max-width:64ch}
+  .sec-head p b{color:var(--ink);font-weight:600}
+  section.blk{padding:66px 0}
+  /* In the light theme the band announces itself simply by being dark. In the
+     dark theme it can only be a shade darker than the canvas, which at a
+     glance is nearly nothing — so the boundary is drawn instead: a vermilion
+     hairline top and bottom, the one colour reserved for patala itself, which
+     reads as a seam between registers at any zoom. */
+  section.band{
+    padding:74px 0;
+    border-top:1px solid color-mix(in srgb, var(--vermilion) 34%, transparent);
+    border-bottom:1px solid color-mix(in srgb, var(--vermilion) 34%, transparent);
+  }
+  @media(max-width:600px){section.blk{padding:48px 0}section.band{padding:54px 0}}
+
+  /* ══ HERO ═══════════════════════════════════════════════════════════════ */
+  .hero{padding:64px 0 0;position:relative;overflow:hidden}
+  /* One huge, asymmetric cowrie bled off the top-right corner — the same
+     evenodd shell+aperture path as the favicon, scaled ~9×. One bold shape
+     claiming real estate, not a balanced tiled texture. */
+  .hero::before{
+    content:"";position:absolute;top:-300px;right:-330px;width:1000px;height:1000px;z-index:0;pointer-events:none;
+    background-color:var(--vermilion);opacity:.045;transform:rotate(-9deg);
+    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-size:contain;mask-size:contain;
+    -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath fill-rule='evenodd' d='M64 12C83 12 100 33 100 62C100 93 83 116 64 116C45 116 28 93 28 62C28 33 45 12 64 12Z M64 26L70 32L65.5 38L70 45L65.5 51L70 58L65.5 64L70 71L65.5 77L70 84L65.5 90L70 97L64 104L58 97L62.5 90L58 84L62.5 77L58 71L62.5 64L58 58L62.5 51L58 45L62.5 38L58 32Z'/%3E%3C/svg%3E");
+    mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cpath fill-rule='evenodd' d='M64 12C83 12 100 33 100 62C100 93 83 116 64 116C45 116 28 93 28 62C28 33 45 12 64 12Z M64 26L70 32L65.5 38L70 45L65.5 51L70 58L65.5 64L70 71L65.5 77L70 84L65.5 90L70 97L64 104L58 97L62.5 90L58 84L62.5 77L58 71L62.5 64L58 58L62.5 51L58 45L62.5 38L58 32Z'/%3E%3C/svg%3E");
+  }
+  /* The light theme needs slightly more of it to register on a pale ground;
+     both themes drop further on a phone, where the headline sits directly on
+     top of the mark and any more turns it into a stain behind the type. */
+  :root[data-theme="light"] .hero::before{opacity:.07}
+  @media(max-width:960px){
+    .hero::before{width:620px;height:620px;top:-170px;right:-210px;opacity:.03}
+    :root[data-theme="light"] .hero::before{opacity:.05}
+  }
+
+  /* The headline gets the whole measure to itself. Boxing it into a column
+     beside the honesty panel forced "Move value." to wrap at 1440 and threw
+     away the one thing this hero is for. Lead, actions and the honesty panel
+     share the row beneath it instead. */
+  .hero-top{display:grid;grid-template-columns:1.06fr .94fr;gap:48px;align-items:start;padding-bottom:40px}
+  @media(max-width:980px){.hero-top{grid-template-columns:1fr;gap:30px}}
+  .badge{
+    display:inline-flex;align-items:center;gap:9px;border:1px solid var(--hair-strong);padding:6px 13px 6px 10px;
+    border-radius:20px;font-family:var(--mono);font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--ink-dim);margin-bottom:24px;
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ev-testnet);flex:none}
+
+  /* Enormous, confident display type. Syne 800 is a sculptural, wide-set face
+     and it is allowed to be the loudest thing above the fold. */
   .hero h1{
-    font-family:var(--disp);font-weight:500;font-size:clamp(36px,5.6vw,64px);line-height:1.04;
-    letter-spacing:-.01em;margin-bottom:20px;color:var(--ink);
+    font-family:var(--disp);font-weight:800;font-size:clamp(42px,7.4vw,86px);line-height:.96;
+    letter-spacing:-.035em;margin:0 0 34px;color:var(--ink);position:relative;
   }
   .hero h1 .accent{color:var(--vermilion-deep)}
-  :root:not([data-theme="light"]) .hero h1 .accent{color:var(--vermilion)}
-  .hero p.lead{max-width:560px;color:var(--ink-dim);font-size:clamp(15px,1.6vw,17.5px);margin-bottom:28px}
-  .hero p.lead em{font-style:normal;color:var(--ink)}
-  .cta-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:26px}
+  .hero p.lead{max-width:52ch;color:var(--ink-dim);font-size:clamp(15.5px,1.5vw,17.5px);margin-bottom:28px}
+  .hero p.lead em{font-style:normal;color:var(--ink);font-weight:600}
+  .cta-row{display:flex;gap:12px;flex-wrap:wrap}
 
-  .honest-box{
-    border:1px solid var(--hair-strong);border-left:3px solid var(--pending);background:var(--surface);
-    padding:16px 18px;border-radius:2px;max-width:640px;
+  /* The honesty panel is amber — the evidence hue for "a real network, but
+     testnet". It is the highest rung this repo has reached and the panel says
+     exactly that, in the colour the rest of the page uses for exactly that. */
+  .honest{
+    border:1px solid var(--hair-strong);border-top:3px solid var(--ev-testnet);background:var(--surface);
+    padding:20px 20px 18px;border-radius:3px;
   }
-  .honest-box .status{margin-bottom:8px}
-  .honest-box p{font-size:13.5px;color:var(--ink-dim);line-height:1.65}
-  .honest-box p a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
+  .honest .status{margin-bottom:10px}
+  .honest p{font-size:13.5px;color:var(--ink-dim);line-height:1.65}
+  .honest p+p{margin-top:9px}
+  .honest b{color:var(--ink);font-weight:600}
+  .honest a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 
-  /* ---- hero rail diagram ---- */
-  .rail-card{border:1px solid var(--hair-strong);background:var(--surface);border-radius:3px;padding:22px 22px 6px}
-  .rail-svg-wrap{width:100%;overflow:hidden}
-  .rail-svg-wrap svg{width:100%;height:auto;display:block}
-  .rail-line{fill:none;stroke-width:2.25}
-  .rail-line.final{stroke:var(--vermilion)}
-  :root[data-theme="light"] .rail-line.final{stroke:var(--vermilion-deep)}
-  .rail-line.rev{stroke:var(--ink-faint);stroke-dasharray:7 5}
-  .rail-line.mock{stroke:var(--ink-faint);stroke-dasharray:1.2 5;stroke-linecap:round;opacity:.85}
-  .rail-cap{fill:var(--surface);stroke-width:2}
-  .rail-cap.final{stroke:var(--vermilion)}
-  :root[data-theme="light"] .rail-cap.final{stroke:var(--vermilion-deep)}
-  .rail-cap.rev,.rail-cap.mock{stroke:var(--ink-faint)}
-  .rail-guide{stroke:var(--hair-strong);stroke-width:1.5;stroke-dasharray:2 4}
-  .rail-tick{fill:var(--surface);stroke:var(--ink-faint);stroke-width:1.6}
-  .rail-aperture{fill:none;stroke:var(--vermilion);stroke-width:2.5}
-  :root[data-theme="light"] .rail-aperture{stroke:var(--vermilion-deep)}
-  .rail-legend{list-style:none;margin:16px 0 18px;padding:0;display:grid;gap:8px}
-  .rail-legend li{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-dim)}
-  .rail-legend i{width:22px;height:0;border-top-width:2.25px;border-top-style:solid;flex:none;display:block}
-  .rail-legend i.final{border-color:var(--vermilion)}
-  :root[data-theme="light"] .rail-legend i.final{border-color:var(--vermilion-deep)}
-  .rail-legend i.rev{border-color:var(--ink-faint);border-top-style:dashed}
-  .rail-legend i.mock{border-color:var(--ink-faint);border-top-style:dotted}
-  .rail-cap-txt{padding:14px 0 18px;border-top:1px solid var(--hair);font-family:var(--mono);font-size:12px;color:var(--ink-faint);line-height:1.65}
-  .rail-cap-txt b{color:var(--ink-dim);font-weight:500}
-
-  /* rail-name icons — small, hand-drawn glyphs in the ledger, our own
-     abstract marks (never a reproduction of any processor's or chain's
-     actual logo): a dashed circle for the offline mock, a two-lane speed
-     chevron for Solana, a four-point star for Stellar, a toggle for a
-     routed switch, a card-with-hole for a directly-talked-to processor. */
-  .rail-name{display:inline-flex;align-items:center;gap:8px}
-  .rail-icon{width:17px;height:17px;flex:none;color:var(--ink-faint)}
-
-  /* ---- the M×1 illustration: one core, four consumers ---- */
-  .mx1{margin-bottom:34px}
-  .mx1-svg{width:100%;height:auto;display:block;max-width:640px;margin:0 auto}
-  .mx1-box{fill:var(--surface);stroke:var(--hair-strong);stroke-width:1.6}
-  .mx1-box-core{stroke:var(--vermilion)}
-  :root[data-theme="light"] .mx1-box-core{stroke:var(--vermilion-deep)}
-  .mx1-label{font-family:var(--mono);font-size:20px;fill:var(--ink);dominant-baseline:middle}
-
-  section.blk{padding:60px 0}
-  .sec-head{max-width:680px;margin-bottom:38px}
-  .sec-head h2{font-family:var(--disp);font-weight:500;font-size:clamp(26px,3.6vw,38px);letter-spacing:-.01em;margin:12px 0 12px;color:var(--ink)}
-  .sec-head p{color:var(--ink-dim);font-size:15px;max-width:600px}
-
-  /* ---- the promise, drawn as three stops on one rail ---- */
-  .promise-rail{position:relative}
-  .promise-track{position:relative;height:2px;background:var(--hair-strong);margin:0 0 0;border-radius:2px}
-  .promise-track::before,.promise-track::after{
-    content:"";position:absolute;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;
-    border:2px solid var(--vermilion);background:var(--canvas);
+  /* The colophon strip — the hero's own facts, ruled like a statement line
+     and coloured by the same evidence schema as everything below it. */
+  .spec{
+    display:flex;flex-wrap:wrap;align-items:stretch;
+    border-top:1px solid var(--hair-strong);border-bottom:1px solid var(--hair-strong);
   }
-  :root[data-theme="light"] .promise-track::before,:root[data-theme="light"] .promise-track::after{border-color:var(--vermilion-deep)}
-  .promise-track::before{left:calc(16.66% - 5px)}
-  .promise-track::after{left:calc(50% - 5px)}
-  .promise-stops{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
-  .promise-stop{position:relative;padding:26px 26px 4px}
-  .promise-stop::before{
-    content:"";position:absolute;top:-2px;left:calc(50% - 5px);width:9px;height:9px;border-radius:50%;
-    border:2px solid var(--vermilion);background:var(--canvas);
+  .spec i{
+    font-style:normal;font-family:var(--mono);font-size:11.5px;font-weight:500;letter-spacing:.11em;
+    text-transform:uppercase;color:var(--ink-faint);white-space:nowrap;
+    padding:15px 22px 15px 0;margin-right:22px;border-right:1px solid var(--hair);
+    display:flex;align-items:baseline;gap:7px;
   }
-  :root[data-theme="light"] .promise-stop::before{border-color:var(--vermilion-deep)}
-  .promise-stop:first-child{padding-left:0}
-  .promise-stop:first-child::before{left:5px}
-  .promise-stop:last-child{padding-right:0}
-  .promise-stop:last-child::before{left:auto;right:5px}
-  .promise-stop h3{font-family:var(--disp);font-weight:500;font-size:18px;margin-bottom:9px;color:var(--ink)}
-  .promise-stop p{font-size:13.5px;color:var(--ink-dim);line-height:1.65}
-  @media(max-width:760px){
-    .promise-stops{grid-template-columns:1fr;gap:30px}
-    .promise-track{display:none}
-    .promise-stop{padding:0 0 0 26px;border-left:2px solid var(--hair-strong)}
-    .promise-stop::before{top:6px;left:-6px}
-    .promise-stop:first-child,.promise-stop:last-child{padding:0 0 0 26px}
-    .promise-stop:first-child::before{left:-6px}
-    .promise-stop:last-child::before{left:-6px;right:auto}
+  .spec i:last-child{border-right:0;margin-right:0;padding-right:0}
+  .spec b{font-size:15px;font-weight:500;letter-spacing:0;color:var(--ink)}
+  .spec b.testnet{color:var(--ev-testnet)}
+  .spec b.zero{color:var(--ev-none)}
+  /* Named .mark, not .seam: .seam is the hero diagram panel, and reusing that
+     name here silently gave these numerals the panel's border, padding and
+     background. */
+  .spec b.mark{color:var(--vermilion-deep)}
+  @media(max-width:860px){
+    .spec i{width:50%;border-right:0;margin-right:0;padding:11px 0;border-bottom:1px solid var(--hair)}
+    .spec i:nth-last-child(-n+2){border-bottom:0}
+  }
+  @media(max-width:520px){
+    .spec i{width:100%;border-bottom:1px solid var(--hair)}
+    .spec i:nth-last-child(-n+2){border-bottom:1px solid var(--hair)}
+    .spec i:last-child{border-bottom:0}
   }
 
-  /* ---- no GUI, by design ---- */
-  .nogui{display:grid;grid-template-columns:1.05fr .95fr;gap:44px;align-items:center}
-  @media(max-width:860px){.nogui{grid-template-columns:1fr;gap:32px}}
-  .nogui h2{font-family:var(--disp);font-weight:500;font-size:clamp(24px,3.2vw,32px);letter-spacing:-.01em;margin-bottom:14px;color:var(--ink)}
-  .nogui p{color:var(--ink-dim);font-size:14.5px;line-height:1.7;max-width:52ch}
-  .nogui p+p{margin-top:12px}
+  /* ── ILLUSTRATION 1 · THE SEAM ─────────────────────────────────────────── */
+  .seam{margin:46px 0 0;padding:30px 30px 26px;border:1px solid var(--hair-strong);border-radius:4px;background:var(--surface)}
+  @media(max-width:600px){.seam{padding:22px 18px 20px;margin-top:34px}}
+  .seam-cap{
+    display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;justify-content:space-between;
+    margin-bottom:26px;padding-bottom:14px;border-bottom:1px solid var(--hair);
+  }
+  .seam-cap .kick{color:var(--ink-dim)}
+  .seam-cap span.hint{font-size:12.5px;color:var(--ink-faint)}
+
+  /* Fractional columns, not auto ones, on purpose: with 1fr / 2.2fr / 1fr the
+     track's centre is exactly the panel's centre at every width, which is what
+     lets the aperture above and the drop-line behind be plain centred elements
+     instead of anything that has to be kept in sync with text metrics. */
+  .rl{
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.2fr) minmax(0,1fr);
+    align-items:center;gap:0 16px;padding:11px 0;
+  }
+  .rl-name{
+    display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:13px;font-weight:500;
+    color:var(--ink);white-space:nowrap;
+  }
+  .rl-name .rail-icon{width:16px;height:16px;flex:none}
+  .rl-dest{font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);text-align:right;letter-spacing:.02em}
+  /* Below 860px the three columns can no longer hold a mono rail name and a
+     mono destination on one line without wrapping both to ribbons, so each
+     rail becomes its own small stack: name, then its full-width track, then
+     where it lands. The tracks stay full-width, so every seam tick stays on
+     the same vertical centre line and the diagram still reads as one stack. */
+  @media(max-width:860px){
+    .rl{grid-template-columns:1fr;gap:7px 0;padding:12px 0}
+    .rl-dest{text-align:left;order:3}
+    .rl-track{order:2}
+  }
+
+  /* The track itself. Colour AND dash pattern both carry the settlement
+     class, so the diagram is still readable with hue removed entirely.
+     Direction is drawn, not implied: a filled origin pip on the left, an
+     arrowhead on the right — payer to destination, one unbroken line. */
+  .rl-track{position:relative;height:2.5px;color:var(--cls-none)}
+  .rl-track.final{color:var(--cls-final);background:currentColor}
+  .rl-track.rev{color:var(--cls-rev);background:repeating-linear-gradient(90deg,currentColor 0 8px,transparent 8px 14px)}
+  .rl-track.none{color:var(--cls-none);background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 8px)}
+  .rl-track::before{
+    content:"";position:absolute;left:-1px;top:50%;width:8px;height:8px;margin-top:-4px;border-radius:50%;
+    background:currentColor;
+  }
+  .rl-track::after{
+    content:"";position:absolute;right:-2px;top:50%;width:0;height:0;margin-top:-5px;
+    border-left:9px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent;
+  }
+  /* The seam tick: an OPEN circle where patala touches the rail. Open because
+     nothing pools there — the interface quotes, charges and verifies the rail
+     without ever standing in the path the value takes. */
+  .rl-tick{
+    position:absolute;left:50%;top:50%;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;
+    background:var(--surface);border:2px solid var(--vermilion-deep);z-index:1;
+  }
+  /* The drop-line: ONE dashed rule down the centre, from the aperture to the
+     last tick. It is a single element rather than a per-row stub because the
+     tracks are centred by construction (see .rl above), so one centred line is
+     correct at every width — including the stacked phone layout, where the
+     tracks are full-width and their ticks stay on the same centre line. */
+  .seam-rows{position:relative}
+  .seam-rows::before{
+    content:"";position:absolute;left:50%;top:-24px;bottom:12px;width:0;
+    border-left:1.5px dashed var(--hair-strong);
+  }
+  /* Stacked, the last row carries its destination line below its track, so the
+     line has further to stop short of the row's bottom edge. */
+  @media(max-width:860px){.seam-rows::before{bottom:38px}}
+
+  /* The aperture: patala's own mark, drawn hollow — stroke only, no fill —
+     because the joint is open. Sits at the head of the drop-line. */
+  .seam-mark{
+    display:flex;flex-direction:column;align-items:center;gap:5px;margin-bottom:24px;
+  }
+  .seam-mark svg{width:26px;height:34px;display:block;overflow:visible}
+  .seam-mark svg path,.seam-mark svg line{stroke:var(--vermilion-deep);fill:none;stroke-width:2;stroke-linecap:round}
+  .seam-mark b{
+    font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--vermilion-deep);white-space:nowrap;
+  }
+  @media(max-width:440px){.seam-mark b{display:none}}
+
+  /* A small bright dash riding the track — "value moving", paused until the
+     panel is actually on screen. Reduced motion is handled globally in
+     patala.css, which collapses every animation to ~0 duration. */
+  .rl-pulse{
+    position:absolute;top:50%;left:0;width:26px;height:3px;margin-top:-1.5px;border-radius:3px;
+    background:currentColor;opacity:0;filter:brightness(1.5);
+    animation:railRide 3.4s linear infinite;animation-play-state:paused;
+  }
+  .in-view .rl-pulse{opacity:.95;animation-play-state:running}
+  @keyframes railRide{0%{left:0}100%{left:calc(100% - 26px)}}
+
+  .seam-legend{
+    display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:26px;padding-top:18px;border-top:1px solid var(--hair);
+  }
+  .seam-note{margin-top:16px;font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:78ch}
+  .seam-note b{color:var(--ink);font-weight:600}
+
+  /* ══ 01 · THE THREE ZEROS (instrument band) ═════════════════════════════ */
+  .zeros{display:grid;grid-template-columns:repeat(3,1fr);gap:0;border-top:1px solid var(--hair-strong)}
+  .zeros>div{padding:30px 30px 4px;border-left:1px solid var(--hair)}
+  .zeros>div:first-child{border-left:none;padding-left:0}
+  .zeros>div:last-child{padding-right:0}
+  @media(max-width:820px){
+    .zeros{grid-template-columns:1fr}
+    .zeros>div{border-left:none;border-top:1px solid var(--hair);padding:26px 0 4px}
+    .zeros>div:first-child{border-top:none}
+  }
+  .zeros .fig{
+    font-family:var(--mono);font-weight:500;font-size:clamp(48px,7vw,80px);line-height:1;letter-spacing:-.04em;
+    color:var(--vermilion);display:block;margin-bottom:6px;
+  }
+  .zeros .unit{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);display:block;margin-bottom:14px}
+  .zeros h3{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.01em;margin-bottom:9px;color:var(--ink)}
+  .zeros p{font-size:13.5px;color:var(--ink-dim);line-height:1.68;padding-bottom:24px}
+  .band-lead{font-size:16px;color:var(--ink-dim);max-width:60ch;margin-bottom:34px}
+  .band-lead b{color:var(--ink);font-weight:600}
+
+  /* ══ 02 · NO GUI (register) ═════════════════════════════════════════════ */
+  .nogui{display:grid;grid-template-columns:1.02fr .98fr;gap:44px}
+  @media(max-width:900px){.nogui{grid-template-columns:1fr;gap:34px}}
+  /* A grid item's default min-width is auto, i.e. its min-CONTENT width — so a
+     single nowrap chip deep inside a column can push the whole track wider
+     than 1fr and take the document with it. This is exactly what put 105px of
+     horizontal scroll on the body at 390px. Every multi-column grid on this
+     page opts its items out. */
+  .hero-top>*,.nogui>*,.zeros>*,.mxn>*,.custody>*,.stations-grid>*,.ladder>*{min-width:0}
+  .nogui p{color:var(--ink-dim);font-size:15px;line-height:1.72;max-width:54ch}
+  .nogui p+p{margin-top:13px}
   .nogui p b{color:var(--ink);font-weight:600}
-  .nogui-list{list-style:none;margin:20px 0 0;padding:0;display:grid;gap:9px}
-  .nogui-list li{display:flex;gap:10px;align-items:baseline;font-size:13.5px;color:var(--ink-dim)}
-  .nogui-list li::before{content:"—";color:var(--vermilion);flex:none;font-family:var(--mono)}
-  :root[data-theme="light"] .nogui-list li::before{color:var(--vermilion-deep)}
-
-  /* ---- rails ledger ---- */
-  .tag{
-    display:inline-block;font-family:var(--mono);font-size:12px;letter-spacing:.03em;padding:3px 8px;
-    border-radius:3px;background:var(--surface-raised);color:var(--ink-dim);white-space:nowrap;
+  /* One shared grid with `display:contents` rows, not three independent
+     two-column grids — otherwise each row sizes its own label column and the
+     three descriptions start at three different x positions. */
+  .nogui-list{
+    list-style:none;margin:22px 0 0;padding:0;border-top:1px solid var(--hair);
+    display:grid;grid-template-columns:auto minmax(0,1fr);
   }
-  .fiat-list{font-size:12.5px;color:var(--ink-faint);line-height:1.7;margin-top:4px}
+  .nogui-list li{display:contents}
+  .nogui-list li>*{padding:12px 0;border-bottom:1px solid var(--hair);font-size:13.5px;color:var(--ink-dim)}
+  .nogui-list li .w{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--vermilion-deep);white-space:nowrap;padding-right:16px;
+  }
+  .nogui-list code{font-family:var(--mono);font-size:.92em;color:var(--ink)}
 
-  /* ---- stat strip ---- */
-  .stat-strip{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--hair);margin-top:10px}
-  .stat{padding:20px 22px;border-left:1px solid var(--hair)}
+  /* ── ILLUSTRATION 2 · KEY CUSTODY ──────────────────────────────────────── */
+  .host{border:1.5px dashed var(--hair-strong);border-radius:6px;padding:34px 22px 22px;position:relative;background:var(--surface)}
+  .host>.host-lbl{
+    position:absolute;top:-9px;left:18px;background:var(--surface);padding:0 8px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .custody{display:grid;grid-template-columns:minmax(0,1.04fr) 92px minmax(0,.96fr);gap:0;align-items:center}
+  @media(max-width:820px){.custody{grid-template-columns:1fr;gap:0}}
+  .procs{list-style:none;margin:0;padding:0;display:grid;gap:8px;min-width:0}
+  .procs li{
+    display:flex;align-items:center;gap:9px;border:1px solid var(--hair);border-radius:4px;
+    padding:11px 12px;font-family:var(--mono);font-size:12.5px;color:var(--ink-dim);background:var(--canvas);
+    min-width:0;
+  }
+  .procs li span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .procs li em{font-style:normal;margin-left:auto;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ev-none);white-space:nowrap;flex:none}
+  .procs .gl{width:17px;height:17px;flex:none;color:var(--ev-none)}
+  /* The bracket: three processes, one destination. Drawn with borders rather
+     than in a viewBox so it stretches with the boxes it joins and can never
+     drift out of register with them. The caption sits under the stem, not on
+     it, so the arrow into the sidecar stays visible. */
+  .brace{position:relative;align-self:stretch;display:flex;align-items:center;justify-content:center}
+  .brace .b{
+    position:absolute;left:6px;top:16%;bottom:16%;width:20px;
+    border:1.5px solid var(--hair-strong);border-left:none;border-radius:0 8px 8px 0;
+  }
+  .brace .stem{position:absolute;left:26px;right:6px;top:50%;height:1.5px;background:var(--hair-strong)}
+  .brace .stem::after{
+    content:"";position:absolute;right:-1px;top:50%;width:0;height:0;margin-top:-4.5px;
+    border-left:8px solid var(--hair-strong);border-top:4.5px solid transparent;border-bottom:4.5px solid transparent;
+  }
+  .brace .lbl{
+    position:absolute;left:50%;top:calc(50% + 9px);transform:translateX(-50%);
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--ink-faint);text-align:center;line-height:1.55;white-space:nowrap;
+  }
+  @media(max-width:820px){
+    .brace{min-height:64px;margin:4px 0}
+    .brace .b{left:22%;right:22%;top:0;bottom:auto;width:auto;height:14px;
+      border:1.5px solid var(--hair-strong);border-top:none;border-radius:0 0 8px 8px}
+    .brace .stem{left:50%;right:auto;top:14px;bottom:0;height:auto;width:1.5px;margin-left:-.75px}
+    .brace .stem::after{right:auto;left:50%;top:auto;bottom:-1px;margin:0 0 0 -4.5px;border:none;
+      border-top:8px solid var(--hair-strong);border-left:4.5px solid transparent;border-right:4.5px solid transparent}
+    .brace .lbl{left:calc(50% + 12px);top:50%;transform:translateY(-50%);text-align:left}
+  }
+  .vault{
+    border:2px solid var(--vermilion-deep);border-radius:5px;padding:16px 16px 14px;background:var(--canvas);
+    display:flex;flex-direction:column;gap:7px;
+  }
+  .vault .gl{width:22px;height:22px;color:var(--vermilion-deep)}
+  .vault b{font-family:var(--mono);font-size:13.5px;font-weight:500;color:var(--ink)}
+  .vault span{font-size:12.5px;color:var(--ink-dim);line-height:1.55}
+  .host-foot{
+    margin-top:16px;padding-top:14px;border-top:1px solid var(--hair);
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-faint);letter-spacing:.03em;line-height:1.7;
+  }
+  .host-foot b{color:var(--ink-dim);font-weight:500}
+
+  /* ══ 03 · RAILS LEDGER ═════════════════════════════════════════════════ */
+  .tag{
+    display:inline-block;font-family:var(--mono);font-size:11.5px;letter-spacing:.02em;padding:3px 7px;
+    border-radius:3px;background:var(--surface-raised);color:var(--ink-dim);white-space:nowrap;margin-top:6px;
+  }
+  .fiat-list{font-size:12.5px;color:var(--ink-faint);line-height:1.75;margin-top:8px}
+  .rail-name{display:inline-flex;align-items:center;gap:8px;font-size:14px}
+  /* Rail-name icons — our own abstract marks, never a reproduction of any
+     processor's or chain's actual logo. They now inherit the settlement
+     class hue from the row, so the icon, the chip and the hero's track for a
+     given rail are all the same colour. */
+  .rail-icon{width:17px;height:17px;flex:none}
+  .ic-final{color:var(--cls-final)}
+  .ic-rev{color:var(--cls-rev)}
+  .ic-none{color:var(--cls-none)}
+
+  /* ══ 04 · THE EVIDENCE LADDER ══════════════════════════════════════════ */
+  .ladder{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(5,1fr);gap:0}
+  .ladder li{padding:0 16px 0 0;position:relative;min-width:0}
+  .ladder li:last-child{padding-right:0}
+  /* The rung head: a pip on a track, coloured by the evidence level it marks.
+     The last rung's pip is hollow and its track dashed, because nothing on
+     this page has ever reached it. */
+  .rung-track{
+    position:relative;height:2px;background:currentColor;color:var(--ev-none);margin-bottom:18px;
+  }
+  .ladder li.r1 .rung-track{color:var(--ev-none)}
+  .ladder li.r2 .rung-track{color:var(--ev-design)}
+  .ladder li.r3 .rung-track{color:var(--ev-exec)}
+  .ladder li.r4 .rung-track{color:var(--ev-testnet)}
+  .ladder li.r5 .rung-track{
+    color:var(--ev-none);background:repeating-linear-gradient(90deg,currentColor 0 3px,transparent 3px 9px);
+  }
+  .rung-track::before{
+    content:"";position:absolute;left:0;top:50%;width:13px;height:13px;margin-top:-6.5px;border-radius:50%;
+    background:currentColor;border:3px solid var(--canvas);box-sizing:content-box;
+  }
+  .ladder li.r5 .rung-track::before{background:var(--canvas);box-shadow:inset 0 0 0 2px currentColor}
+  .rung-n{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--ink-faint);display:block;margin-bottom:5px}
+  .rung h3{font-family:var(--disp);font-weight:700;font-size:16.5px;letter-spacing:-.008em;color:var(--ink);margin-bottom:10px}
+  .ladder li.r1 h3{color:var(--ev-none)}
+  .ladder li.r2 h3{color:var(--ev-design)}
+  .ladder li.r3 h3{color:var(--ev-exec)}
+  .ladder li.r4 h3{color:var(--ev-testnet)}
+  .ladder li.r5 h3{color:var(--ev-none)}
+  .rung ul{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+  .rung ul li{
+    font-family:var(--mono);font-size:11.5px;color:var(--ink-dim);padding:0;line-height:1.5;
+    overflow-wrap:anywhere;
+  }
+  .rung .empty{
+    font-family:var(--mono);font-size:11.5px;color:var(--ev-none);border:1px dashed currentColor;
+    border-radius:3px;padding:9px 10px;text-align:center;letter-spacing:.06em;
+  }
+  .rung .why{font-size:12px;color:var(--ink-faint);line-height:1.55;margin-top:9px}
+  @media(max-width:1000px){
+    .ladder{grid-template-columns:repeat(2,1fr);gap:26px 22px}
+    .ladder li{padding-right:0}
+    .ladder li.r5{grid-column:1/-1}
+  }
+  @media(max-width:560px){
+    .ladder{grid-template-columns:1fr;gap:22px}
+    .ladder li.r5{grid-column:auto}
+  }
+
+  .stat-strip{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--hair);margin-top:36px}
+  .stat{padding:20px 20px;border-left:1px solid var(--hair);min-width:0}
   .stat:first-child{border-left:none}
-  .stat .stat-num{font-family:var(--mono);font-size:clamp(22px,3vw,30px);font-weight:500;color:var(--ink);display:block;margin-bottom:4px}
-  .stat .stat-lbl{font-size:12px;color:var(--ink-faint)}
-  @media(max-width:760px){.stat-strip{grid-template-columns:1fr}.stat{border-left:none;border-top:1px solid var(--hair)}.stat:first-child{border-top:none}}
+  .stat .stat-num{font-family:var(--mono);font-size:clamp(24px,3vw,34px);font-weight:500;color:var(--ink);display:block;margin-bottom:4px;letter-spacing:-.02em}
+  .stat.exec .stat-num{color:var(--ev-exec)}
+  .stat.testnet .stat-num{color:var(--ev-testnet)}
+  .stat.none .stat-num{color:var(--ev-none)}
+  .stat .stat-lbl{font-size:12.5px;color:var(--ink-faint);line-height:1.5}
+  @media(max-width:880px){.stat-strip{grid-template-columns:1fr 1fr}.stat:nth-child(3),.stat:nth-child(4){border-top:1px solid var(--hair)}.stat:nth-child(3){border-left:none}}
+  @media(max-width:520px){.stat-strip{grid-template-columns:1fr}.stat{border-left:none;border-top:1px solid var(--hair)}.stat:first-child{border-top:none}}
 
   .caveat{
-    margin-top:26px;border:1px solid var(--hair-strong);border-left:3px solid var(--pending);
-    padding:16px 18px;font-size:13.5px;color:var(--ink-dim);line-height:1.65;background:var(--surface);
+    margin-top:30px;border:1px solid var(--hair-strong);border-left:3px solid var(--ev-testnet);
+    padding:20px 22px;font-size:14px;color:var(--ink-dim);line-height:1.7;background:var(--surface);border-radius:0 3px 3px 0;
   }
   .caveat b{color:var(--ink)}
+  .caveat .rej{color:var(--ev-fail);font-style:normal;font-weight:600}
+  .caveat a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 
-  /* ---- polyglot, drawn as four stations on one rail ---- */
-  .stations{position:relative;border-top:1px solid var(--hair);margin-top:6px}
+  /* ══ 05 · POLYGLOT ═════════════════════════════════════════════════════ */
+  /* ── ILLUSTRATION 3 · M×N vs M×1 ───────────────────────────────────────
+     The only bare SVG left on the page, because here the argument IS the
+     shape: twenty crossing edges you would have to write and keep in sync,
+     beside nine that fan through one core. No text lives inside the viewBox. */
+  .mxn{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:36px}
+  @media(max-width:760px){.mxn{grid-template-columns:1fr}}
+  .mxn figure{border:1px solid var(--hair-strong);border-radius:4px;padding:20px;background:var(--surface);margin:0}
+  .mxn figure.win{border-color:var(--vermilion-deep)}
+  .mxn .ttl{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .mxn .ttl b{font-family:var(--mono);font-size:14px;font-weight:500;letter-spacing:.04em;color:var(--ink)}
+  .mxn figure.win .ttl b{color:var(--vermilion-deep)}
+  .mxn .ttl span{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint)}
+  .mxn svg{width:100%;height:auto;display:block}
+  .mxn .edge{stroke:var(--ev-fail);stroke-width:1;fill:none;opacity:.55}
+  .mxn .edge-ok{stroke:var(--cls-final);stroke-width:1.4;fill:none;opacity:.9}
+  .mxn .nd{fill:var(--ink-faint)}
+  .mxn .nd-core{fill:none;stroke:var(--vermilion-deep);stroke-width:2}
+  .mxn figcaption{margin-top:14px;padding-top:12px;border-top:1px solid var(--hair);font-size:13px;color:var(--ink-dim);line-height:1.6}
+  .mxn figcaption b{color:var(--ink);font-weight:600}
+  .mxn .axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);margin-top:8px}
+
+  .stations{border-top:1px solid var(--hair-strong)}
   .stations-grid{display:grid;grid-template-columns:repeat(4,1fr)}
-  .station{padding:22px 22px 0 22px;border-left:1px solid var(--hair);position:relative}
+  .station{padding:22px 20px 0 20px;border-left:1px solid var(--hair);position:relative;min-width:0}
   .station::before{
-    content:"";position:absolute;top:-6px;left:21px;width:11px;height:11px;border-radius:50%;
-    border:2px solid var(--vermilion);background:var(--canvas);
+    content:"";position:absolute;top:-5px;left:19px;width:9px;height:9px;border-radius:50%;
+    background:var(--vermilion-deep);
   }
-  :root[data-theme="light"] .station::before{border-color:var(--vermilion-deep)}
-  .station:first-child{border-left:none}
+  .station:first-child{border-left:none;padding-left:0}
   .station:first-child::before{left:0}
   .station .kick{margin-bottom:10px}
-  .station h3{font-family:var(--disp);font-weight:500;font-size:16px;margin-bottom:8px;color:var(--ink)}
+  .station h3{font-family:var(--disp);font-weight:700;font-size:16px;margin-bottom:8px;color:var(--ink)}
   .station p{font-size:13px;color:var(--ink-dim);line-height:1.6;padding-bottom:22px}
+  .station code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
   @media(max-width:920px){
     .stations-grid{grid-template-columns:1fr 1fr}
-    .station:nth-child(2){border-left:1px solid var(--hair)}
-    .station:nth-child(2)::before{left:21px}
-    .station:nth-child(3){border-left:none}
+    .station:nth-child(3){border-left:none;padding-left:0}
     .station:nth-child(3)::before{left:0}
   }
   @media(max-width:560px){
     .stations-grid{grid-template-columns:1fr}
-    .station{border-left:none;border-top:1px solid var(--hair);padding-left:22px}
+    .station{border-left:none;border-top:1px solid var(--hair);padding:20px 0 0}
     .station::before{left:0}
     .station:first-child{border-top:none}
   }
 
-  .cb-panel{margin-top:30px}
+  .cb-panel{margin-top:34px}
   .lang-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
   .lang-tab{
-    font-family:var(--mono);font-size:12px;padding:7px 13px;border-radius:5px;border:1px solid var(--hair-strong);
-    background:var(--surface);color:var(--ink-dim);cursor:pointer;transition:.15s;min-height:32px;
+    font-family:var(--mono);font-size:12px;padding:7px 15px;border-radius:5px;border:1px solid var(--hair-strong);
+    background:var(--surface);color:var(--ink-dim);cursor:pointer;transition:.15s;min-height:44px;min-width:44px;
   }
   .lang-tab:hover{color:var(--ink);border-color:var(--ink-faint)}
-  .lang-tab[aria-selected="true"]{background:var(--vermilion);border-color:var(--vermilion);color:var(--vermilion-ink)}
+  .lang-tab[aria-selected="true"]{background:var(--vermilion);border-color:var(--vermilion);color:var(--vermilion-ink);font-weight:500}
   .lang-pane{display:none}
   .lang-pane.active{display:block}
 
-  /* proof strip — real captured output, not mockups */
-  .proof-note{font-size:13px;color:var(--ink-faint);margin-top:2px}
+  /* ══ 06 · PROOF (instrument band) ══════════════════════════════════════ */
+  .proof-note{font-size:13px;color:var(--ink-faint);margin-top:8px;display:block}
   .proof-note code{font-family:var(--mono);background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink-dim)}
-  .proof-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
-  .proof-item{min-width:0}
+  .proof-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+  .proof-item{min-width:0;margin:0}
   .proof-item.wide{grid-column:1/-1}
   @media(max-width:820px){.proof-grid{grid-template-columns:1fr}}
   .proof-item img{width:100%;max-width:720px;height:auto;display:block;border:1px solid var(--hair-strong);border-radius:2px}
   .proof-item.wide img{max-width:920px}
-  .proof-item figcaption{margin-top:10px;font-size:13px;color:var(--ink-dim);line-height:1.55;max-width:58ch}
+  .proof-item figcaption{margin-top:11px;font-size:13px;color:var(--ink-dim);line-height:1.6;max-width:58ch}
+  .proof-item figcaption b{color:var(--ink);font-weight:600}
   .proof-item figcaption code{font-family:var(--mono);font-size:1em;background:var(--surface-raised);padding:1px 5px;border-radius:3px;color:var(--ink)}
-  /* The captured panes are set in real 12.5px mono type. Shrinking that to
-     fit a narrow phone would make the very JSON/test-count text this
-     section exists to prove illegible — same reasoning as the ledger
-     tables (patala.css). So below 640px each pane keeps its true pixel
-     width and scrolls horizontally instead of shrinking. */
+  /* The captured panes are set in real 12.5px mono. Shrinking that to fit a
+     narrow phone would make the very JSON/test-count text this section exists
+     to prove illegible — same reasoning as the ledger tables. So below 640px
+     each pane keeps its true pixel width and scrolls horizontally. */
   .proof-scroll{position:relative;border-radius:2px;min-width:0}
   .proof-scroll.tall{max-height:440px;overflow-y:auto}
   .proof-scroll img{border-radius:2px}
@@ -278,23 +605,28 @@
     .proof-scroll img{width:640px;max-width:640px}
     .proof-scroll::after{
       content:"";position:sticky;top:0;right:0;float:right;width:26px;height:100%;
-      pointer-events:none;background:linear-gradient(90deg,transparent,#151c33);
+      pointer-events:none;background:linear-gradient(90deg,transparent,var(--canvas));
     }
   }
 
+  /* ══ CLOSE ═════════════════════════════════════════════════════════════ */
+  /* An explicit two-track grid, not a wrapping flex row: with flex the prose
+     column claimed the free space, the actions wrapped below it, and the close
+     ended as a wide box with an empty right half. */
   .final-cta{
-    border:1px solid var(--hair-strong);padding:40px 36px;text-align:left;
-    display:flex;flex-wrap:wrap;gap:24px;align-items:center;justify-content:space-between;
+    border:1px solid var(--hair-strong);border-top:3px solid var(--vermilion-deep);padding:40px 36px;
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px 40px;align-items:center;background:var(--surface);
   }
-  .final-cta h2{font-family:var(--disp);font-weight:500;font-size:clamp(22px,3vw,30px);letter-spacing:-.01em;margin-bottom:8px;color:var(--ink)}
-  .final-cta p{color:var(--ink-dim);font-size:14px;max-width:440px}
-  .final-cta .cta-row{margin-bottom:0}
-
-  /* Responsive is a stated requirement, not a side effect: verified at
-     1440/1024/768/390 with Playwright (see the task notes) — nothing here
-     ever grows past 100% of the viewport, and every wide table/code block
-     scrolls inside its own container via patala.css's .ledger-wrap /
-     .codeblock rather than widening <body>. */
+  @media(max-width:820px){.final-cta{grid-template-columns:1fr;gap:22px}}
+  @media(max-width:600px){.final-cta{padding:28px 22px}}
+  /* Explicit line break, and no breaking inside "Self-host": left to itself
+     the browser hyphen-broke it as "Self- / host" mid-headline. */
+  .final-cta h2{font-family:var(--disp);font-weight:800;font-size:clamp(23px,3.2vw,34px);letter-spacing:-.024em;margin-bottom:12px;color:var(--ink)}
+  .final-cta h2 span{white-space:nowrap}
+  .final-cta p{color:var(--ink-dim);font-size:14.5px;max-width:54ch}
+  .final-cta .cta-row{flex-direction:column;align-items:stretch;gap:10px}
+  .final-cta .cta-row .btn{justify-content:center}
+  @media(max-width:820px){.final-cta .cta-row{flex-direction:row}}
 </style>
 </head>
 <body>
@@ -305,7 +637,7 @@
   </a>
   <div class="nlinks">
     <a class="nl hidem" href="#rails">Rails</a>
-    <a class="nl hidem" href="#status">Status</a>
+    <a class="nl hidem" href="#status">Evidence</a>
     <a class="nl hidem" href="#bindings">Bindings</a>
     <a class="nl hidem" href="#proof">Proof</a>
     <a class="nl" href="./docs.html">Docs</a>
@@ -314,156 +646,206 @@
       <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" style="display:none"><path d="M20 14.1A8.3 8.3 0 1 1 9.9 4a6.6 6.6 0 0 0 10.1 10.1Z" stroke-linejoin="round"/></svg>
     </button>
     <a class="btn sm" href="https://github.com/vul-os/patala" target="_blank" rel="noopener">GitHub</a>
+    <a class="iconbtn vulos-btn" href="https://vulos.org" target="_blank" rel="noopener" aria-label="Vulos — open by design" title="Vulos — open by design">
+      <img src="./assets/vulos-logo.png" alt="" width="18" height="18">
+    </a>
   </div>
 </div></nav>
 
-<header class="hero" id="top"><div class="wrap hero-grid">
-  <div>
-    <div class="badge"><span class="dot"></span> Foundational · unit-tested · unverified against live networks</div>
-    <h1>Move value.<br>Hold <span class="accent">none</span> of it.</h1>
-    <p class="lead">patala is a sovereign, centreless payment-rail substrate — <em>one interface</em> to move money, fiat or crypto, that any product can vendor and self-host. The platform holds no funds, takes no cut, and no one owns the network. <em>Patala</em> is Sesotho/Setswana for "to pay."</p>
-    <div class="cta-row">
-      <a class="btn pri" href="./docs.html">Read the docs</a>
-      <a class="btn" href="https://github.com/vul-os/patala" target="_blank" rel="noopener">View source</a>
+<header class="hero" id="top"><div class="wrap">
+  <div class="badge"><span class="dot"></span> Foundational · 2 testnet runs · 0 mainnet</div>
+  <h1>Move value.<br>Hold <span class="accent">none</span> of it.</h1>
+  <div class="hero-top">
+    <div>
+      <p class="lead">patala is a sovereign, centreless payment-rail substrate — <em>one interface</em> to move money, fiat or crypto, that any product can vendor and self-host. The platform holds no funds, takes no cut, and no one owns the network. <em>Patala</em> is Sesotho/Setswana for "to pay."</p>
+      <div class="cta-row">
+        <a class="btn pri" href="./docs.html">Read the docs</a>
+        <a class="btn" href="#status">See the evidence</a>
+      </div>
     </div>
-    <div class="honest-box">
-      <span class="status pending">UNVERIFIED AGAINST LIVE</span>
-      <p>260 offline tests pass in the default build, 572 more with every processor feature compiled in — but no rail in this repo has been run against a live network or a live merchant account. Read the <a href="./docs.html#status">full status</a> before you trust it with real money.</p>
+    <div class="honest">
+      <span class="status testnet">TESTNET TWICE · MAINNET NEVER</span>
+      <p><b>293 offline tests</b> pass in the default build and <b>572 more</b> with every processor feature compiled in. Beyond that, exactly two runs have ever touched a live network — both <code>patala-stellar</code>, both Stellar <b>testnet</b>, both 2026-07-30.</p>
+      <p>No mainnet. No live merchant account. Read the <a href="#status">evidence ladder</a> before you point this at real money.</p>
     </div>
   </div>
-  <div>
-    <div class="rail-card">
-      <div class="rail-svg-wrap">
-        <svg viewBox="0 0 560 226" role="img" aria-labelledby="railDiagT railDiagD">
-          <title id="railDiagT">Five rails, one open seam</title>
-          <desc id="railDiagD">A schematic of five unbroken horizontal lines, one per rail patala ships, running left (a payer) to right (a destination). An open, hollow lens shape sits above the stack — patala's own aperture mark — connected to each line by a thin dashed guide that ends in a small open circle where it touches the line, never breaking or merging it. The lines never converge: patala watches every rail without ever sitting inside the path value moves on.</desc>
-          <!-- the seam: an open aperture, hollow, above the stack -->
-          <path class="rail-aperture" d="M280 2 Q288 16 280 30 Q272 16 280 2 Z"></path>
-          <line class="rail-guide" x1="280" y1="30" x2="280" y2="197"></line>
-          <!-- five rails: mock (dotted), solana + stellar (solid = final), hyperswitch + fiat (dashed = reversible) -->
-          <g>
-            <line class="rail-line mock" x1="28" y1="46" x2="532" y2="46"></line>
-            <circle class="rail-tick" cx="280" cy="46" r="4"></circle>
-            <circle class="rail-cap mock" cx="28" cy="46" r="3.5"></circle>
-            <circle class="rail-cap mock" cx="532" cy="46" r="3.5"></circle>
-          </g>
-          <g>
-            <line class="rail-line final" x1="28" y1="84" x2="532" y2="84"></line>
-            <circle class="rail-tick" cx="280" cy="84" r="4"></circle>
-            <circle class="rail-cap final" cx="28" cy="84" r="3.5"></circle>
-            <circle class="rail-cap final" cx="532" cy="84" r="3.5"></circle>
-          </g>
-          <g>
-            <line class="rail-line final" x1="28" y1="122" x2="532" y2="122"></line>
-            <circle class="rail-tick" cx="280" cy="122" r="4"></circle>
-            <circle class="rail-cap final" cx="28" cy="122" r="3.5"></circle>
-            <circle class="rail-cap final" cx="532" cy="122" r="3.5"></circle>
-          </g>
-          <g>
-            <line class="rail-line rev" x1="28" y1="160" x2="532" y2="160"></line>
-            <circle class="rail-tick" cx="280" cy="160" r="4"></circle>
-            <circle class="rail-cap rev" cx="28" cy="160" r="3.5"></circle>
-            <circle class="rail-cap rev" cx="532" cy="160" r="3.5"></circle>
-          </g>
-          <g>
-            <line class="rail-line rev" x1="28" y1="198" x2="532" y2="198"></line>
-            <circle class="rail-tick" cx="280" cy="198" r="4"></circle>
-            <circle class="rail-cap rev" cx="28" cy="198" r="3.5"></circle>
-            <circle class="rail-cap rev" cx="532" cy="198" r="3.5"></circle>
-          </g>
-        </svg>
-      </div>
-      <ul class="rail-legend">
-        <li><i class="mock"></i> Mock — the offline default</li>
-        <li><i class="final"></i> Solana &amp; Stellar — non-custodial, final</li>
-        <li><i class="rev"></i> Hyperswitch &amp; 20 direct adapters — custodial, reversible</li>
-      </ul>
-      <div class="rail-cap-txt"><b>The seam:</b> patala quotes, charges and verifies every rail above — it never sits inside the line. Value moves directly, payer to destination, and nothing pools at the open joint.</div>
+
+  <div class="spec">
+    <i><b>5</b> rails</i>
+    <i><b>293</b> offline tests</i>
+    <i><b class="testnet">2</b> testnet runs</i>
+    <i><b class="zero">0</b> mainnet runs</i>
+    <i><b class="mark">0</b> funds held</i>
+    <i><b class="mark">0</b> GUI</i>
+  </div>
+
+  <!-- ILLUSTRATION 1 · THE SEAM -->
+  <div class="seam rv">
+    <div class="seam-cap">
+      <span class="kick">The seam · one interface, five rails</span>
+      <span class="hint">Line style and colour both carry the settlement class.</span>
     </div>
+    <div class="seam-mark" aria-hidden="true">
+      <svg viewBox="0 0 26 34" aria-hidden="true"><path d="M13 1 Q22 17 13 33 Q4 17 13 1 Z"/><line x1="10.4" y1="9" x2="15.6" y2="9"/><line x1="9.2" y1="17" x2="16.8" y2="17"/><line x1="10.4" y1="25" x2="15.6" y2="25"/></svg>
+      <b>patala</b>
+    </div>
+    <div class="seam-rows" role="img" aria-label="Five rails drawn as five horizontal tracks running from a payer on the left to a destination on the right — mock, Solana, Stellar, Hyperswitch and twenty direct fiat adapters. Each track is coloured and dashed by its settlement class: solid jade for non-custodial and final, dashed violet for custodial and reversible, dotted slate for the classless offline mock. patala's own aperture mark sits above the stack on a dashed drop-line that touches each track at a small open circle, never breaking or merging it. The tracks never converge: patala quotes, charges and verifies every rail without ever sitting inside the path the value takes.">
+      <div class="rl">
+        <span class="rl-name"><svg class="rail-icon ic-none" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="1.2 4.4" stroke-linecap="round"/></svg>mock</span>
+        <span class="rl-track none"><span class="rl-tick"></span><span class="rl-pulse" style="animation-delay:0s"></span></span>
+        <span class="rl-dest">in-process, no network</span>
+      </div>
+      <div class="rl">
+        <span class="rl-name"><svg class="rail-icon ic-final" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h11M9 8 6 5M9 8 6 11M9 16h11M14 16l3-3M14 16l3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>solana</span>
+        <span class="rl-track final"><span class="rl-tick"></span><span class="rl-pulse" style="animation-delay:.5s"></span></span>
+        <span class="rl-dest">SPL-USDC wallet</span>
+      </div>
+      <div class="rl">
+        <span class="rl-name"><svg class="rail-icon ic-final" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 14.6 9.4 21 12 14.6 14.6 12 21 9.4 14.6 3 12 9.4 9.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>stellar</span>
+        <span class="rl-track final"><span class="rl-tick"></span><span class="rl-pulse" style="animation-delay:1s"></span></span>
+        <span class="rl-dest">Stellar USDC account</span>
+      </div>
+      <div class="rl">
+        <span class="rl-name"><svg class="rail-icon ic-rev" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="9" width="18" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="15.5" cy="12" r="2.3" fill="currentColor" stroke="none"/></svg>hyperswitch</span>
+        <span class="rl-track rev"><span class="rl-tick"></span><span class="rl-pulse" style="animation-delay:1.5s"></span></span>
+        <span class="rl-dest">your Hyperswitch</span>
+      </div>
+      <div class="rl">
+        <span class="rl-name"><svg class="rail-icon ic-rev" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6.5" width="19" height="11" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>fiat &times;20</span>
+        <span class="rl-track rev"><span class="rl-tick"></span><span class="rl-pulse" style="animation-delay:2s"></span></span>
+        <span class="rl-dest">merchant account</span>
+      </div>
+    </div>
+    <div class="seam-legend">
+      <span class="cls final">Non-custodial, final</span>
+      <span class="cls rev">Custodial, reversible</span>
+      <span class="cls none">No class — offline mock</span>
+    </div>
+    <p class="seam-note"><b>Nothing pools at the joint.</b> patala quotes, charges and verifies every rail above and is never in the line value actually moves on — there is no balance to hold, so the tick where the interface meets each rail is drawn open, not filled.</p>
   </div>
 </div></header>
 
-<div class="tooth-rule" role="presentation"></div>
-
-<section class="blk"><div class="wrap promise-rail">
-  <div class="promise-track"></div>
-  <div class="promise-stops">
-    <div class="promise-stop">
-      <h3>Holds no funds</h3>
-      <p>Non-custodial by construction — no balance table, no payout queue, no ledger of its own. Value moves over the rail directly; patala is the interface, never the account.</p>
+<!-- ══ 01 · THE THREE ZEROS ═══════════════════════════════════════════════ -->
+<section class="blk band"><div class="wrap">
+  <div class="srule" style="--hue:var(--vermilion)">
+    <span class="n">§ 01</span><span class="t">The guarantee</span><span class="r"></span>
+    <span class="f">structural, not promised</span>
+  </div>
+  <p class="band-lead">Three claims a payment platform normally asks you to take on trust. Here each one is a <b>consequence of the architecture</b> — there is no code path that could break them, because the thing that would break them was never built.</p>
+  <div class="zeros">
+    <div>
+      <span class="fig">0</span><span class="unit">funds held</span>
+      <h3>Non-custodial by construction</h3>
+      <p>No balance table, no payout queue, no ledger of its own. Value moves over the rail directly; patala is the interface, never the account. There is nothing to freeze and nothing to run off with.</p>
     </div>
-    <div class="promise-stop">
-      <h3>Takes no cut</h3>
-      <p>No platform fee, no spread, no rent. You pay the rail its own cost — a processor's fee, a chain's gas — and nothing extra to a middle patala doesn't have.</p>
+    <div>
+      <span class="fig">0</span><span class="unit">platform fee</span>
+      <h3>No cut, no spread, no rent</h3>
+      <p>You pay the rail its own cost — a processor's fee, a chain's gas — and nothing extra to a middle patala doesn't occupy. No token, no protocol tax, nothing to meter.</p>
     </div>
-    <div class="promise-stop">
-      <h3>No one owns it</h3>
-      <p>Centreless: no registry to join, no operator to depend on. Vendor the crate into your own product and self-host it — the substrate is the code, not a company.</p>
+    <div>
+      <span class="fig">0</span><span class="unit">owners</span>
+      <h3>Centreless</h3>
+      <p>No registry to join, no operator to depend on, no network to be admitted to. Vendor the crate into your own product and self-host it — the substrate is the code, not a company.</p>
     </div>
   </div>
 </div></section>
 
-<div class="tooth-rule" role="presentation"></div>
-
-<section class="blk"><div class="wrap nogui">
-  <div>
-    <div class="kick">No dashboard. No login. No "app."</div>
-    <h2>There is no GUI, and that's on purpose</h2>
-    <p>patala isn't a product you sign into — it's <b>a library and a sidecar</b>. Everything it ships is a crate you `cargo add`, a trait you implement, or a process you run next to your own app. There is no admin panel to secure, no session to hijack, no dashboard that becomes the thing an attacker (or an outage) actually targets.</p>
-    <p>That's not a missing feature. A payment substrate with no web surface has no login page to phish, no cookie to steal, and nothing to keep available at 3am besides the process you already run. The whole attack surface is the trait boundary — and that boundary is reviewable in an afternoon.</p>
-    <ul class="nogui-list">
-      <li>Rust crate — <code>patala-core</code> plus whichever rail feature you enable</li>
-      <li>Python / Go binding — one generated UniFFI surface, two languages</li>
-      <li>Local sidecar — loopback HTTP, token-gated, keys in one process</li>
-    </ul>
+<!-- ══ 02 · NO GUI ════════════════════════════════════════════════════════ -->
+<section class="blk"><div class="wrap">
+  <div class="srule" style="--hue:var(--vermilion-deep)">
+    <span class="n">§ 02</span><span class="t">Surface area</span><span class="r"></span>
+    <span class="f">a library and a sidecar · <b>nothing else</b></span>
   </div>
-  <div class="codeblock">
-    <div class="cb-head"><span class="dots"><span></span><span></span><span></span></span><span>~/patala</span></div>
-    <pre><code class="language-bash">$ ls
+  <div class="nogui">
+    <div>
+      <div class="sec-head rv" style="margin-bottom:0">
+        <h2>There is no GUI, and that is a <em>security property</em></h2>
+        <p>patala isn't a product you sign into — it's <b>a library and a sidecar</b>. Everything it ships is a crate you vendor, a trait you implement, or a process you run next to your own app.</p>
+      </div>
+      <p style="margin-top:18px">There is no admin panel to secure, no session to hijack, no dashboard that becomes the thing an attacker — or an outage — actually targets. A payment substrate with no web surface has no login page to phish, no cookie to steal, and nothing to keep available at 3am besides the process you already run.</p>
+      <p>The whole attack surface is the trait boundary, and that boundary is reviewable in an afternoon.</p>
+      <ul class="nogui-list">
+        <li><span class="w">Crate</span><span><code>patala-core</code> plus whichever rail feature you enable</span></li>
+        <li><span class="w">Binding</span><span>one generated UniFFI surface, Python and Go</span></li>
+        <li><span class="w">Sidecar</span><span>loopback HTTP, token-gated, keys in one process</span></li>
+      </ul>
+    </div>
+    <div>
+      <!-- ILLUSTRATION 2 · KEY CUSTODY -->
+      <div class="host">
+        <span class="host-lbl">your host</span>
+        <div class="custody">
+          <ul class="procs">
+            <li><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11.4 12H20m-3 0v3.4m3-3.4v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3.5 20.5 20.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>your app</span><em>no key</em></li>
+            <li><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11.4 12H20m-3 0v3.4m3-3.4v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3.5 20.5 20.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>go service</span><em>no key</em></li>
+            <li><svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11.4 12H20m-3 0v3.4m3-3.4v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M3.5 20.5 20.5 3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>python worker</span><em>no key</em></li>
+          </ul>
+          <div class="brace" aria-hidden="true">
+            <span class="b"></span><span class="stem"></span>
+            <span class="lbl">127.0.0.1<br>token-gated</span>
+          </div>
+          <div class="vault">
+            <svg class="gl" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11.4 12H20m-3 0v3.6m3-3.6v3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <b>patala-sidecar</b>
+            <span>The only process that ever holds a signing key.</span>
+          </div>
+        </div>
+        <div class="host-foot"><b>One key, one process.</b> Every other process in a polyglot stack reaches the substrate over loopback HTTP — none of them ever holds the key, and nothing off this host can reach the sidecar at all.</div>
+      </div>
+      <div class="codeblock" style="margin-top:22px">
+        <div class="cb-head"><span class="dots"><span></span><span></span><span></span></span><span>~/patala</span></div>
+        <pre><code class="language-bash">$ ls
 patala-core/         patala-hyperswitch/   patala-sidecar/
 patala-fiat/         patala-py/            patala-solana/
 patala-go/                                 patala-stellar/
 
 $ # no server to sign into, no dashboard to click through —
 $ # a library and a sidecar, and nothing else in this tree.</code></pre>
+      </div>
+    </div>
   </div>
 </div></section>
 
-<div class="tooth-rule" role="presentation"></div>
+<div class="tooth-rule final" role="presentation"></div>
 
+<!-- ══ 03 · RAILS ═════════════════════════════════════════════════════════ -->
 <section class="blk" id="rails"><div class="wrap">
-  <div class="sec-head">
-    <div class="kick">One trait, every rail</div>
-    <h2>Fiat processors and crypto rails, one honest interface</h2>
-    <p>Fiat is custodial and reversible — chargebacks, KYC, T+2 settlement. Crypto is non-custodial and final — wallet-to-wallet, no reversal. patala never blurs which one a consumer is getting; the settlement class lives in the type, not a flag.</p>
+  <div class="srule" style="--hue:var(--cls-final)">
+    <span class="n">§ 03</span><span class="t">Rails</span><span class="r"></span>
+    <span class="f"><b>5</b> shipped · <b>2</b> settlement classes</span>
+  </div>
+  <div class="sec-head rv">
+    <h2>Fiat and crypto, and never a lie about <em>which one you got</em></h2>
+    <p>Fiat is custodial and reversible — chargebacks, KYC, T+2 settlement. Crypto is non-custodial and final — wallet-to-wallet, no reversal. patala never blurs which one a consumer is getting: <b>the settlement class lives in the type</b>, not in a flag, and it is the one thing this page gives its own colour.</p>
   </div>
   <div class="ledger-wrap">
     <table class="ledger">
-      <thead><tr><th>Rail</th><th>Class</th><th>What it is</th></tr></thead>
+      <thead><tr><th>Rail</th><th>Settlement class</th><th>What it is</th></tr></thead>
       <tbody>
         <tr>
-          <td class="mono"><span class="rail-name"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="1.2 4.4" stroke-linecap="round"/></svg>Mock</span><br><span class="tag">patala-core</span></td>
-          <td>&mdash;</td>
+          <td class="mono"><span class="rail-name"><svg class="rail-icon ic-none" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="1.2 4.4" stroke-linecap="round"/></svg>Mock</span><br><span class="tag">patala-core</span></td>
+          <td><span class="cls none">None</span></td>
           <td>The offline default. Deterministic, no network, no external crypto dependency — what keeps the default build and CI running with no chain and no processor reachable.</td>
         </tr>
         <tr>
-          <td class="mono"><span class="rail-name"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h11M9 8 6 5M9 8 6 11M9 16h11M14 16l3-3M14 16l3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Solana</span><br><span class="tag">patala-solana</span></td>
-          <td>Non-custodial, final</td>
+          <td class="mono"><span class="rail-name"><svg class="rail-icon ic-final" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h11M9 8 6 5M9 8 6 11M9 16h11M14 16l3-3M14 16l3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>Solana</span><br><span class="tag">patala-solana</span></td>
+          <td><span class="cls final">Final</span></td>
           <td>SPL-USDC on Solana. Ed25519 — the app's identity key doubles as the wallet key, no mapping table. Ported from an earlier in-house implementation (~1,760 lines).</td>
         </tr>
         <tr>
-          <td class="mono"><span class="rail-name"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 14.6 9.4 21 12 14.6 14.6 12 21 9.4 14.6 3 12 9.4 9.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Stellar</span><br><span class="tag">patala-stellar</span></td>
-          <td>Non-custodial, final</td>
-          <td>Native USDC (Stellar Asset), Ed25519 (StrKey), built on SDF's own <code>stellar-xdr</code>/<code>stellar-strkey</code>. The cheapest measured fees of the two crypto rails.</td>
+          <td class="mono"><span class="rail-name"><svg class="rail-icon ic-final" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 14.6 9.4 21 12 14.6 14.6 12 21 9.4 14.6 3 12 9.4 9.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Stellar</span><br><span class="tag">patala-stellar</span></td>
+          <td><span class="cls final">Final</span></td>
+          <td>Native USDC (Stellar Asset), Ed25519 (StrKey), built on SDF's own <code>stellar-xdr</code>/<code>stellar-strkey</code>. The cheapest measured fees of the two crypto rails, and the only rail that has ever touched a live network — see <a href="#status" style="color:var(--ev-testnet);text-decoration:underline;text-underline-offset:2px">§&nbsp;04</a>.</td>
         </tr>
         <tr>
-          <td class="mono"><span class="rail-name"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="9" width="18" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="15.5" cy="12" r="2.3" fill="currentColor" stroke="none"/></svg>Hyperswitch</span><br><span class="tag">patala-hyperswitch</span></td>
-          <td>Custodial, reversible</td>
+          <td class="mono"><span class="rail-name"><svg class="rail-icon ic-rev" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="9" width="18" height="6" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="15.5" cy="12" r="2.3" fill="currentColor" stroke="none"/></svg>Hyperswitch</span><br><span class="tag">patala-hyperswitch</span></td>
+          <td><span class="cls rev">Reversible</span></td>
           <td>A thin HTTP client to a <strong>self-hosted Hyperswitch</strong> instance, presenting its whole fiat processor set — Stripe, Paystack, Xendit and 100+ connectors — as one rail. Adopted, not rebuilt.</td>
         </tr>
         <tr>
-          <td class="mono"><span class="rail-name"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6.5" width="19" height="11" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Direct fiat adapters</span><br><span class="tag">patala-fiat</span></td>
-          <td>Custodial, reversible</td>
+          <td class="mono"><span class="rail-name"><svg class="rail-icon ic-rev" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6.5" width="19" height="11" rx="1.8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Direct fiat adapters</span><br><span class="tag">patala-fiat</span></td>
+          <td><span class="cls rev">Reversible</span></td>
           <td>Twenty processors talked to directly, one Cargo feature each, plus the ISO-4217 minor-unit currency table and an always-on offline <code>manual</code> rail.
             <div class="fiat-list">Adyen · BTCPay · Checkout.com · Coinbase&nbsp;Commerce · Flutterwave · iyzico · LNbits · Mercado&nbsp;Pago · Midtrans · Mollie · OpenNode · PayFast · PayPal · Paystack · PayU · Razorpay · Square · Stripe · Xendit · Yoco</div>
           </td>
@@ -473,103 +855,178 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
   </div>
 </div></section>
 
-<div class="tooth-rule" role="presentation"></div>
+<div class="tooth-rule evidence" role="presentation"></div>
 
+<!-- ══ 04 · THE EVIDENCE LADDER ═══════════════════════════════════════════ -->
 <section class="blk" id="status"><div class="wrap">
-  <div class="sec-head">
-    <div class="kick">Honest status</div>
-    <h2>Foundational — built and unit-tested, unverified against live networks</h2>
-    <p><code>make check</code> runs two gated passes: the default workspace build, and everything again with every processor feature compiled in. Clippy-clean, fmt-clean. What it does not mean: no rail here has been run against a live network or a live merchant account from this repo.</p>
+  <div class="srule" style="--hue:var(--ev-testnet)">
+    <span class="n">§ 04</span><span class="t">Evidence</span><span class="r"></span>
+    <span class="f">highest rung reached: <b>live testnet</b></span>
+  </div>
+  <div class="sec-head rv">
+    <h2>What has actually been <em>proved</em>, rung by rung</h2>
+    <p>"Tested" is not one thing. Below, every crate sits on the highest rung it has genuinely reached — and the last rung is drawn empty because <b>nothing in this repo has ever run against mainnet</b>. Nothing here is coloured green for a thing it has not done.</p>
   </div>
 
+  <ul class="ladder rv">
+    <li class="rung r1">
+      <div class="rung-track"></div>
+      <span class="rung-n">RUNG 01</span>
+      <h3>Compiles clean</h3>
+      <ul>
+        <li>every crate</li>
+        <li>clippy-clean, fmt-clean</li>
+      </ul>
+      <p class="why">Two gated passes in <code>make check</code>: the default workspace build, then everything again with every processor feature on.</p>
+    </li>
+    <li class="rung r2">
+      <div class="rung-track"></div>
+      <span class="rung-n">RUNG 02</span>
+      <h3>Offline tests</h3>
+      <ul>
+        <li>293 default build</li>
+        <li>572 more, all features</li>
+        <li>mock rail: offline <em>by design</em></li>
+      </ul>
+      <p class="why">No chain, no processor, no network reachable. This is where the mock rail is meant to stop — that is the point of it, not a shortfall.</p>
+    </li>
+    <li class="rung r3">
+      <div class="rung-track"></div>
+      <span class="rung-n">RUNG 03</span>
+      <h3>Really executed</h3>
+      <ul>
+        <li>patala-sidecar</li>
+        <li>patala-py</li>
+        <li>patala-go</li>
+      </ul>
+      <p class="why">Real processes, not assertions about them: the sidecar booted and answered HTTP, both bindings ran under a real interpreter and real cgo. CI-enforced. See <a href="#proof" style="color:var(--ev-exec);text-decoration:underline;text-underline-offset:2px">§&nbsp;06</a>.</p>
+    </li>
+    <li class="rung r4">
+      <div class="rung-track"></div>
+      <span class="rung-n">RUNG 04</span>
+      <h3>Live testnet</h3>
+      <ul>
+        <li>patala-stellar &mdash; twice</li>
+        <li>2026-07-30</li>
+      </ul>
+      <p class="why">The highest rung anything here has reached. One single-leg payment read back from real Horizon, and one 3-instalment plan whose second instalment was genuinely <em>rejected</em>, then accepted.</p>
+    </li>
+    <li class="rung r5">
+      <div class="rung-track"></div>
+      <span class="rung-n">RUNG 05</span>
+      <h3>Live mainnet</h3>
+      <div class="empty">&mdash;&nbsp;&nbsp;nothing&nbsp;&nbsp;&mdash;</div>
+      <p class="why">No rail. Not Stellar's own mainnet path, not Solana, not one fiat processor, not one live merchant account. This rung is empty and the page will say so until it isn't.</p>
+    </li>
+  </ul>
+
   <div class="stat-strip">
-    <div class="stat"><span class="stat-num tabular">260</span><span class="stat-lbl">offline tests, default build</span></div>
-    <div class="stat"><span class="stat-num tabular">572</span><span class="stat-lbl">more tests, every processor feature on</span></div>
-    <div class="stat"><span class="stat-num tabular">0</span><span class="stat-lbl">rails run against a live network from this repo</span></div>
+    <div class="stat exec"><span class="stat-num tabular">293</span><span class="stat-lbl">offline tests, default build</span></div>
+    <div class="stat exec"><span class="stat-num tabular">572</span><span class="stat-lbl">more with every processor feature on</span></div>
+    <div class="stat testnet"><span class="stat-num tabular">2</span><span class="stat-lbl">runs against a live network — both Stellar testnet</span></div>
+    <div class="stat none"><span class="stat-num tabular">0</span><span class="stat-lbl">runs against mainnet, any rail</span></div>
   </div>
 
   <div class="ledger-wrap" style="margin-top:30px">
     <table class="ledger ledger--wide">
-      <thead><tr><th>Crate</th><th>Class</th><th class="mono">Tests</th><th>Live-verified?</th></tr></thead>
+      <thead><tr><th>Crate</th><th>Settlement class</th><th class="mono">Tests</th><th>Highest rung reached</th></tr></thead>
       <tbody>
         <tr>
-          <td class="mono">patala-core</td><td>&mdash;</td>
+          <td class="mono">patala-core</td><td><span class="cls none">None</span></td>
           <td class="mono tabular">38 + 3 doctests</td>
-          <td><span class="status settled">OFFLINE BY DESIGN</span></td>
+          <td><span class="status design">OFFLINE BY DESIGN</span></td>
         </tr>
         <tr>
-          <td class="mono">patala-fiat</td><td>Custodial, reversible</td>
+          <td class="mono">patala-fiat</td><td><span class="cls rev">Reversible</span></td>
           <td class="mono tabular">552 (all features)</td>
-          <td><span class="status pending">NO — NO LIVE MERCHANT ACCOUNT</span></td>
+          <td><span class="status none">NOT RUN — NO LIVE MERCHANT ACCOUNT</span></td>
         </tr>
         <tr>
-          <td class="mono">patala-solana</td><td>Non-custodial, final</td>
+          <td class="mono">patala-solana</td><td><span class="cls final">Final</span></td>
           <td class="mono tabular">56 (+1 gated) + 2 doctests</td>
-          <td><span class="status pending">NO — TESTNET STEP IN README</span></td>
+          <td><span class="status none">NOT RUN — TESTNET STEP IN README</span></td>
         </tr>
         <tr>
-          <td class="mono">patala-stellar</td><td>Non-custodial, final</td>
+          <td class="mono">patala-stellar</td><td><span class="cls final">Final</span></td>
           <td class="mono tabular">84 (+3 gated) + 5 doctests</td>
-          <td><span class="status settled">TESTNET — TWICE, 2026-07-30</span></td>
+          <td><span class="status testnet">LIVE TESTNET — TWICE, 2026-07-30</span></td>
         </tr>
         <tr>
-          <td class="mono">patala-hyperswitch</td><td>Custodial, reversible</td>
+          <td class="mono">patala-hyperswitch</td><td><span class="cls rev">Reversible</span></td>
           <td class="mono tabular">23</td>
-          <td><span class="status pending">NO — NEEDS A LIVE INSTANCE</span></td>
+          <td><span class="status none">NOT RUN — NEEDS A LIVE INSTANCE</span></td>
         </tr>
         <tr>
-          <td class="mono">patala-py / patala-go</td><td>&mdash;</td>
+          <td class="mono">patala-py / patala-go</td><td><span class="cls none">None</span></td>
           <td class="mono tabular">11 Rust (20 w/ fiat-all) + 19 Go</td>
-          <td><span class="status settled">EXECUTED, CI-ENFORCED</span></td>
+          <td><span class="status exec">EXECUTED, CI-ENFORCED</span></td>
         </tr>
         <tr>
-          <td class="mono">patala-sidecar</td><td>&mdash;</td>
+          <td class="mono">patala-sidecar</td><td><span class="cls none">None</span></td>
           <td class="mono tabular">15 (12 HTTP + 3 unit)</td>
-          <td><span class="status settled">EXECUTED</span></td>
+          <td><span class="status exec">EXECUTED — RAIL REGISTRY IS MOCK-ONLY</span></td>
         </tr>
       </tbody>
     </table>
   </div>
 
   <div class="caveat">
-    <b>What "testnet, twice" narrowly means:</b> both runs were <code>patala-stellar</code> only, both on Stellar <em>testnet</em>, both 2026-07-30 — a single-leg USDC-shaped payment confirmed by <code>StellarRail::verify</code> reading it back from Horizon, and separately a 3-instalment recurring schedule whose second instalment was genuinely <em>rejected</em> by real Horizon when resubmitted too early, then accepted once the pacing floor elapsed. Mainnet is untouched, atomic multi-party splits have never run live, and every other rail — including Stellar's own mainnet path — still says plainly, in its own README, that it hasn't been run live. See the <a href="./docs.html#status">full status</a> for the transaction hashes and every other crate's caveats, including the sidecar's still mock-only rail registry.
+    <b>What "testnet, twice" narrowly means:</b> both runs were <code>patala-stellar</code> only, both on Stellar <em>testnet</em>, both 2026-07-30 — a single-leg USDC-shaped payment confirmed by <code>StellarRail::verify</code> reading it back from Horizon, and separately a 3-instalment recurring schedule whose second instalment was genuinely <i class="rej">rejected</i> by real Horizon when resubmitted too early, then accepted once the pacing floor elapsed. Mainnet is untouched, atomic multi-party splits have never run live, the sidecar's rail registry is still mock-only, and every other rail — including Stellar's own mainnet path — says plainly, in its own README, that it hasn't been run live. Anything specified in <code>PATALA.md</code> but not built is marked as such there. See the <a href="./docs.html#status">full status</a> for the transaction hashes and every crate's caveats.
   </div>
 </div></section>
 
 <div class="tooth-rule" role="presentation"></div>
 
+<!-- ══ 05 · POLYGLOT ══════════════════════════════════════════════════════ -->
 <section class="blk" id="bindings"><div class="wrap">
-  <div class="sec-head">
-    <div class="kick">Polyglot, M&times;1 not M&times;N</div>
-    <h2>One Rust core. Four ways to consume it.</h2>
-    <p>Every adapter is written once, in the core. Nothing is reimplemented per language — Python, Go and any HTTP client all dispatch through the same <code>PaymentRail</code> trait. Same round trip, four languages below.</p>
+  <div class="srule" style="--hue:var(--vermilion-deep)">
+    <span class="n">§ 05</span><span class="t">Consuming it</span><span class="r"></span>
+    <span class="f"><b>5</b> adapters · <b>4</b> ways in</span>
+  </div>
+  <div class="sec-head rv">
+    <h2>One Rust core. Four ways in. <em>Not twenty</em> implementations.</h2>
+    <p>Write every rail adapter once, in the core, and reach it four different ways — or write each rail again in each language and keep twenty copies in step forever. patala is the first shape.</p>
   </div>
 
-  <div class="mx1">
-    <svg class="mx1-svg" viewBox="0 0 640 190" role="img" aria-labelledby="mx1T mx1D" preserveAspectRatio="xMidYMin meet">
-      <title id="mx1T">One patala-core, four consumers</title>
-      <desc id="mx1D">A diagram: a single box labelled patala-core at the top, with one line dropping to a horizontal bar, then four lines dropping from that bar to four boxes labelled Rust, Python, Go and Sidecar — illustrating that every adapter is written once in the core and reached four different ways, never reimplemented per language.</desc>
-      <rect x="210" y="6" width="220" height="44" rx="6" class="mx1-box mx1-box-core"></rect>
-      <text x="320" y="33" text-anchor="middle" class="mx1-label">patala-core</text>
-      <line class="rail-guide" x1="320" y1="50" x2="320" y2="78"></line>
-      <line class="rail-guide" x1="80" y1="78" x2="560" y2="78"></line>
-      <circle class="rail-tick" cx="80" cy="78" r="4"></circle>
-      <circle class="rail-tick" cx="240" cy="78" r="4"></circle>
-      <circle class="rail-tick" cx="400" cy="78" r="4"></circle>
-      <circle class="rail-tick" cx="560" cy="78" r="4"></circle>
-      <line class="rail-guide" x1="80" y1="78" x2="80" y2="112"></line>
-      <line class="rail-guide" x1="240" y1="78" x2="240" y2="112"></line>
-      <line class="rail-guide" x1="400" y1="78" x2="400" y2="112"></line>
-      <line class="rail-guide" x1="560" y1="78" x2="560" y2="112"></line>
-      <rect x="10" y="112" width="140" height="56" rx="6" class="mx1-box"></rect>
-      <text x="80" y="146" text-anchor="middle" class="mx1-label">Rust</text>
-      <rect x="170" y="112" width="140" height="56" rx="6" class="mx1-box"></rect>
-      <text x="240" y="146" text-anchor="middle" class="mx1-label">Python</text>
-      <rect x="330" y="112" width="140" height="56" rx="6" class="mx1-box"></rect>
-      <text x="400" y="146" text-anchor="middle" class="mx1-label">Go</text>
-      <rect x="490" y="112" width="140" height="56" rx="6" class="mx1-box"></rect>
-      <text x="560" y="146" text-anchor="middle" class="mx1-label">Sidecar</text>
-    </svg>
+  <!-- ILLUSTRATION 3 · M×N vs M×1 -->
+  <div class="mxn rv">
+    <figure>
+      <div class="ttl"><b>M &times; N</b><span>the usual shape</span></div>
+      <svg viewBox="0 0 220 174" role="img" aria-labelledby="mxnT mxnD">
+        <title id="mxnT">M by N: twenty separate rail implementations</title>
+        <desc id="mxnD">Four consumer nodes on the left, each connected to all five rail nodes on the right — twenty crossing edges, one per language-and-rail pair.</desc>
+        <g class="edge">
+          <path d="M24 30 200 15M24 30 200 51M24 30 200 87M24 30 200 123M24 30 200 159"/>
+          <path d="M24 66 200 15M24 66 200 51M24 66 200 87M24 66 200 123M24 66 200 159"/>
+          <path d="M24 102 200 15M24 102 200 51M24 102 200 87M24 102 200 123M24 102 200 159"/>
+          <path d="M24 138 200 15M24 138 200 51M24 138 200 87M24 138 200 123M24 138 200 159"/>
+        </g>
+        <g class="nd">
+          <circle cx="24" cy="30" r="4"/><circle cx="24" cy="66" r="4"/><circle cx="24" cy="102" r="4"/><circle cx="24" cy="138" r="4"/>
+          <circle cx="200" cy="15" r="4"/><circle cx="200" cy="51" r="4"/><circle cx="200" cy="87" r="4"/><circle cx="200" cy="123" r="4"/><circle cx="200" cy="159" r="4"/>
+        </g>
+      </svg>
+      <div class="axis"><span>4 consumers</span><span>5 rails</span></div>
+      <figcaption><b>20 rail implementations</b> to write, review and keep in sync — and twenty chances for two languages to disagree about what <code>verify</code> means.</figcaption>
+    </figure>
+    <figure class="win">
+      <div class="ttl"><b>M &times; 1</b><span>patala</span></div>
+      <svg viewBox="0 0 220 174" role="img" aria-labelledby="mx1T mx1D">
+        <title id="mx1T">M by 1: one core, five adapters</title>
+        <desc id="mx1D">Four consumer nodes on the left all converge on a single core node in the middle, which fans out to five rail nodes on the right — nine edges in total, and each rail implemented exactly once.</desc>
+        <g class="edge-ok">
+          <path d="M24 30 96 87M24 66 96 87M24 102 96 87M24 138 96 87"/>
+          <path d="M128 87 200 15M128 87 200 51M128 87 200 87M128 87 200 123M128 87 200 159"/>
+        </g>
+        <rect class="nd-core" x="96" y="72" width="32" height="30" rx="5"/>
+        <g class="nd">
+          <circle cx="24" cy="30" r="4"/><circle cx="24" cy="66" r="4"/><circle cx="24" cy="102" r="4"/><circle cx="24" cy="138" r="4"/>
+          <circle cx="200" cy="15" r="4"/><circle cx="200" cy="51" r="4"/><circle cx="200" cy="87" r="4"/><circle cx="200" cy="123" r="4"/><circle cx="200" cy="159" r="4"/>
+        </g>
+      </svg>
+      <div class="axis"><span>4 consumers</span><span>patala-core</span><span>5 rails</span></div>
+      <figcaption><b>5 rail implementations.</b> Python, Go and any HTTP client all dispatch through the same <code>PaymentRail</code> trait, so there is exactly one definition of <code>verify</code> to get right.</figcaption>
+    </figure>
   </div>
 
   <div class="stations">
@@ -671,7 +1128,7 @@ valid := must(rail.Verify(receipt)) // fail-closed: a tampered receipt verifies 
 
     <div class="lang-pane" data-pane="toml">
       <div class="codeblock">
-        <div class="cb-head"><span>Vendoring it — not on crates.io yet</span><span>Cargo.toml</span></div>
+        <div class="cb-head"><span>Vendoring it — nothing is published on crates.io</span><span>Cargo.toml</span></div>
         <pre><code class="language-ini">[dependencies]
 # SECURITY.md: patala publishes no artifacts today — vendor by path or git.
 patala-core    = { git = "https://github.com/vul-os/patala" }
@@ -681,18 +1138,21 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
   </div>
 </div></section>
 
-<div class="tooth-rule" role="presentation"></div>
-
-<section class="blk" id="proof"><div class="wrap">
-  <div class="sec-head">
-    <div class="kick">Not a demo</div>
-    <h2>Every pane below is real, captured from this repo</h2>
-    <p>No mockups, no invented JSON. The sidecar actually booted, <code>curl</code> actually hit it, the offline suite actually ran, and the Python and Go bindings actually executed — moments before this page was built. <span class="proof-note">Reproduce it yourself: <code>scripts/capture-transcripts.sh &amp;&amp; node scripts/render-shots.mjs</code>.</span></p>
+<!-- ══ 06 · PROOF ═════════════════════════════════════════════════════════ -->
+<section class="blk band" id="proof"><div class="wrap">
+  <div class="srule" style="--hue:var(--ev-exec)">
+    <span class="n">§ 06</span><span class="t">Proof</span><span class="r"></span>
+    <span class="f">rung 03 · <b>really executed</b></span>
+  </div>
+  <div class="sec-head rv">
+    <h2>Every pane below is real output, captured from <em>this repo</em></h2>
+    <p>No mockups, no invented JSON. The sidecar actually booted, <code>curl</code> actually hit it, the offline suite actually ran, and the Python and Go bindings actually executed — moments before this page was built.
+    <span class="proof-note">Reproduce it yourself: <code>scripts/capture-transcripts.sh &amp;&amp; node scripts/render-shots.mjs</code>.</span></p>
   </div>
 
   <div class="proof-grid">
     <figure class="proof-item">
-      <div class="proof-scroll"><img src="./assets/shots/sidecar-boot.webp" width="720" height="202" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
+      <div class="proof-scroll"><img src="./assets/shots/sidecar-boot.webp" width="720" height="222" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
       <figcaption>The sidecar — <code>cargo run -p patala-sidecar</code>, actually booting.</figcaption>
     </figure>
     <figure class="proof-item">
@@ -700,8 +1160,8 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
       <figcaption>Real HTTP round-trips against it: capabilities, charge, verify — and the fail-closed 401 when the token is missing.</figcaption>
     </figure>
     <figure class="proof-item wide">
-      <div class="proof-scroll tall"><img src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 260 passed."></div>
-      <figcaption><code>cargo test --workspace</code> — the same 260 offline tests <a href="#status">the status table</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.</figcaption>
+      <div class="proof-scroll tall"><img src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
+      <figcaption><code>cargo test --workspace</code> — the same <b>293</b> offline tests <a href="#status" style="color:var(--ev-exec);text-decoration:underline;text-underline-offset:2px">rung 02</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.</figcaption>
     </figure>
     <figure class="proof-item">
       <div class="proof-scroll"><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
@@ -714,13 +1174,12 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
   </div>
 </div></section>
 
-<div class="tooth-rule dim" role="presentation"></div>
-
+<!-- ══ CLOSE ══════════════════════════════════════════════════════════════ -->
 <section class="blk"><div class="wrap">
   <div class="final-cta">
     <div>
-      <h2>Vendor it. Self-host it. Read it first.</h2>
-      <p>patala is a library, not a service — there is nothing to sign up for. Read exactly what's tested and what isn't before you point it at real money.</p>
+      <h2>Vendor it. <span>Self-host</span> it.<br>Read it first.</h2>
+      <p>patala is a library, not a service — there is nothing to sign up for and nobody to ask. Read exactly what has been proved, and what hasn't, before you point it at real money.</p>
     </div>
     <div class="cta-row">
       <a class="btn pri" href="./docs.html#self-host">Self-host &amp; vendor</a>
@@ -735,7 +1194,7 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
     <a href="./index.html">Home</a>
     <a href="./docs.html">Docs</a>
     <a href="https://github.com/vul-os/patala" target="_blank" rel="noopener">GitHub</a>
-    <a href="./LICENSE-MIT" target="_blank" rel="noopener">License</a>
+    <a href="https://github.com/vul-os/patala/blob/main/LICENSE-MIT" target="_blank" rel="noopener">License</a>
   </div>
 </div></footer>
 
@@ -762,9 +1221,8 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
 })();
 
 // Real syntax highlighting (vendored highlight.js core, see ./assets/vendor/)
-// over every code block on the page — including the four language tabs,
-// which start with only one pane visible; highlighting the hidden panes too
-// (not just the active one) means switching tabs never shows a flash of
+// over every code block on the page — including the four language tabs, whose
+// hidden panes are highlighted too, so switching tabs never shows a flash of
 // unhighlighted text.
 (function(){
   if (window.hljs) {
@@ -772,13 +1230,7 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
   }
 })();
 
-// Language tabs for the "same round trip, four languages" panel. Degrades
-// fine with JS off: all four panes are real markup, and CSS alone would just
-// need `.lang-pane{display:block}` — but since this only matters with JS off,
-// and JS is required for the tab *behaviour* anyway, the panes are hidden by
-// default via .lang-pane (shown) / .active and this script is what adds the
-// interaction; a no-JS visitor sees the Rust pane, same as any other partly
-// enhanced tab widget on this page (the theme toggle, the highlighter).
+// Language tabs for the "same round trip, four languages" panel.
 (function(){
   var tabs=document.querySelectorAll('.lang-tab');
   var panes=document.querySelectorAll('.lang-pane');
@@ -789,6 +1241,30 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
       panes.forEach(function(p){ p.classList.toggle('active', p.dataset.pane===target); });
     });
   });
+})();
+
+// Motion, gated on scroll position. One observer drives both: `.rv` elements
+// fade up once; `.in-view` on the seam panel starts the travelling rail pulses
+// (CSS keyframes, paused until then) so "value moving along a rail" happens
+// once the diagram is actually on screen. Reduced motion is handled entirely
+// in patala.css, whose global @media query collapses every animation and
+// transition to ~0 — classes still toggle, the CSS just makes it instant.
+(function(){
+  if (!('IntersectionObserver' in window)) {
+    document.querySelectorAll('.rv').forEach(function(el){ el.classList.add('in'); });
+    document.querySelectorAll('.seam').forEach(function(el){ el.classList.add('in-view'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting) {
+        if (entry.target.classList.contains('rv')) entry.target.classList.add('in');
+        if (entry.target.classList.contains('seam')) entry.target.classList.add('in-view');
+        io.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -6% 0px' });
+  document.querySelectorAll('.rv, .seam').forEach(function(el){ io.observe(el); });
 })();
 </script>
 </body>

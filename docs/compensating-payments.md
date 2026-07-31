@@ -395,7 +395,7 @@ this document exists:
   parse a real address and can reach `StructurallyValid`. `refund` is
   `Unsupported`, so **this document's flow is the only way to pay a customer
   back**.
-- **Fiat rails** (`patala-fiat`'s 21 adapters, `patala-hyperswitch` —
+- **Fiat rails** (`patala-fiat`'s 20 adapters, `patala-hyperswitch` —
   `CustodialReversible`) have a `destination` that is a redirect URL, a buyer's
   email, an opaque `payment_token`, or a string the rail never reads. None is a
   place money goes, so their honest ceiling is `Unknown` and they never return

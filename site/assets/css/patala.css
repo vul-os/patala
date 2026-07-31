@@ -1,21 +1,32 @@
 /* patala — shared design system for the landing page and the docs viewer.
    Self-contained: no @import, no remote url(), fonts vendored in ../fonts/. */
 
+/* Syne — the display face. Sculptural, wide-set, unapologetically geometric;
+   chosen for the cowrie/substrate idea (a shell is a hard, faceted object)
+   and deliberately NOT what a sibling Vulos landing already picked
+   (gitstate: Bricolage Grotesque, cackle: Figtree) — Inter is dropped
+   entirely, it was the one generic choice on offer. Static weights (600/700/
+   800) rather than the variable axis: only three weights are ever used, so
+   three ~14KB files beat one larger variable one. */
 @font-face{
-  font-family:'Familjen Grotesk';font-style:normal;font-weight:500;font-display:swap;
-  src:url('../fonts/familjen-grotesk-latin-500-normal.woff2') format('woff2');
+  font-family:'Syne';font-style:normal;font-weight:600;font-display:swap;
+  src:url('../fonts/syne-latin-600-normal.woff2') format('woff2');
 }
 @font-face{
-  font-family:'Familjen Grotesk';font-style:normal;font-weight:400;font-display:swap;
-  src:url('../fonts/familjen-grotesk-latin-400-normal.woff2') format('woff2');
+  font-family:'Syne';font-style:normal;font-weight:700;font-display:swap;
+  src:url('../fonts/syne-latin-700-normal.woff2') format('woff2');
 }
 @font-face{
-  font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;
-  src:url('../fonts/inter-latin-400-normal.woff2') format('woff2');
+  font-family:'Syne';font-style:normal;font-weight:800;font-display:swap;
+  src:url('../fonts/syne-latin-800-normal.woff2') format('woff2');
 }
+/* Schibsted Grotesk — the body face. A grotesque with real personality
+   (flared terminals, a taller x-height than Inter) instead of the reflexive
+   system-sans default. One variable file covers the whole weight range this
+   page uses. */
 @font-face{
-  font-family:'Inter';font-style:normal;font-weight:500;font-display:swap;
-  src:url('../fonts/inter-latin-500-normal.woff2') format('woff2');
+  font-family:'Schibsted Grotesk';font-style:normal;font-weight:400 900;font-display:swap;
+  src:url('../fonts/schibsted-grotesk-latin-wght-normal.woff2') format('woff2');
 }
 @font-face{
   font-family:'IBM Plex Mono';font-style:normal;font-weight:400;font-display:swap;
@@ -26,34 +37,150 @@
   src:url('../fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   THE PALETTE IS A SCHEMA, NOT A MOOD.
+   patala moves value over rails that differ in exactly two ways a reader must
+   never have to guess about, so those two — and only those two — get hue:
+
+     1. SETTLEMENT CLASS (--cls-*) — what you get when the money moves.
+        jade   = NonCustodialFinal   (wallet-to-wallet, no reversal)
+        violet = CustodialReversible (chargebacks, KYC, T+2)
+        slate  = no class at all     (the offline mock)
+        Class hue appears ONLY in class positions: the rail lines in the hero,
+        the rail ledger's icons and class chips, the M×1 fan.
+
+     2. EVIDENCE (--ev-*) — how much this repo has actually proved, as a
+        ladder rather than a pass/fail:
+        slate  --ev-none     nothing was run; no evidence either way
+        blue   --ev-design   offline BY DESIGN (the mock) — correct, not a gap
+        green  --ev-exec     a real process actually ran (sidecar, bindings, CI)
+        amber  --ev-testnet  a real live network — TESTNET ONLY. The highest
+                             rung anything in this repo has ever reached, and
+                             amber says "yes, but" on purpose.
+        rose   --ev-fail     a genuine rejection (Stellar's 2nd instalment)
+        There is deliberately NO hue for mainnet. Nothing has reached it, so
+        nothing may wear a colour that implies it has.
+
+     3. --vermilion is reserved for patala ITSELF — the seam, the aperture,
+        the primary action. It is never a class and never an evidence level,
+        so "brand colour" and "data colour" can never be confused.
+
+   Every one of these is measured with the WCAG relative-luminance formula
+   against the two grounds it can actually land on (--canvas and --surface) in
+   both themes; the figures are in the light-theme note below. --vermilion
+   stays decoupled from --vermilion-deep in the light theme (see that note) —
+   one is tuned as a FILL under --vermilion-ink, the other as TEXT.
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root{
   color-scheme:dark;
   --canvas:#0d1220;--indigo:#151c33;--overlay:#273052;
   --overlay-2:#323d63;
-  --ink:#eef1f8;--ink-dim:#a9b1cf;--ink-faint:#6b7396;
+  --ink:#eef1f8;--ink-dim:#a9b1cf;--ink-faint:#7c83a2;
   --hair:rgba(238,241,248,.10);--hair-strong:rgba(238,241,248,.18);
-  --vermilion:#f06b3d;--vermilion-bright:#ff8a5f;--vermilion-deep:#c74a20;
+  --vermilion:#f06b3d;--vermilion-bright:#ff9068;--vermilion-deep:#f06b3d;
   --vermilion-ink:#151c33; /* label colour on a filled vermilion button */
-  --settled:#34b87a;--pending:#6c8ff5;--failed:#f2506f;
+
+  /* settlement class */
+  --cls-final:#3ecfaf;--cls-rev:#a48cff;--cls-none:#8e97ba;
+  /* evidence ladder */
+  --ev-none:#8e97ba;--ev-design:#6c8ff5;--ev-exec:#3fbe7c;--ev-testnet:#e6b23c;--ev-fail:#f2506f;
+  /* legacy aliases — docs.html and the shared .status component speak these */
+  --settled:var(--ev-exec);--pending:var(--ev-design);--failed:var(--ev-fail);
+
   --rule-color:var(--vermilion);
   --surface:var(--indigo);--surface-raised:var(--overlay);
   --shadow:0 20px 60px -20px rgba(0,0,0,.55);
-  --disp:'Familjen Grotesk',system-ui,-apple-system,sans-serif;
-  --body:'Inter',system-ui,-apple-system,sans-serif;
+  --disp:'Syne',system-ui,-apple-system,sans-serif;
+  --body:'Schibsted Grotesk',system-ui,-apple-system,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
 }
+/* ── MEASURED CONTRAST ───────────────────────────────────────────────────────
+   Every value below is checked with the WCAG relative-luminance formula
+   against BOTH grounds it can land on — --canvas and --surface — in its own
+   theme. Text floor is 4.5:1; nothing that carries meaning is under it.
+
+   DARK   ground canvas #0d1220 / surface #151c33
+     --ink        #eef1f8  16.52 / 14.91      --cls-final   #3ecfaf   9.56 / 8.63
+     --ink-dim    #a9b1cf   8.78 /  7.93      --cls-rev     #a48cff   6.91 / 6.24
+     --ink-faint  #7c83a2   5.00 /  4.52      --cls-none    #8e97ba   6.48 / 5.85
+     --vermilion  #f06b3d   6.11 /  5.52      --ev-design   #6c8ff5   6.12 / 5.53
+     --verm-bright#ff9068   8.40 /  7.58      --ev-exec     #3fbe7c   7.89 / 7.12
+                                              --ev-testnet  #e6b23c   9.60 / 8.67
+                                              --ev-fail     #f2506f   5.47 / 4.94
+
+   LIGHT  ground canvas #ebeef5 / surface #fbfcfe
+     --ink        #141a2e  14.86 / 16.81      --cls-final   #046a5f   5.59 / 6.33
+     --ink-dim    #454c6b   7.23 /  8.19      --cls-rev     #5637ce   6.38 / 7.22
+     --ink-faint  #5c6382   5.08 /  5.74      --cls-none    #525977   5.92 / 6.70
+     --verm-deep  #b24016   4.97 /  5.62      --ev-design   #2a4cc7   6.11 / 6.92
+     (--vermilion #de5d32 is 3.16/3.58 as     --ev-exec     #0c6f42   5.37 / 6.07
+      TEXT and is never used as text in       --ev-testnet  #7a5000   6.08 / 6.88
+      this theme — see the note below)        --ev-fail     #b81f3e   5.47 / 6.19
+
+   FILLS  --vermilion-ink #151c33 on --vermilion: 5.52 dark / 4.59 light.
+
+   Why --vermilion and --vermilion-deep stay decoupled in the light theme: an
+   earlier pass collapsed them, which fixed every TEXT/stroke use of
+   --vermilion (already redirected to --vermilion-deep by the
+   `:root[data-theme="light"] .x{color:var(--vermilion-deep)}` overrides
+   throughout this file) but silently broke every FILL use carrying
+   --vermilion-ink text on top (.btn.pri, .lang-tab[aria-selected],
+   ::selection) down to 3.56:1. They diverge on purpose and must stay
+   divergent: --vermilion is tuned as a FILL, --vermilion-deep as TEXT.
+
+   The light ground moved from a warm ivory (#f6f2e9) to this pale indigo
+   paper. That is deliberate and not a neutral swap: patala's dark theme is a
+   deep indigo instrument, and the light theme is now the SAME instrument
+   under a different light rather than a separate warm world — the light and
+   dark grounds are the same hue family, four stops apart. Every token above
+   was re-measured against the new ground; --ink-faint (#686e87 -> #5c6382),
+   --vermilion-deep (#be471f -> #b24016) and the whole evidence/class set were
+   re-tuned for it, since a cooler, slightly lighter paper raises the bar for
+   every mid-tone.
+   ──────────────────────────────────────────────────────────────────────── */
 :root[data-theme="light"]{
   color-scheme:light;
-  --canvas:#f6f2e9;--indigo:#fffdf8;--overlay:#efe8d8;
-  --overlay-2:#e3dac4;
-  --ink:#1c2138;--ink-dim:#4d5372;--ink-faint:#7b8099;
-  --hair:rgba(28,33,56,.12);--hair-strong:rgba(28,33,56,.22);
-  --vermilion:#c74a20;--vermilion-bright:#ff8a5f;--vermilion-deep:#c74a20;
+  --canvas:#ebeef5;--indigo:#fbfcfe;--overlay:#e1e6f2;
+  --overlay-2:#d3daec;
+  --ink:#141a2e;--ink-dim:#454c6b;--ink-faint:#5c6382;
+  --hair:rgba(20,26,46,.12);--hair-strong:rgba(20,26,46,.22);
+  --vermilion:#de5d32;--vermilion-bright:#c74a20;--vermilion-deep:#b24016;
   --vermilion-ink:#151c33;
-  --settled:#1f8a5a;--pending:#3457d5;--failed:#c62c4c;
+
+  --cls-final:#046a5f;--cls-rev:#5637ce;--cls-none:#525977;
+  --ev-none:#525977;--ev-design:#2a4cc7;--ev-exec:#0c6f42;--ev-testnet:#7a5000;--ev-fail:#b81f3e;
+
   --rule-color:var(--vermilion-deep);
-  --surface:#fffdf8;--surface-raised:#efe8d8;
-  --shadow:0 20px 50px -24px rgba(28,33,56,.25);
+  --surface:#fbfcfe;--surface-raised:#e1e6f2;
+  --shadow:0 20px 50px -24px rgba(20,26,46,.22);
+}
+
+/* ── The instrument band ────────────────────────────────────────────────────
+   Two sections on the landing are not paper — they are the machine itself,
+   and they stay a deep indigo panel in BOTH page themes. This is the same
+   argument the code surface already makes (see the --code-* note further
+   down): a terminal and an instrument panel do not repaint for a paper mode,
+   and alternating paper/instrument is what stops nine sections in a row from
+   sharing one shape.
+
+   The band works by re-declaring the theme tokens on itself rather than by
+   overriding each child, so every component inside — .status, .ledger, .kick,
+   .btn, .tag — is the same component it is anywhere else and simply resolves
+   against a darker ground. --vermilion-deep is pointed at --vermilion here so
+   the `[data-theme="light"] ... {color:var(--vermilion-deep)}` rules elsewhere
+   in this file, which fire because the PAGE is still light, land on a value
+   that is legible on this dark ground instead of the paper-tuned one.
+   Ground is #0a0f1c, marginally darker than --canvas, so every dark-theme
+   ratio above is met or exceeded here. */
+.band{
+  --canvas:#0a0f1c;--indigo:#121a2e;--overlay:#212a47;--overlay-2:#2b365a;
+  --ink:#eef1f8;--ink-dim:#a9b1cf;--ink-faint:#7c83a2;
+  --hair:rgba(238,241,248,.10);--hair-strong:rgba(238,241,248,.18);
+  --vermilion:#f06b3d;--vermilion-bright:#ff9068;--vermilion-deep:#f06b3d;
+  --cls-final:#3ecfaf;--cls-rev:#a48cff;--cls-none:#8e97ba;
+  --ev-none:#8e97ba;--ev-design:#6c8ff5;--ev-exec:#3fbe7c;--ev-testnet:#e6b23c;--ev-fail:#f2506f;
+  --surface:#121a2e;--surface-raised:#212a47;--rule-color:#f06b3d;
+  background:var(--canvas);color:var(--ink);
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -89,6 +216,37 @@ img{max-width:100%;display:block}
 
 .tabular,.num,td.num,.tests,.stat-num{font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1}
 
+/* ---- motion: explains, never decorates ----
+   Two mechanisms, both gated by the SAME reduced-motion block above (which
+   collapses every animation/transition to near-zero duration), so neither
+   needs its own reduced-motion query:
+
+   1. `.rv`/`.in` — a plain fade-up reveal, toggled by one shared
+      IntersectionObserver each page wires up once (see the inline script at
+      the bottom of index.html/docs.html). Used sparingly, on section HEADS
+      and the three big diagrams only, not on every element — motion on
+      everything reads as noise, not "alive". Gated on `html.js`; see below.
+   2. `.rl-pulse` (defined in index.html, since only the landing's seam
+      diagram has one) — a small bright dash riding each rail track, PAUSED
+      until the diagram gains `.in-view` from the same observer, so "value
+      moving along the rail" happens once the diagram is actually on screen
+      rather than the instant the page loads off-screen.
+
+   The former `.rail-pulse`/`.mx1-pulse` rules lived here because both
+   diagrams were single SVGs animated with stroke-dashoffset. The seam is now
+   built from DOM text and CSS (so its rail names stay legible at 390px) and
+   the M×1 tree was replaced by the M×N/M×1 comparison, which is a static
+   argument and wants no motion at all — so both rule sets are gone rather
+   than left behind as dead selectors that describe elements no longer on
+   either page. */
+/* Gated on `html.js`, which the inline head script sets synchronously before
+   first paint. Without it, `.rv{opacity:0}` is a content-hiding bug rather
+   than an animation: the IntersectionObserver that would reveal these elements
+   never runs, so with JS off the seam diagram, the evidence ladder and the
+   M×N comparison were all rendering as blank space. */
+html.js .rv{opacity:0;transform:translateY(14px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
+html.js .rv.in{opacity:1;transform:none}
+
 /* ---- type scale + rhythm ----
    A single ratio (~1.25, "major third") drives every display size on both
    pages, expressed with clamp() so it is fluid rather than breakpoint-
@@ -104,26 +262,58 @@ img{max-width:100%;display:block}
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
 @media(max-width:480px){.wrap{padding:0 18px}}
 
-.disp{font-family:var(--disp);font-weight:500}
+.disp{font-family:var(--disp);font-weight:700}
 .kick{
   font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.16em;
   text-transform:uppercase;color:var(--ink-faint);
 }
 
-/* ---- toothed rule: the cowrie aperture, stretched into a divider ---- */
+/* ---- toothed rule: the cowrie aperture, stretched into a divider ----
+   Used sparingly. An earlier pass put one between every pair of sections —
+   seven identical full-width saw-blades down one page, which made the loudest
+   element on the page also the most repeated one. It now appears three times
+   on the landing, at half the old opacity and a finer pitch, and only where it
+   is announcing a change of register. */
 .tooth-rule{
-  height:14px;width:100%;background-color:var(--rule-color);
+  height:11px;width:100%;background-color:var(--rule-color);
   -webkit-mask-repeat:repeat-x;mask-repeat:repeat-x;
-  -webkit-mask-size:34px 14px;mask-size:34px 14px;
+  -webkit-mask-size:28px 11px;mask-size:28px 11px;
   -webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 14'%3E%3Crect x='0' y='11' width='34' height='2.4' rx='1.2'/%3E%3Cpath d='M5 11L11 11L8 1Z'/%3E%3Cpath d='M20 11L26 11L23 1Z'/%3E%3C/svg%3E");
   mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 14'%3E%3Crect x='0' y='11' width='34' height='2.4' rx='1.2'/%3E%3Cpath d='M5 11L11 11L8 1Z'/%3E%3Cpath d='M20 11L26 11L23 1Z'/%3E%3C/svg%3E");
-  opacity:.9;
+  opacity:.5;
 }
-.tooth-rule.dim{opacity:.35}
+.tooth-rule.dim{opacity:.3}
+/* The rule is the one place the divider is allowed to announce what follows:
+   it takes the hue of the section beneath it, so the page's colour schema is
+   legible even in the gaps between sections. */
+.tooth-rule.final{--rule-color:var(--cls-final)}
+.tooth-rule.rev{--rule-color:var(--cls-rev)}
+.tooth-rule.evidence{--rule-color:var(--ev-testnet)}
+.tooth-rule.exec{--rule-color:var(--ev-exec)}
+
+/* ---- settlement-class chip: the schema, spelled out ----
+   A word plus a hue plus a distinct border weight. Used in the rail ledger and
+   beside the hero's rail names, and nowhere an evidence level is meant. */
+.cls{
+  display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;
+  font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:3px;
+  white-space:nowrap;border:1px solid currentColor;
+}
+.cls::before{content:'';width:6px;height:6px;flex:none;background:currentColor}
+.cls.final{color:var(--cls-final)}
+.cls.final::before{border-radius:50%}                   /* ● final       */
+.cls.rev{color:var(--cls-rev)}
+.cls.rev::before{border-radius:1px;transform:rotate(45deg)}  /* ◆ reversible */
+.cls.none{color:var(--cls-none)}
+.cls.none::before{background:transparent;box-shadow:inset 0 0 0 1.4px currentColor;border-radius:50%} /* ○ none */
+
+/* Full-bleed helper: a band spans the viewport while its .wrap keeps the
+   measure. 100vw would include the scrollbar and cause a horizontal scroll,
+   so the width comes from the element's own containing block instead. */
+.full{width:100%;margin-left:0;margin-right:0}
 
 /* cowrie mark */
 .cowrie{display:block}
-.mark-vermilion{color:var(--vermilion)}
 
 /* texture: repeated cowrie glyph, very low opacity, decorative only */
 .shell-texture{
@@ -143,53 +333,86 @@ nav.top{
   border-bottom:1px solid var(--hair);
 }
 nav.top .wrap{display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
-.brand{display:flex;align-items:center;gap:10px}
+.brand{display:flex;align-items:center;gap:10px;min-height:44px}
 .brand .cowrie{width:24px;height:24px}
-.brand b{font-family:var(--disp);font-weight:500;font-size:19px;letter-spacing:-.03em;color:var(--ink)}
+.brand b{font-family:var(--disp);font-weight:700;font-size:19px;letter-spacing:-.03em;color:var(--ink)}
 .nlinks{display:flex;gap:8px;align-items:center}
 .nlinks a.nl{
+  display:inline-flex;align-items:center;min-height:44px;
   font-family:var(--body);font-size:13.5px;color:var(--ink-dim);padding:8px 12px;border-radius:6px;
   transition:color .15s;
 }
 .nlinks a.nl:hover{color:var(--ink)}
 @media(max-width:760px){.nlinks a.nl.hidem{display:none}}
 
+/* Tap targets are >=44px on every interactive control, including the
+   ostensibly "small"/icon-only ones — a hard requirement (390px is a real
+   breakpoint here, not just a layout check), so .iconbtn/.btn.sm grow their
+   HIT AREA to 44px via min-width/min-height even where the visible chip
+   stays compact. */
 .iconbtn{
-  display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;
+  display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;
   border:1px solid var(--hair-strong);border-radius:8px;background:transparent;color:var(--ink-dim);
   cursor:pointer;transition:.15s;
 }
 .iconbtn:hover{color:var(--ink);border-color:var(--ink-faint)}
 .iconbtn svg{width:17px;height:17px}
 
+/* The one place Vulos appears beyond the footer's single line: a compact,
+   logo-only button in the header, nothing else — no band, no tagline, no
+   badge sprawl. */
+.vulos-btn img{width:18px;height:18px;border-radius:4px;display:block;opacity:.92}
+.vulos-btn:hover img{opacity:1}
+/* The source mark is dark ink on transparent — correct on the light theme's
+   near-white button, unreadable on the dark theme's near-black one. Flipped
+   with a filter rather than shipping a second bitmap. */
+:root:not([data-theme="light"]) .vulos-btn img{filter:invert(1) brightness(1.15)}
+
 .btn{
-  display:inline-flex;align-items:center;gap:8px;font-family:var(--body);font-weight:500;
-  font-size:13.5px;padding:10px 18px;border-radius:8px;border:1px solid var(--hair-strong);
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--body);font-weight:500;
+  font-size:13.5px;padding:10px 18px;min-height:44px;border-radius:8px;border:1px solid var(--hair-strong);
   color:var(--ink);transition:.15s;white-space:nowrap;
 }
 .btn:hover{border-color:var(--ink-faint);background:var(--surface-raised)}
 .btn.pri{background:var(--vermilion);border-color:var(--vermilion);color:var(--vermilion-ink);font-weight:500}
 .btn.pri:hover{background:var(--vermilion-bright);border-color:var(--vermilion-bright)}
-.btn.sm{padding:7px 13px;font-size:12.5px}
+.btn.sm{padding:7px 13px;font-size:12.5px;min-height:44px}
 
 footer.site{border-top:1px solid var(--hair);padding:44px 0;color:var(--ink-faint);font-size:13px}
 footer.site .fwrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;align-items:center}
-footer.site .flinks{display:flex;gap:20px;flex-wrap:wrap}
+/* .flinks are standalone nav links (not inline prose, unlike the "vulos"
+   credit link to their left), so — same 44px hit-area rule as the header's
+   .nlinks a.nl — each gets a real tap target via inline-flex + min-height,
+   not just its 13px visible text line. */
+footer.site .flinks{display:flex;gap:8px;flex-wrap:wrap}
+/* Real 44×44 hit areas, not just 44px tall: "Docs" is only 31px of glyphs, so
+   the target is grown with padding (and the visual rhythm restored by shrinking
+   the flex gap by the same amount) rather than left short on one axis. */
+footer.site .flinks a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;min-width:44px;padding:0 8px}
 footer.site a:hover{color:var(--ink-dim)}
-footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:500}
+footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 
-/* ---- generic status word (rule 4: word, not just colour) ---- */
+/* ---- generic status word ----------------------------------------------------
+   Colour is never the only carrier: every status is a WORD first, with the hue
+   and the pip as reinforcement, so the evidence ladder survives greyscale,
+   colour-blindness and a bad projector. `.status.none` is deliberately the
+   dullest thing on the page — "nothing was run" should look like nothing. */
 .status{
   display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;
   font-weight:500;letter-spacing:.02em;white-space:nowrap;
 }
-.status::before{content:'';width:7px;height:7px;border-radius:50%;flex:none}
-.status.settled{color:var(--settled)}
-.status.settled::before{background:var(--settled)}
-.status.pending{color:var(--pending)}
-.status.pending::before{background:var(--pending)}
-.status.failed{color:var(--failed)}
-.status.failed::before{background:var(--failed)}
+.status::before{content:'';width:7px;height:7px;border-radius:50%;flex:none;background:currentColor}
+.status.none{color:var(--ev-none)}
+/* An unreached rung is drawn hollow — an outline, not a filled pip. */
+.status.none::before{background:transparent;box-shadow:inset 0 0 0 1.5px currentColor}
+.status.design{color:var(--ev-design)}
+.status.exec{color:var(--ev-exec)}
+.status.testnet{color:var(--ev-testnet)}
+.status.fail{color:var(--ev-fail)}
+/* legacy names kept so docs.html and older markup keep resolving */
+.status.settled{color:var(--ev-exec)}
+.status.pending{color:var(--ev-design)}
+.status.failed{color:var(--ev-fail)}
 
 /* ---- ledger table (rule 5: hairline rows, toothed rule only between sections; rule 6 tabular nums; rule 3 no vermilion in data) ---- */
 .ledger{width:100%;border-collapse:collapse;font-size:14px}
@@ -289,6 +512,12 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:500}
   --code-keyword:#C4B5FD; --code-string:#5EEAD4; --code-number:#FBBF24;
   --code-function:#7DD3FC; --code-property:#93C5FD; --code-variable:#FDA4AF;
   --code-meta:#FDBA74; --code-punct:#8195AC;
+  /* The block's own chrome (filename bar) is NOT a code token and must not
+     borrow --code-comment: that value is the shared cross-project token,
+     pinned at 4.45:1 (see above) and reserved for the lowest-stakes class.
+     A filename is real UI text, so it gets its own value, measured 5.52:1 on
+     the same #0C1116 surface. */
+  --code-chrome:#7A8CA3;
 }
 .hljs{display:block;color:var(--code-text);background:transparent}
 .hljs-comment{color:var(--code-comment);font-style:italic}
@@ -313,7 +542,7 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:500}
 .codeblock .cb-head{
   display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 16px;
   border-bottom:1px solid rgba(238,241,248,.09);background:rgba(238,241,248,.025);
-  font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--code-comment);
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--code-chrome);
 }
 .codeblock .cb-head .dots{display:flex;gap:5px;flex:none}
 .codeblock .cb-head .dots span{width:7px;height:7px;border-radius:50%;background:rgba(238,241,248,.14);display:block}

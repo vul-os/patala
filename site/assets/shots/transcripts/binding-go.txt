@@ -51,6 +51,6 @@ $ cd patala-go && make test
 === RUN   TestGeneratedWebhookStatusVariantsAreExactlyThree
 --- PASS: TestGeneratedWebhookStatusVariantsAreExactlyThree (0.00s)
 PASS
-ok  	github.com/vul-os/patala/patala-go/bindingtest	1.583s
+ok  	github.com/vul-os/patala/patala-go/bindingtest	5.306s
 go-test-gate: go test exit=0 | top-level ran=19 passed=19 failed=0 skipped=0 | subtests passed=13
 go-test-gate: OK — 19 top-level tests passed (min 19), 10 required tests present.

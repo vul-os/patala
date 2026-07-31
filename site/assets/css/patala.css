@@ -393,7 +393,7 @@ nav.top .wrap{display:flex;align-items:center;justify-content:space-between;heig
 .btn.pri:hover{background:var(--vermilion-bright);border-color:var(--vermilion-bright)}
 .btn.sm{padding:7px 13px;font-size:12.5px;min-height:44px}
 
-footer.site{border-top:1px solid var(--hair);padding:44px 0;color:var(--ink-faint);font-size:13px}
+footer.site{border-top:1px solid var(--hair);padding:32px 0;color:var(--ink-faint);font-size:13px}
 footer.site .fwrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;align-items:center}
 /* .flinks are standalone nav links (not inline prose, unlike the "vulos"
    credit link to their left), so — same 44px hit-area rule as the header's
@@ -431,8 +431,8 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 .status.failed{color:var(--ev-fail)}
 
 /* ---- ledger table (rule 5: hairline rows, toothed rule only between sections; rule 6 tabular nums; rule 3 no vermilion in data) ---- */
-.ledger{width:100%;border-collapse:collapse;font-size:14px}
-.ledger th,.ledger td{text-align:left;padding:13px 14px;border-bottom:1px solid var(--hair);vertical-align:top}
+.ledger{width:100%;border-collapse:collapse;font-size:14px;line-height:1.55}
+.ledger th,.ledger td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--hair);vertical-align:top}
 .ledger thead th{
   font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
   color:var(--ink-faint);font-weight:500;border-bottom:1px solid var(--hair-strong);
@@ -658,7 +658,7 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 @media(max-width:760px){
   .ledger{min-width:600px}
   .ledger.ledger--wide{min-width:680px}
-  .ledger th,.ledger td{padding:12px 12px}
+  .ledger th,.ledger td{padding:10px 11px}
   /* Scroll affordance: without it a clipped table reads as a complete one.
      Pinned to the wrapper, so it sits at the clipped edge. */
   .ledger-wrap{position:relative}
@@ -679,16 +679,16 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
   .ledger thead{display:none}
   .ledger tbody,.ledger tr,.ledger td{display:block;width:auto}
   .ledger tr{
-    border:1px solid var(--hair);border-radius:4px;margin-bottom:12px;padding:2px 15px 8px;
+    border:1px solid var(--hair);border-radius:4px;margin-bottom:10px;padding:2px 14px 6px;
     background:var(--surface);
   }
   .ledger tbody tr:last-child{margin-bottom:0}
-  .ledger td,.ledger tbody tr:last-child td{padding:11px 0;border-bottom:0}
+  .ledger td,.ledger tbody tr:last-child td{padding:9px 0;border-bottom:0}
   .ledger td+td{border-top:1px solid var(--hair)}
   /* The row's own title needs no label — it IS the label. */
-  .ledger td:first-child{padding-top:14px;font-size:15px}
+  .ledger td:first-child{padding-top:12px;font-size:15px}
   .ledger td:not(:first-child)::before{
-    content:attr(data-label);display:block;margin-bottom:6px;
+    content:attr(data-label);display:block;margin-bottom:4px;
     font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.1em;
     text-transform:uppercase;color:var(--ink-faint);
   }

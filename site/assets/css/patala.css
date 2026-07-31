@@ -639,12 +639,22 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
   .codeblock .cb-path{flex-basis:100%;text-align:left;order:3}
 }
 
-/* A ledger that has to be squinted at defeats the point of the aesthetic.
-   Below 600px these tables were shrinking to fit rather than scrolling — the
-   rails table had 36px of overflow, i.e. three columns crushed into 352px with
-   the prose column reduced to a ribbon. Give each one a real minimum so the
-   columns keep working layout and the wrapper genuinely scrolls, and do NOT
-   drop the type: the fix for a cramped table is more width, not smaller text. */
+/* A ledger that has to be squinted at defeats the point of the aesthetic —
+   and so does one that scrolls its content out of sight. Two different fixes
+   for two different widths, because the failure is different at each.
+
+   760-620px the table is merely cramped, so it keeps its columns and its type
+   and the wrapper genuinely scrolls. The fix for a cramped table is more
+   width, never smaller text.
+
+   Below 620px scrolling stops working as a fix and becomes the defect: at
+   360px the rail ledger showed two columns and a stack of 150px-tall rows
+   that were empty, because the row height was being set by a prose column
+   entirely off screen. So the table STOPS BEING A TABLE. Each row becomes its
+   own bordered block and every cell is titled from the data-label the markup
+   carries, which is the same string the hidden <thead> holds — one source, so
+   the two views cannot drift. Nothing is dropped and nothing shrinks; the
+   table is simply transposed. */
 @media(max-width:760px){
   .ledger{min-width:600px}
   .ledger.ledger--wide{min-width:680px}
@@ -657,4 +667,35 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
     width:26px;height:100%;pointer-events:none;
     background:linear-gradient(90deg,transparent,var(--surface))
   }
+}
+@media(max-width:620px){
+  .ledger-wrap{overflow-x:visible;border:0;border-radius:0}
+  .ledger-wrap::after{display:none}
+  .ledger,.ledger.ledger--wide{min-width:0;display:block;font-size:14px}
+  /* display:none, not a visually-hidden clip: an absolutely positioned thead
+     still lays its <th> out at full content width and measured 350px inside
+     a 320px viewport. Nothing is lost — every cell carries the same string
+     as its own data-label heading in this view. */
+  .ledger thead{display:none}
+  .ledger tbody,.ledger tr,.ledger td{display:block;width:auto}
+  .ledger tr{
+    border:1px solid var(--hair);border-radius:4px;margin-bottom:12px;padding:2px 15px 8px;
+    background:var(--surface);
+  }
+  .ledger tbody tr:last-child{margin-bottom:0}
+  .ledger td,.ledger tbody tr:last-child td{padding:11px 0;border-bottom:0}
+  .ledger td+td{border-top:1px solid var(--hair)}
+  /* The row's own title needs no label — it IS the label. */
+  .ledger td:first-child{padding-top:14px;font-size:15px}
+  .ledger td:not(:first-child)::before{
+    content:attr(data-label);display:block;margin-bottom:6px;
+    font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-faint);
+  }
+  .ledger td:last-child{max-width:none}
+  /* The longest status word — EXECUTED - RAIL REGISTRY IS MOCK-ONLY — is
+     nowrap everywhere else and measured 350px here. In the stacked view it
+     is a block of text, not a chip in a column, so it is allowed to wrap. */
+  .ledger td .status{white-space:normal;align-items:baseline}
+  .ledger td .status::before{position:relative;top:-1px}
 }

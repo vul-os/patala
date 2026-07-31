@@ -139,8 +139,8 @@
      to spend when the page is too long. They were 66/92/74; the page read as
      eight islands separated by more air than any of them needed, and the
      reader met the second section a full screen after the first. */
-  section.blk{padding:42px 0}
-  section.blk.airy{padding:48px 0}
+  section.blk{padding:38px 0}
+  section.blk.airy{padding:44px 0}
   @media(max-width:820px){section.blk.airy{padding:42px 0}}
   /* In the light theme the band announces itself simply by being dark. In the
      dark theme it can only be a shade darker than the canvas, which at a
@@ -148,7 +148,7 @@
      hairline top and bottom, the one colour reserved for patala itself, which
      reads as a seam between registers at any zoom. */
   section.band{
-    padding:46px 0;
+    padding:42px 0;
     border-top:1px solid color-mix(in srgb, var(--vermilion) 34%, transparent);
     border-bottom:1px solid color-mix(in srgb, var(--vermilion) 34%, transparent);
   }
@@ -365,7 +365,7 @@
   .seam-legend{
     display:flex;flex-wrap:wrap;gap:9px 20px;margin-top:18px;padding-top:14px;border-top:1px solid var(--hair);
   }
-  .seam-note{margin-top:10px;font-size:13.5px;color:var(--ink-dim);line-height:1.62;max-width:78ch}
+  .seam-note{margin-top:10px;font-size:13.5px;color:var(--ink-dim);line-height:1.62;max-width:104ch}
   .seam-note b{color:var(--ink);font-weight:600}
 
   /* ══ 01 · THE THREE ZEROS (instrument band) ═════════════════════════════ */
@@ -615,7 +615,13 @@
          distorted, it just stops growing, and margin auto re-centres it.
      Together the two figures land at nearly equal height while keeping their
      deliberately unequal WIDTH, which is what carries the composition. */
-  .mxn svg{width:100%;height:auto;max-height:230px;margin:0 auto;display:block}
+  .mxn svg{width:100%;height:auto;max-height:170px;margin:0 auto;display:block}
+  /* The cap has to be per-figure, not shared. A shared cap scaled BOTH shapes
+     to the same height, and because the rejected M×N sits in the narrower
+     column it then rendered WIDER than the M×1 beside it — inverting the one
+     thing this figure's composition is for, which is that the shape this repo
+     argues for is the larger of the two. The win figure keeps the bigger cap. */
+  .mxn figure.win svg{max-height:196px}
   .mxn .edge{stroke:var(--ev-fail);stroke-width:1;fill:none;opacity:.55}
   .mxn .edge-ok{stroke:var(--cls-final);stroke-width:1.4;fill:none;opacity:.9}
   .mxn .nd{fill:var(--ink-faint)}

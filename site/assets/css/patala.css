@@ -298,8 +298,8 @@ html.js .rv.in{opacity:1;transform:none}
    A word plus a hue plus a distinct border weight. Used in the rail ledger and
    beside the hero's rail names, and nowhere an evidence level is meant. */
 .cls{
-  display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11.5px;
-  font-weight:500;letter-spacing:.04em;text-transform:uppercase;padding:3px 8px;border-radius:3px;
+  display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:12px;
+  font-weight:500;letter-spacing:.03em;text-transform:uppercase;padding:3px 8px;border-radius:3px;
   white-space:nowrap;border:1px solid currentColor;
 }
 .cls::before{content:'';width:6px;height:6px;flex:none;background:currentColor}
@@ -347,6 +347,13 @@ nav.top .wrap{display:flex;align-items:center;justify-content:space-between;heig
 }
 .nlinks a.nl:hover{color:var(--ink)}
 @media(max-width:760px){.nlinks a.nl.hidem{display:none}}
+/* Below 560px the header no longer fits its own row: measured at 334px of
+   content inside a 320px viewport. Drop by replaceability, never function —
+   the Vulos credit is repeated in the footer, the GitHub button is repeated
+   in the closing CTA and the footer, and "Docs" and the theme toggle are the
+   only route to the documentation and the only theme control, so they stay. */
+@media(max-width:560px){.nlinks .vulos-btn{display:none}}
+@media(max-width:430px){nav.top .nlinks .btn.sm{display:none}nav.top .wrap{gap:10px}}
 
 /* Tap targets are >=44px on every interactive control, including the
    ostensibly "small"/icon-only ones — a hard requirement (390px is a real

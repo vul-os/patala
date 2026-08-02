@@ -66,10 +66,11 @@
      DESKTOP (>860px) — a table of contents that shows the SHAPE of the
      documentation, not just its filenames. Four numbered documents, and the
      one you are reading opens to reveal its own ## headings, built from the
-     rendered markdown so the outline cannot drift from the text. It sticks
-     under the header and scrolls in its own box (never the page) so a long
-     outline can never push the footer off. Height is now a consequence of
-     the document you are in — 227px was the tell that it was a fixed slab.
+     rendered markdown so the outline cannot drift from the text; the heading
+     you are actually inside is marked as you scroll, so the outline reports
+     your position rather than only accepting clicks. It is FIXED to the left
+     edge of the viewport (see "the rail is a plane" below) and scrolls in its
+     own box, never the page, so a long outline can never push the footer off.
 
      PHONE (<=860px) — the reader wants prose, immediately, so there is no nav
      block above the article at all: the crumb line names where you are and the
@@ -88,19 +89,89 @@
      and the aside falls back to exactly what it was: a plain block of four
      links above the article. Every rule below that would break that fallback
      is gated on html.js. */
+  /* ── THE RAIL IS A PLANE, NOT A CARD ──────────────────────────────────────
+     What it was: `position:sticky` inside `.wrap docs-shell`, a 1160px centred
+     wrapper. Measured at 1440 that put the rail at left=164 — 164px of empty
+     canvas to its left, and a top that drifted (77.1px at the end of a long
+     document, because a sticky element stops sticking when its container runs
+     out). A navigator that moves, and that floats in the middle of the page,
+     is not somewhere the eye can return to without looking for it.
+
+     What it is now, above 860px: genuinely `position:fixed` at left:0, from
+     the underside of the header to the bottom of the viewport, full height,
+     with one hairline on its right edge. It is a plane the page is laid on,
+     not an object the page contains — so it cannot drift, cannot be scrolled
+     past, and is always in the same place.
+
+     Everything else on the page therefore moves off that left edge: the
+     document column and the footer are inset past the rail by --doc-inset,
+     and the toothed rule starts where the document starts. The header is the
+     one thing that spans over the rail, because a header spanning the top and
+     a rail hanging below it at the left is the shape this now is.
+
+     --doc-inset also CENTRES the document in whatever is left over once the
+     rail has taken its width, so a 2560px screen doesn't leave 1100px of
+     canvas stranded on the right while the prose hugs the rail. At 1440 the
+     max() clamps to ~8px and the column simply fills the space.
+
+     Below 860px none of this exists — see the sheet, further down. */
   /* padding-BLOCK, never the `padding` shorthand. This element is `wrap
      docs-shell`, and .wrap supplies the horizontal gutter — a shorthand here
-     resets it to 0, and below the 860px breakpoint there is no grid column
-     left to fake an inset, so every heading, paragraph and code frame sits
-     flush against both screen edges. The same shorthand caused the same bug
-     on llmux twice. */
-  .docs-shell{display:grid;grid-template-columns:248px minmax(0,1fr);gap:var(--sp-6);align-items:start;padding-block:var(--sp-5) 80px}
-  @media(max-width:860px){.docs-shell{grid-template-columns:minmax(0,1fr);padding-top:var(--sp-4)}}
+     resets it to 0, and below the 860px breakpoint there is no rail left to
+     fake an inset, so every heading, paragraph and code frame sits flush
+     against both screen edges. The same shorthand caused the same bug on
+     llmux twice. The desktop rules below use padding-INLINE for the same
+     reason: it cannot touch the block padding this line sets. */
+  .docs-shell{padding-block:var(--sp-5) 80px}
+  @media(max-width:860px){.docs-shell{padding-top:var(--sp-4)}}
+
+  @media(min-width:861px){
+    :root{
+      --rail:248px; --doc-max:1120px;
+      --doc-inset:calc(
+        var(--rail) + var(--sp-5) +
+        max(0px, (100vw - var(--rail) - var(--sp-5) - var(--sp-4) - var(--doc-max)) / 2)
+      );
+    }
+    /* One expression, two elements, so the document column and the footer
+       line up on the same left edge to the pixel. */
+    .docs-shell,footer.site>.wrap{
+      max-width:calc(var(--doc-inset) + var(--doc-max) + var(--sp-4));
+      margin-inline:0;
+      padding-inline:var(--doc-inset) var(--sp-4);
+    }
+    .docs-main{max-width:var(--doc-max)}
+    /* The header spans over the rail; its own centred measure would have put
+       the brand at x=140 with the rail ending at 248, which reads as two
+       layouts fighting. Full bleed, and the brand lands ~24px in — the same
+       inset as the rail's own link text. */
+    nav.top>.wrap{max-width:none;padding-inline:var(--sp-4)}
+    /* The toothed rule divides the DOCUMENT from the header, not the rail.
+       width:auto is load-bearing: .tooth-rule is width:100%, and 100% plus a
+       248px left margin is 248px of horizontal page overflow — the whole
+       document panned sideways by exactly the width of the rail. */
+    .docs-rule{margin-left:var(--rail);width:auto}
+  }
+  /* The rail steps up at 1280, not at 1200. At 1200 it made the document
+     column NARROWER than it had been at 1199 (896px against 927px), which is
+     enough to push the five-column tables over their threshold — so widening
+     the window turned two tables into cards. A breakpoint that runs backwards
+     is a breakpoint in the wrong place. */
+  @media(min-width:861px) and (max-width:1279px){:root{--rail:216px}}
 
   .docs-nav{
     position:sticky;top:80px;border:1px solid var(--hair);background:var(--surface);
     border-radius:3px;display:flex;flex-direction:column;
     max-height:calc(100vh - 104px);
+  }
+  /* 65px = the header's 64px row plus its 1px underline. The rail's top edge
+     is that underline, so the two chrome elements meet with no seam. */
+  @media(min-width:861px){
+    .docs-nav{
+      position:fixed;left:0;top:65px;bottom:0;width:var(--rail);
+      max-height:none;border:0;border-right:1px solid var(--hair);border-radius:0;
+    }
+    .dn-list{padding:8px 8px 24px 10px}
   }
   .dn-top{
     display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;
@@ -124,8 +195,10 @@
     transition:color .15s,background-color .15s,border-color .15s;
     border-left:2px solid transparent;border-radius:2px;min-height:44px;
   }
+  /* 12px, not the 11.5px it was: this site holds a 12px type floor and the
+     document numbers were the one string on the page still under it. */
   .docs-nav .dn-n{
-    font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--ink-faint);flex:none;
+    font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--ink-faint);flex:none;
     font-variant-numeric:tabular-nums;
   }
   .docs-nav .dn-t{min-width:0}
@@ -245,7 +318,13 @@
      12.5px by .86 — 10.75px of Rust on a phone, under this site's 12px floor. */
   /* max() keeps the site's 12px type floor: .86em is right inside 16px prose
      and 10.3px inside a 12px table head, which is where it was landing. */
-  .markdown :not(pre)>code{font-family:var(--mono);font-size:max(12px,.86em);background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink)}
+  /* break-word is the backstop under seamCode() (see below): a token with no
+     seam in it — `PaymentRail` inside a 284px column at 320px — has nowhere
+     natural to break, and an inline chip that cannot break is 24px of
+     horizontal page overflow. break-word, unlike `anywhere`, does not enter
+     intrinsic sizing, so it only ever fires on a word that could not have fit
+     on a line of its own. */
+  .markdown :not(pre)>code{font-family:var(--mono);font-size:max(12px,.86em);background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink);overflow-wrap:break-word}
   /* Fenced code is re-parented into .codeblock by dressContent() below, so the
      child selector here is load-bearing: it styles ONLY a <pre> still sitting
      directly in the article — the instant between paint and that script, and
@@ -272,6 +351,75 @@
   .markdown>.table-scroll{margin:1.4em 0}
   .markdown th,.markdown td{border-bottom:1px solid var(--hair);padding:11px 14px;text-align:left;vertical-align:top}
   .markdown thead th{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--hair-strong);font-weight:500}
+
+  /* ── WHY THE WIDE TABLES WERE 784px OF NEARLY NOTHING ──────────────────────
+     Measured on "Destination validation by rail" (5 columns, status.md): the
+     table laid out at exactly 997px inside an 814px column — and 997px is the
+     SUM OF ITS COLUMNS' MIN-CONTENT WIDTHS. Every column was at its minimum,
+     which meant the widths were being set by the longest unbreakable token in
+     each: `MockRail::without_destination_checks` claimed 304px, a StrKey chip
+     167px, a crate path 226px — and the 55-word prose column, the one anybody
+     is actually reading, was left with 101px. One word per line, 784px tall,
+     while the row's other four cells were blank space. The same defect the
+     landing's .ledger had at 360px, arriving here at 1440.
+
+     Two changes, and they are the two halves of the same idea — the row's
+     height must be set by what is being read, not by what happens to be the
+     longest identifier.
+
+     1. A break OPPORTUNITY is offered inside every long inline code token in
+        the article, at its own seams — after `_ : . / -` and nowhere else
+        (seamCode()
+        below inserts <wbr>, which adds no character and so cannot change what
+        Copy puts on the clipboard). `MockRail::without_destination_checks`
+        stops claiming 304px because it can now break after `MockRail::`;
+        `StructurallyValid` has no seam, keeps claiming its full 162px, and is
+        never broken mid-word — which is the whole reason this is not simply
+        `overflow-wrap:anywhere`. That blunt version was tried first: it does
+        lower min-content, but it lowers it to one character, so the surplus
+        all went to the prose column and the verdict chips came out as
+        "StructurallyV / alid". A seam is the difference between a column
+        being allowed to be narrower and a word being allowed to be wrong.
+     2. Below a width that depends on how many columns the table has, it STOPS
+        BEING A TABLE and becomes one bordered card per row, every cell titled
+        with its own column heading. Identical treatment, identical reasoning
+        and nearly identical rules to .ledger in patala.css — a table that has
+        to be panned sideways to be read has stopped being a table already.
+
+     The width is judged per table by fitTables() below rather than by a media
+     query, because the thing that has to fit is the DOCUMENT COLUMN, and that
+     column is 1120px at 1440 but 752px at 1024 — same viewport family, two
+     completely different answers. data-cols and data-label are written by the
+     same pass, from the table's own <thead>, so the card titles and the column
+     headings cannot drift apart. */
+  /* In a card the column is as narrow as the screen and there is no
+     neighbouring column left to protect, so here the blunt rule is the right
+     one: nothing may ever exceed the card and reintroduce a sideways pan. */
+  .markdown table.tt td code{overflow-wrap:anywhere}
+  .markdown .table-scroll.tt{overflow-x:visible;border:0;border-radius:0}
+  .markdown table.tt{display:block;font-size:14px}
+  /* display:none, not a visually-hidden clip: an absolutely positioned thead
+     still lays its <th> out at full content width. Nothing is lost — every
+     cell carries the same string as its own data-label heading here. */
+  .markdown table.tt thead{display:none}
+  .markdown table.tt tbody,.markdown table.tt tr,.markdown table.tt td{display:block;width:auto}
+  .markdown table.tt tr{
+    border:1px solid var(--hair);border-radius:4px;margin-bottom:10px;padding:2px 14px 8px;
+    background:var(--surface);
+  }
+  .markdown table.tt tbody tr:last-child{margin-bottom:0}
+  .markdown table.tt td{padding:9px 0;border-bottom:0}
+  .markdown table.tt td+td{border-top:1px solid var(--hair)}
+  /* The row's own title needs no label — it IS the label. */
+  .markdown table.tt td:first-child{padding-top:12px;font-size:15px;color:var(--ink)}
+  .markdown table.tt td:not(:first-child)::before{
+    content:attr(data-label);display:block;margin-bottom:5px;
+    font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--ink-faint);
+  }
+  /* A cell that was empty in the grid (an em dash, or nothing) still gets its
+     heading here, so a card is never a list with a gap in it. */
+  .markdown table.tt td:empty::after{content:"—";color:var(--ink-faint)}
   .markdown img{max-width:100%;border:1px solid var(--hair);margin:1.1em 0;border-radius:2px}
   .markdown hr{border:none;height:1px;background:var(--hair);margin:2.3em 0}
   .docs-error{
@@ -356,7 +504,7 @@
   </div>
 </div></nav>
 
-<div class="tooth-rule dim" role="presentation"></div>
+<div class="tooth-rule dim docs-rule" role="presentation"></div>
 
 <div class="wrap docs-shell">
   <aside class="docs-nav" id="docsNav" aria-label="Documentation contents">
@@ -543,18 +691,67 @@ function buildOutline(slug){
       if(!t) return;
       closeSheet();
       t.scrollIntoView({block:'start'});
-      ul.querySelectorAll('a').forEach(function(x){ x.classList.toggle('here', x===a); });
+      markHere(a);
     });
   });
+  spyHeads = heads.map(function(h){ return document.getElementById(h.id); }).filter(Boolean);
+  spy();
 }
 
-// Every table marked.js renders gets its own horizontal scroller (never the
-// whole page) — same fix as .ledger-wrap on the landing, for the same reason
-// (PaymentRail's method table and the destination-status table are both
-// genuinely wide). Every fenced code block gets re-parented into the shared
-// .codeblock/.cb-head chrome and then highlighted for real.
+/* ── where you are, without being asked ────────────────────────────────────
+   The rail no longer moves, so it can carry a reading position honestly: the
+   outline row for the section you are actually inside is marked as the page
+   scrolls, not only when the row is clicked. The rule is deliberately the
+   simple one — the last heading whose top has passed the header — because a
+   more clever "most visible section" flickers between two headings around
+   every boundary, and a table of contents that twitches is worse than one
+   that says nothing.
+
+   Everything is read in one rAF-coalesced pass and nothing is written unless
+   the answer changed, so scrolling costs one getBoundingClientRect per
+   heading and, almost always, no layout write at all. */
+var spyHeads = [];
+function markHere(a){
+  document.querySelectorAll('.dn-sub a').forEach(function(x){ x.classList.toggle('here', x===a); });
+}
+function spy(){
+  if(!spyHeads.length) return;
+  var line = 96, cur = null;
+  for (var i=0;i<spyHeads.length;i++){
+    if (spyHeads[i].getBoundingClientRect().top <= line) cur = spyHeads[i]; else break;
+  }
+  // Past the end of the prose (the pager, the footer) the last section is
+  // still the one being read.
+  if(!cur && window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 4) cur = spyHeads[spyHeads.length-1];
+  var want = cur ? document.querySelector('.dn-sub a[data-head="'+cur.id+'"]') : null;
+  if(want && want.classList.contains('here')) return;
+  markHere(want);
+}
+var spyPending = false;
+window.addEventListener('scroll', function(){
+  if(spyPending) return;
+  spyPending = true;
+  requestAnimationFrame(function(){ spyPending = false; spy(); });
+}, {passive:true});
+
+// Every table marked.js renders is labelled from its own <thead> and then
+// judged by fitTables(): wide enough and it stays a grid, too narrow and it
+// transposes into cards. The .table-scroll wrapper stays underneath both as
+// the last resort — same object as .ledger-wrap on the landing — but on the
+// measurements below nothing on this page now reaches it. Every fenced code
+// block gets re-parented into the shared .codeblock/.cb-head chrome and then
+// highlighted for real.
 function dressContent(){
+  seamCode(content);
   content.querySelectorAll('table').forEach(function(table){
+    // Every cell is told which column it is in, from the table's own <thead>,
+    // so the card view below can title it without a second copy of the
+    // headings existing anywhere. Written once per render, never per resize.
+    var heads = [...table.querySelectorAll('thead th')].map(function(th){ return (th.textContent||'').trim(); });
+    table.dataset.cols = String(heads.length || (table.querySelector('tr') ? table.querySelector('tr').children.length : 0));
+    table.querySelectorAll('tbody tr').forEach(function(tr){
+      [...tr.children].forEach(function(td, i){ if(heads[i]) td.setAttribute('data-label', heads[i]); });
+    });
     if (table.closest('.table-scroll')) return;
     var wrap = document.createElement('div');
     wrap.className = 'table-scroll';
@@ -601,7 +798,83 @@ function dressContent(){
   // with the landing (./assets/js/codeblock.js), so a block rendered from
   // markdown here behaves identically to one hand-written there.
   if (window.patalaCode) patalaCode.dress(content);
+  fitTables();
 }
+
+/* A column in an auto-laid-out table is never narrower than its longest
+   unbreakable run, so one 36-character identifier can hold four columns
+   hostage — see the thesis beside the table CSS. <wbr> offers a break at the
+   token's own seams and only there, so an identifier may be split where a
+   reader would already read a join, and never anywhere else. It contributes
+   no text, so textContent — and therefore the Copy control — is unchanged. */
+function seamCode(scope){
+  // :not(pre)>code — inline code only. Inside a fenced block the text is about
+  // to be tokenised and split per line by codeblock.js, and inserting elements
+  // into it first would be interfering with someone else's parse.
+  scope.querySelectorAll(':not(pre) > code').forEach(function(c){
+    if (c.dataset.seamed) return;
+    c.dataset.seamed = '1';
+    var text = c.textContent || '';
+    if (text.length < 14) return;
+    var parts = [], buf = '';
+    for (var i = 0; i < text.length; i++){
+      buf += text[i];
+      if ('_:./-'.indexOf(text[i]) > -1 && i < text.length - 1){ parts.push(buf); buf = ''; }
+    }
+    if (buf) parts.push(buf);
+    if (parts.length < 2) return;
+    c.textContent = '';
+    parts.forEach(function(p, i){
+      c.appendChild(document.createTextNode(p));
+      if (i < parts.length - 1) c.appendChild(document.createElement('wbr'));
+    });
+  });
+}
+
+/* Decide, per table and against the width the document column ACTUALLY has,
+   whether the thing can still be read as a grid.
+
+   The threshold is a function of column count because that is what the number
+   of columns costs: two columns are a label and a value and stay a table down
+   to a phone; five columns of prose and identifiers need most of a laptop.
+   Below its threshold the table transposes into one card per row (.tt).
+
+   Then a second pass, which is the part that cannot be got wrong by guessing:
+   anything still overflowing its wrapper after that decision is transposed
+   too. So "does this need to be panned sideways" is answered by measurement,
+   not by a breakpoint that was right on the day it was written. */
+function fitTables(){
+  var NEED = { 2:460, 3:620 };
+  var tables = [...content.querySelectorAll('table[data-cols]')];
+  tables.forEach(function(t){
+    var cols = +t.dataset.cols || 2;
+    var need = NEED[cols] || 900;
+    setTT(t, content.clientWidth < need);
+  });
+  // Re-measure only after the first decision has been laid out.
+  tables.forEach(function(t){
+    if (t.classList.contains('tt')) return;
+    var wrap = t.closest('.table-scroll');
+    if (wrap && wrap.scrollWidth > wrap.clientWidth + 1) setTT(t, true);
+  });
+  // A transposed table no longer scrolls, so the shared affordance has to be
+  // told: without this the edge fade and the tab stop survive on a wrapper
+  // with nothing left to reveal.
+  if (window.patalaCode) patalaCode.remeasure();
+}
+function setTT(t, on){
+  t.classList.toggle('tt', on);
+  var wrap = t.closest('.table-scroll');
+  if (wrap) wrap.classList.toggle('tt', on);
+}
+// A width change moves the threshold, and the reader may well be looking at
+// the table while it happens. rAF-coalesced so a drag resize costs one pass.
+var fitPending = false;
+window.addEventListener('resize', function(){
+  if (fitPending) return;
+  fitPending = true;
+  requestAnimationFrame(function(){ fitPending = false; fitTables(); });
+});
 
 function renderPager(slug){
   var i = DOCS.findIndex(function(d){ return d.slug===slug; });

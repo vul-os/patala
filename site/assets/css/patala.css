@@ -611,9 +611,14 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
   flex:1 1 120px;min-width:0;text-align:right;letter-spacing:.02em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
+/* 40px, not the 32 these were. These are the only standalone controls inside a
+   code block, they sit in a dense mono bar where a mis-tap costs the reader
+   their scroll position, and 32 is below every touch-target floor worth
+   holding. The bar's own height follows from the control rather than the
+   other way round. */
 .codeblock .cb-copy,.codeblock .cb-wrap{
   flex:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;
-  min-height:32px;padding:0 10px;border-radius:6px;cursor:pointer;
+  min-height:40px;padding:0 12px;border-radius:6px;cursor:pointer;
   border:1px solid var(--code-edge);background:transparent;color:var(--code-chrome);
   font-family:var(--mono);font-size:12px;letter-spacing:.04em;transition:.15s;
 }

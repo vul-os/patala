@@ -463,71 +463,52 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
 
 /* ---- syntax highlighting (highlight.js core, vendored — see ../vendor/) ----
 
-   THE SURFACE NOW FOLLOWS THE PAGE THEME, and that is a reversal of the
-   previous rule ("a terminal doesn't repaint for paper mode"). The reversal is
-   deliberate: this page draws a hard line between the INSTRUMENT and the
-   REGISTER, and these blocks are not terminals — they are SOURCE, which is
-   register. The genuinely captured terminal output still never repaints: every
-   .webp in section 06 is a dark pane and it lives inside .band, which stays a
-   dark instrument panel in both themes. So the rule the page actually keeps is
-   "captured output is always the instrument; source you would read is always
-   the paper", which is stricter than the old one and produces a light theme
-   that is designed rather than one carrying a black slab through it.
+   ONE PALETTE, NOT TWO, AND IT IS THE SUITE'S. Every Vulos project renders
+   code on the same fixed carbon panel with the same ten token colours, so a
+   Rust block in patala, a JSON block in llmux and a shell block in openrate
+   are the same object wearing the same clothes. That is why the surface no
+   longer follows the page theme: a shared palette can only be measured once
+   if the ground it is measured against is constant. The previous pass shipped
+   two palettes (a dark set and a paper set) which were internally fine and
+   family-wise wrong — patala was the only project in the suite whose code
+   turned to paper in light mode.
 
-   TWO PALETTES, BOTH MEASURED. Every value below is checked with the WCAG
-   relative-luminance formula against its own theme's code surface. The floor
-   is 4.5:1 and nothing is under it — including comments, which under the
-   previous shared palette sat at 4.45:1 and were knowingly shipped short.
+   The rule the page keeps is unchanged in spirit and stricter in practice:
+   captured terminal output (§06's .webp panes) and source you would read are
+   BOTH instrument, and neither repaints for paper mode.
 
-   The previous palette's real defect was not hue, it was VALUE: eight tokens
-   all landing between 10.0:1 and 12.8:1, so keyword, string, number, function
-   and property had near-identical weight and the eye could not rank them. The
-   palette below is built as a hierarchy instead, so a block reads before it is
-   parsed — payload brightest, names next, structure below that, and the two
-   classes that carry no meaning (comments, punctuation) dimmest:
+   MEASURED, on --hl-bg #0C1116, with the WCAG relative-luminance formula.
+   Floor is 4.5:1; nothing is under it:
 
-   DARK  code surface #0A0E1A          LIGHT code surface #F4F7FD
-     text      #C9D4E5  12.87:1          text      #182238  14.77:1
-     type/attr #6FD2EC  11.10:1          keyword   #6D28C4   7.11:1
-     number    #EFAE4E   9.93:1          function  #134FB0   7.06:1
-     string    #3FCEAA   9.74:1          meta      #8A3E12   7.04:1
-     meta      #EFA06B   9.09:1          type/attr #0B5C76   6.97:1
-     variable  #F58FA4   8.57:1          variable  #A32348   6.77:1
-     function  #63B0F2   8.27:1          number    #8A4B00   6.34:1
-     keyword   #BC8CF5   7.53:1          string    #046A5A   6.09:1
-     chrome    #8592AC   6.15:1          chrome    #5A6683   5.34:1
-     comment   #7F8CA8   5.70:1          comment   #5A6683   5.34:1
-     punct     #77849F   5.12:1          punct     #58647E   5.11:1
+     fg       #C8D4E3  12.63:1     property  #93C5FD  10.52:1
+     string   #5EEAD4  12.82:1     variable  #FDA4AF  10.03:1
+     number   #FBBF24  11.36:1     keyword   #C4B5FD  10.27:1
+     function #7DD3FC  11.37:1     punct     #8195AC   6.17:1
+     meta     #FDBA74  11.24:1     comment   #6C7D94   4.51:1
 
-   Seven hues, not ten: `type`, `attr` and `property` are one colour, because
-   all three are declared NAMES and splitting them into two near-identical
-   blues was the single biggest source of the old palette's mush.
+   Comment is #6C7D94 rather than the nominal #6B7C93 for the same reason the
+   sibling projects use that value: #6B7C93 measures 4.45:1, a hair under AA,
+   and one LSB per channel is invisible but clears the floor. The header bar
+   (--hl-bar #111820) carries UI text, not tokens, so it is measured on its
+   own ground: --code-chrome #93A6BC is 7.16:1 there and --code-chip #B0BECE
+   is 9.45:1.
 
-   Class inventory — every hljs-* scope the five vendored grammars (rust, go,
-   python, ini/toml, bash) plus json actually emit over the code this site
-   ships is mapped by hand below; nothing inherits the default by accident.
-     .hljs-comment                     -> comment (italic)
-     .hljs-doctag                      -> comment, upright + bold (a TODO or
-                                            SAFETY tag inside a comment must
-                                            stand out from the prose round it)
-     .hljs-keyword, .keyword.control_  -> keyword       (structure)
-     .hljs-string, .hljs-meta-string   -> string        (payload)
-     .hljs-number, .hljs-literal       -> number        (payload; true/false/
-                                            None/nil are literals)
-     .hljs-title (+ .function_/.class_/.invoke__), .hljs-name, .hljs-section
-                                       -> function      (names you call, and
-                                            TOML [section] headers, which are
-                                            the title of their block)
-     .hljs-type, .hljs-attr, .hljs-property
-                                       -> type          (names you declare)
-     .hljs-variable, .hljs-params      -> variable      (bindings, params,
-                                            $SHELL_VARS)
-     .hljs-meta, .hljs-built_in, .hljs-symbol
-                                       -> meta          (attributes/derives,
-                                            macros, built-ins, lifetimes)
-     .hljs-punctuation, .hljs-operator -> punct
-     .hljs-subst                       -> default text (an interpolated
-                                            expression inside a string is code)
+   CLASS INVENTORY. Every hljs-* scope the six vendored grammars (rust, go,
+   python, ini/toml, bash, json) actually emit over the code this site ships
+   was dumped from the live pages and is mapped by hand below — measured, not
+   assumed. What Rust alone contributes, and what a generic theme misses:
+     hljs-meta                     #[async_trait], #[derive(...)]  -> meta
+     hljs-symbol                   'a / 'static lifetimes          -> variable
+     hljs-title function_ invoke__ a call site, `foo()`            -> function
+     hljs-title class_             a declared type name            -> function
+     hljs-type                     bool, Vec, String, RailClass    -> property
+     hljs-built_in                 Some/Ok/Vec! and friends        -> meta
+   The one deliberate divergence from the suite sheet is hljs-type: the shared
+   sheet folds it into `keyword`, which is right for JSON/YAML-shaped content
+   and wrong here, where a Rust page is half type names and folding them into
+   the keyword violet erases the distinction between what a line DECLARES and
+   what it is MADE OF. It takes `property` — a suite colour, in a suite slot,
+   for the same category of thing (a declared name).
 
    NOTE ON HUE AND THE SCHEMA. Everywhere else on this page hue carries exactly
    two variables (settlement class, evidence level) and vermilion is reserved
@@ -536,59 +517,79 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
    the page with its own ground, and the LANGUAGE CHIPS in its header are
    deliberately ACHROMATIC — a language is not a settlement class and not an
    evidence level, so it is not allowed a colour. Language identity is carried
-   by an original drawn glyph plus the language's name, never by hue.
+   by an original drawn mark plus the language's name, never by hue.
    ---------------------------------------------------------------------- */
 :root{
-  --code-surface:#0A0E1A; --code-edge:rgba(238,241,248,.13); --code-bar:rgba(238,241,248,.03);
-  --code-text:#C9D4E5; --code-comment:#7F8CA8; --code-punct:#77849F;
-  --code-keyword:#BC8CF5; --code-string:#3FCEAA; --code-number:#EFAE4E;
-  --code-function:#63B0F2; --code-type:#6FD2EC;
-  --code-variable:#F58FA4; --code-meta:#EFA06B;
-  /* The block's own chrome (file path, chip) is UI text, not a code token, so
-     it never borrows --code-comment. Measured on its own ground. */
-  --code-chrome:#8592AC; --code-chip:#96A3BD;
+  --hl-bg:#0C1116; --hl-bar:#111820; --hl-line:#22303C; --hl-line-2:#2C3D4C;
+  --hl-fg:#C8D4E3; --hl-comment:#6C7D94; --hl-keyword:#C4B5FD; --hl-string:#5EEAD4;
+  --hl-number:#FBBF24; --hl-function:#7DD3FC; --hl-property:#93C5FD;
+  --hl-variable:#FDA4AF; --hl-meta:#FDBA74; --hl-punct:#8195AC;
+  --hl-add:#86EFAC; --hl-del:#FCA5A5;
+  /* The component's own names, so .codeblock reads as a component rather than
+     as a highlighter. They are aliases, never a second palette — and they are
+     declared once, on :root, because the surface is theme-independent. */
+  --code-surface:var(--hl-bg); --code-edge:var(--hl-line); --code-bar:var(--hl-bar);
+  --code-text:var(--hl-fg);
+  /* The block's own chrome (file path, chip, controls) is UI text, not a code
+     token, so it never borrows --hl-comment. Measured on --hl-bar. */
+  --code-chrome:#93A6BC; --code-chip:#B0BECE;
 }
-:root[data-theme="light"]{
-  --code-surface:#F4F7FD; --code-edge:rgba(20,26,46,.16); --code-bar:rgba(20,26,46,.028);
-  --code-text:#182238; --code-comment:#5A6683; --code-punct:#58647E;
-  --code-keyword:#6D28C4; --code-string:#046A5A; --code-number:#8A4B00;
-  --code-function:#134FB0; --code-type:#0B5C76;
-  --code-variable:#A32348; --code-meta:#8A3E12;
-  --code-chrome:#5A6683; --code-chip:#4A5673;
-}
-/* Inside the instrument band the PAGE may be light but the ground is not, so
-   the block re-declares the dark palette on itself. Without this a light-theme
-   reader gets a paper code block sitting on a near-black panel. */
-.band{
-  --code-surface:#080C16; --code-edge:rgba(238,241,248,.13); --code-bar:rgba(238,241,248,.03);
-  --code-text:#C9D4E5; --code-comment:#7F8CA8; --code-punct:#77849F;
-  --code-keyword:#BC8CF5; --code-string:#3FCEAA; --code-number:#EFAE4E;
-  --code-function:#63B0F2; --code-type:#6FD2EC;
-  --code-variable:#F58FA4; --code-meta:#EFA06B;
-  --code-chrome:#8592AC; --code-chip:#96A3BD;
-}
-.hljs{display:block;color:var(--code-text);background:transparent}
-.hljs-comment{color:var(--code-comment);font-style:italic}
-.hljs-doctag{color:var(--code-comment);font-style:normal;font-weight:600}
-.hljs-keyword,.hljs-keyword.control_{color:var(--code-keyword)}
-.hljs-string,.hljs-meta-string{color:var(--code-string)}
-.hljs-number,.hljs-literal{color:var(--code-number)}
-.hljs-title,.hljs-title.class_,.hljs-title.function_,.hljs-title.function_.invoke__,
-.hljs-name,.hljs-section{color:var(--code-function)}
+.hljs{display:block;color:var(--hl-fg);background:transparent}
+.hljs-comment,.hljs-quote{color:var(--hl-comment);font-style:italic}
+/* A TODO/SAFETY tag inside a comment has to stand out from the prose round it,
+   so it stays upright and bold rather than taking the string colour. */
+.hljs-doctag{color:var(--hl-comment);font-style:normal;font-weight:600}
+.hljs-keyword,.hljs-selector-tag,.hljs-variable.language_{color:var(--hl-keyword)}
+.hljs-string,.hljs-regexp{color:var(--hl-string)}
+.hljs-number,.hljs-literal,.hljs-variable.constant_{color:var(--hl-number)}
+.hljs-title,.hljs-title.class_,.hljs-title.class_.inherited__,
+.hljs-title.function_,.hljs-title.function_.invoke__,.hljs-section{color:var(--hl-function)}
 .hljs-section{font-weight:600}
-.hljs-type,.hljs-attr,.hljs-property{color:var(--code-type)}
-.hljs-variable,.hljs-params{color:var(--code-variable)}
-.hljs-meta,.hljs-built_in,.hljs-symbol{color:var(--code-meta)}
-.hljs-punctuation,.hljs-operator{color:var(--code-punct)}
-.hljs-subst{color:var(--code-text)}
+.hljs-type,.hljs-attr,.hljs-attribute,.hljs-params,.hljs-property{color:var(--hl-property)}
+.hljs-variable,.hljs-template-variable,.hljs-name,.hljs-symbol,
+.hljs-selector-class,.hljs-selector-attr,.hljs-selector-pseudo,.hljs-link{color:var(--hl-variable)}
+.hljs-meta,.hljs-built_in,.hljs-tag{color:var(--hl-meta)}
+/* The string inside a #[path = "..."] attribute is still a string. */
+.hljs-meta .hljs-string{color:var(--hl-string)}
+.hljs-punctuation,.hljs-operator,.hljs-bullet,.hljs-selector-id{color:var(--hl-punct)}
+/* An interpolated expression inside a string is code, not string content —
+   this is what stops an f-string swallowing the variable inside it. */
+.hljs-subst{color:var(--hl-fg)}
+.hljs-addition{color:var(--hl-add)}
+.hljs-deletion{color:var(--hl-del)}
+.hljs-emphasis{font-style:italic}
+.hljs-strong{font-weight:700}
 
 /* ---- the code block: one component, both pages ---------------------------
    A block is presented as an ARTIFACT, not a paragraph: it has a header that
-   names the language with a drawn glyph, states where the code lives, and
-   offers a copy control that actually copies. The header is a real flex row
-   that wraps rather than truncating, so at 320px the path drops to its own
-   line instead of being clipped or pushing the block wide. */
+   names the language with a drawn mark, states where the code lives, and
+   offers controls that actually work. The header is a real flex row that
+   wraps rather than truncating, so at 320px the path drops to its own line
+   instead of being clipped or pushing the block wide.
+
+   HOW A BLOCK BEHAVES WHEN IT IS WIDER THAN ITS COLUMN — the one decision
+   this component exists to make, and it is made per block, not per page.
+
+   The failure being fixed: a 629px-wide Rust block inside a 352px phone
+   column, and an 887px one inside a 722px docs column at 1440. Horizontal
+   scroll alone lets a reader REACH the rest of a line; it does not let them
+   READ it, because every line has to be panned separately and the eye loses
+   the line it was on. So the default for an overflowing block is SOFT WRAP
+   with a hanging indent: assets/js/codeblock.js rebuilds the highlighted
+   output as one block element per source line (.cl), which is what makes a
+   per-line hanging indent possible at all — text-indent in a <pre> only ever
+   affects the first line of the box. A continuation is then unmistakably a
+   continuation and never mistaken for the next statement.
+
+   Where the COLUMNS are the content — `ls` output, an aligned table — wrapping
+   destroys the information, so that block declares data-wrap="never" and keeps
+   exact horizontal scroll. Either way the reader can flip the block with the
+   header's Wrap control, and either way an overflowing block gets a visible
+   affordance: a fade at the clipped edge that appears only while there is
+   genuinely more to the right, plus a real tab stop so the scroller is
+   reachable from the keyboard rather than by pointer alone. */
 .codeblock{
+  position:relative;
   border:1px solid var(--code-edge);background:var(--code-surface);border-radius:6px;
   overflow:hidden;min-width:0;
 }
@@ -610,32 +611,82 @@ footer.site b{color:var(--ink-dim);font-family:var(--disp);font-weight:700}
   flex:1 1 120px;min-width:0;text-align:right;letter-spacing:.02em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
-.codeblock .cb-copy{
+.codeblock .cb-copy,.codeblock .cb-wrap{
   flex:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;
   min-height:32px;padding:0 10px;border-radius:6px;cursor:pointer;
   border:1px solid var(--code-edge);background:transparent;color:var(--code-chrome);
   font-family:var(--mono);font-size:12px;letter-spacing:.04em;transition:.15s;
 }
-.codeblock .cb-copy svg{width:14px;height:14px;flex:none}
-.codeblock .cb-copy:hover{color:var(--code-text);border-color:var(--code-chrome)}
-.codeblock .cb-copy[data-state="done"]{color:var(--code-string);border-color:var(--code-string)}
+.codeblock .cb-copy svg,.codeblock .cb-wrap svg{width:14px;height:14px;flex:none}
+.codeblock .cb-copy:hover,.codeblock .cb-wrap:hover{color:var(--code-text);border-color:var(--code-chrome)}
+.codeblock .cb-copy[data-state="done"]{color:var(--hl-string);border-color:var(--hl-string)}
 .codeblock .cb-copy .done{display:none}
 .codeblock .cb-copy[data-state="done"] .idle{display:none}
 .codeblock .cb-copy[data-state="done"] .done{display:inline-flex}
+/* The Wrap control is a real toggle and says which state it is in — pressed
+   means the block is currently wrapped. Colour alone never carries it: the
+   word changes too (Wrap / Wrapped), so the state survives greyscale. */
+.codeblock .cb-wrap[aria-pressed="true"]{color:var(--hl-property);border-color:var(--hl-property)}
+.codeblock .cb-wrap .on{display:none}
+.codeblock .cb-wrap[aria-pressed="true"] .off{display:none}
+.codeblock .cb-wrap[aria-pressed="true"] .on{display:inline-flex;align-items:center;gap:6px}
+.codeblock .cb-wrap .off{display:inline-flex;align-items:center;gap:6px}
 /* Tap target: the visible chip stays 32px so it does not dominate a 9px-padded
    bar, but the hit area is grown to the 44px floor with a pseudo-element. */
-.codeblock .cb-copy{position:relative}
-.codeblock .cb-copy::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
+.codeblock .cb-copy,.codeblock .cb-wrap{position:relative}
+.codeblock .cb-copy::after,.codeblock .cb-wrap::after{content:"";position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%)}
+/* The scroll frame. `pre` is the scroller; .cb-body exists only to hold the
+   edge fade in register with it, since .codeblock also contains the header. */
+.codeblock .cb-body{position:relative;min-width:0}
+.codeblock .cb-fade{
+  position:absolute;top:0;bottom:0;right:0;width:34px;pointer-events:none;
+  opacity:0;transition:opacity .18s ease;
+  background:linear-gradient(90deg,transparent,var(--code-surface));
+}
+.codeblock[data-x="more"] .cb-fade{opacity:1}
+/* The same affordance for the things that are NOT code and can never wrap:
+   §06's captured terminal panes and the docs' wide tables. Both declare
+   [data-scroller]; assets/js/codeblock.js wraps them in .sc-frame and measures
+   them. The fade takes --canvas rather than the code surface because these sit
+   on the page (or, in §06, on the band, which redeclares --canvas on itself),
+   so one rule is correct on every ground it lands on. */
+.sc-frame{position:relative;min-width:0}
+.sc-fade{
+  position:absolute;top:0;bottom:0;right:0;width:30px;z-index:2;pointer-events:none;
+  opacity:0;transition:opacity .18s ease;border-radius:0 2px 2px 0;
+  background:linear-gradient(90deg,transparent,var(--canvas));
+}
+[data-x="more"]+.sc-fade{opacity:1}
+[data-scroller]:focus-visible{outline:2px solid var(--vermilion-deep);outline-offset:2px}
+:root:not([data-theme="light"]) [data-scroller]:focus-visible{outline-color:var(--vermilion)}
 .codeblock pre{
   margin:0;padding:15px 18px;overflow-x:auto;overscroll-behavior-x:contain;
   font-family:var(--mono);font-size:13px;line-height:1.62;color:var(--code-text);
 }
 .codeblock code{background:none;padding:0;font-size:1em;color:inherit;font-family:inherit}
+/* One block element per source line (built by assets/js/codeblock.js). In the
+   default, exact state they behave exactly like the lines they replaced. */
+.codeblock .cl{display:block}
+.codeblock .cl:empty::before{content:" "}
+/* WRAPPED. 2.6ch of hang is two mono characters plus the gap — deep enough
+   that a continuation cannot be read as a new statement, shallow enough that
+   it does not eat a phone's measure. It is measured from THIS line's own
+   indent (--lead, set per line by codeblock.js) rather than from the block's
+   left edge, so the continuation of an indented line still sits inside that
+   line's block. `anywhere` rather than `break-word` because the things that
+   overflow here are unbreakable tokens (a git URL, a base58 address), and
+   break-word leaves those sticking out of the box. */
+.codeblock.wrapped pre{overflow-x:hidden}
+.codeblock.wrapped pre code{white-space:pre-wrap;overflow-wrap:anywhere}
+.codeblock.wrapped .cl{
+  padding-left:calc((var(--lead,0) + 2.6) * 1ch);
+  text-indent:calc((var(--lead,0) + 2.6) * -1ch);
+}
 @media(max-width:600px){
   .codeblock pre{padding:13px 14px;font-size:12.5px}
   .codeblock .cb-head{padding:8px 10px}
   /* Below 600px the path is the first thing to go: it is context, the chip and
-     the copy control are function. It reappears on its own full-width line. */
+     the controls are function. It reappears on its own full-width line. */
   .codeblock .cb-path{flex-basis:100%;text-align:left;order:3}
 }
 

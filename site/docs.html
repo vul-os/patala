@@ -54,33 +54,178 @@
    and highlights the result — no build step, no server-side anything, and
    nothing beyond this origin is ever requested.
    ═══════════════════════════════════════════════════════════════════════════ */
-  /* Docs shell */
-  .docs-shell{display:grid;grid-template-columns:236px minmax(0,1fr);gap:var(--sp-6);align-items:start;padding:var(--sp-5) 0 80px}
+  /* ── THE NAVIGATOR ────────────────────────────────────────────────────────
+     What it was: one 236×227px block, identical at 1440 and at 390 — four
+     links, no sense of how long any of them is, no way to see inside the
+     document you are already reading, and on a phone a fifth of the first
+     screen spent on a menu before a single sentence of prose. One shape
+     pretending to serve two completely different problems.
+
+     What it is now, decided per width because the problem IS different:
+
+     DESKTOP (>860px) — a table of contents that shows the SHAPE of the
+     documentation, not just its filenames. Four numbered documents, and the
+     one you are reading opens to reveal its own ## headings, built from the
+     rendered markdown so the outline cannot drift from the text. It sticks
+     under the header and scrolls in its own box (never the page) so a long
+     outline can never push the footer off. Height is now a consequence of
+     the document you are in — 227px was the tell that it was a fixed slab.
+
+     PHONE (<=860px) — the reader wants prose, immediately, so there is no nav
+     block above the article at all: the crumb line names where you are and the
+     first heading is the first thing on screen. The contents live behind one
+     control in the BOTTOM-RIGHT corner, inside a thumb's reach on a phone
+     held one-handed, and open as a sheet from the bottom edge — the direction
+     the thumb travels. Esc closes it, the backdrop closes it, choosing a
+     destination closes it, and focus is handed to the sheet and handed back.
+
+     Both widths make the current page obvious the same way: aria-current,
+     a filled vermilion pip where every other row has a hollow one, a vermilion
+     left rail, and full-strength ink against the dim of its siblings — three
+     signals, only one of which is colour, so it survives greyscale.
+
+     Without JavaScript the sheet mechanism does not exist (it could not work),
+     and the aside falls back to exactly what it was: a plain block of four
+     links above the article. Every rule below that would break that fallback
+     is gated on html.js. */
+  /* padding-BLOCK, never the `padding` shorthand. This element is `wrap
+     docs-shell`, and .wrap supplies the horizontal gutter — a shorthand here
+     resets it to 0, and below the 860px breakpoint there is no grid column
+     left to fake an inset, so every heading, paragraph and code frame sits
+     flush against both screen edges. The same shorthand caused the same bug
+     on llmux twice. */
+  .docs-shell{display:grid;grid-template-columns:248px minmax(0,1fr);gap:var(--sp-6);align-items:start;padding-block:var(--sp-5) 80px}
   @media(max-width:860px){.docs-shell{grid-template-columns:minmax(0,1fr);padding-top:var(--sp-4)}}
-  .docs-nav{position:sticky;top:84px;border:1px solid var(--hair);background:var(--surface);padding:6px}
-  @media(max-width:860px){.docs-nav{position:static;margin-bottom:var(--sp-2)}}
-  .docs-nav .label{
-    font-family:var(--mono);font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.12em;color:var(--ink-faint);
-    padding:10px 12px 8px;
+
+  .docs-nav{
+    position:sticky;top:80px;border:1px solid var(--hair);background:var(--surface);
+    border-radius:3px;display:flex;flex-direction:column;
+    max-height:calc(100vh - 104px);
   }
+  .dn-top{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none;
+    padding:12px 12px 10px;border-bottom:1px solid var(--hair);
+  }
+  .dn-label{
+    font-family:var(--mono);font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.12em;
+    color:var(--ink-faint);
+  }
+  .dn-count{font-family:var(--mono);font-size:var(--fs-micro);color:var(--hair-strong);color:var(--ink-faint);opacity:.75}
+  .dn-list{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:6px}
+  /* The transition names its properties. As the bare shorthand `transition:.15s`
+     it meant `all`, which includes VISIBILITY — and visibility is inherited, so
+     when the phone sheet flipped from hidden to visible every link inside it
+     started its own 150ms visibility transition and computed `hidden` for the
+     first frames. An element that computes hidden refuses .focus() without
+     raising anything, which is exactly how focus stayed on the button that
+     opened the sheet instead of moving into it. */
   .docs-nav a{
-    display:flex;align-items:center;gap:9px;padding:10px 12px;color:var(--ink-dim);font-size:13.5px;font-weight:500;
-    transition:.15s;border-left:2px solid transparent;border-radius:2px;min-height:44px;
+    display:flex;align-items:center;gap:10px;padding:9px 10px;color:var(--ink-dim);font-size:13.5px;font-weight:500;
+    transition:color .15s,background-color .15s,border-color .15s;
+    border-left:2px solid transparent;border-radius:2px;min-height:44px;
   }
+  .docs-nav .dn-n{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.06em;color:var(--ink-faint);flex:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .docs-nav .dn-t{min-width:0}
   .docs-nav a::before{
     content:"";width:7px;height:7px;border-radius:50%;flex:none;border:1.6px solid var(--ink-faint);background:var(--canvas);
-    transition:.15s;
+    transition:border-color .15s,background-color .15s;
   }
   .docs-nav a:hover{background:var(--surface-raised);color:var(--ink)}
   .docs-nav a.active{background:var(--surface-raised);color:var(--ink);border-left-color:var(--vermilion)}
+  .docs-nav a.active .dn-n{color:var(--vermilion)}
   .docs-nav a.active::before{border-color:var(--vermilion);background:var(--vermilion)}
   :root[data-theme="light"] .docs-nav a.active{border-left-color:var(--vermilion-deep)}
+  :root[data-theme="light"] .docs-nav a.active .dn-n{color:var(--vermilion-deep)}
   :root[data-theme="light"] .docs-nav a.active::before{border-color:var(--vermilion-deep);background:var(--vermilion-deep)}
+
+  /* The open document's own outline. Indented under its parent and hung off a
+     hairline, so it reads as inside that document rather than as four more
+     documents. Built from the rendered <h2>s — see buildOutline() below. */
+  .dn-sub{list-style:none;margin:2px 0 8px;padding:0 0 0 22px;border-left:1px solid var(--hair)}
+  .dn-sub li{margin:0}
+  /* 44px, like every other control on this site — not 36. An outline row is a
+     real destination and a thumb is the same size in a sidebar as it is in a
+     toolbar; the compact version measured 36 and was the only sub-44 target
+     this page would have introduced. The list scrolls in its own box, so the
+     extra height costs the layout nothing. */
+  .docs-nav .dn-sub a{
+    min-height:44px;padding:7px 10px;font-size:12.5px;font-weight:400;color:var(--ink-faint);
+    border-left:0;gap:8px;
+  }
+  .docs-nav .dn-sub a::before{width:4px;height:4px;border-width:1.2px;background:transparent}
+  .docs-nav .dn-sub a:hover{color:var(--ink-dim);background:transparent;text-decoration:underline;text-underline-offset:3px}
+  .docs-nav .dn-sub a.here{color:var(--ink)}
+  .docs-nav .dn-sub a.here::before{background:var(--ink-faint);border-color:var(--ink-faint)}
+
+  /* The phone sheet and its control. Both exist only with JS. */
+  .dn-fab,.dn-scrim,.dn-close{display:none}
+  @media(max-width:860px){
+    /* .wrap sets position:relative AND z-index:1, which makes it a stacking
+       context — so the sheet's z-index:60 was being resolved INSIDE a context
+       whose own z-index is 1, and the backdrop (59, at the root) painted over
+       the whole sheet and swallowed every tap on it. position:relative with
+       z-index:auto creates no stacking context, so the sheet competes at the
+       root where its number means what it says. The docs page has no
+       decoration underneath that needed the 1 in the first place. */
+    html.js .docs-shell{z-index:auto}
+    html.js .docs-nav{
+      position:fixed;left:0;right:0;bottom:0;top:auto;z-index:60;border-radius:14px 14px 0 0;
+      border:1px solid var(--hair-strong);border-bottom:0;max-height:min(74vh,560px);
+      box-shadow:var(--shadow);
+      transform:translateY(102%);visibility:hidden;
+      /* visibility flips INSTANTLY on open (0s, no delay) and is held back
+         until the slide-out finishes on close (0s after .24s). Transitioning
+         visibility itself left the sheet computing as `hidden` for the first
+         frame after it opened, and an element that is still hidden refuses
+         .focus() without complaining — which is how a keyboard user ended up
+         behind the backdrop. */
+      transition:transform .24s cubic-bezier(.16,1,.3,1),visibility 0s linear .24s;
+      padding-bottom:env(safe-area-inset-bottom,0px);
+    }
+    html.js .docs-nav.open{
+      transform:none;visibility:visible;
+      transition:transform .24s cubic-bezier(.16,1,.3,1),visibility 0s linear 0s;
+    }
+    html.js .dn-top{padding:14px 14px 12px}
+    html.js .dn-list{padding:6px 8px 14px}
+    html.js .dn-close{
+      display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-8px -8px -8px 0;
+      border:0;background:transparent;color:var(--ink-dim);cursor:pointer;border-radius:8px;
+    }
+    html.js .dn-close svg{width:18px;height:18px}
+    html.js .dn-scrim{
+      display:block;position:fixed;inset:0;z-index:59;background:rgba(3,6,14,.55);
+      opacity:0;transition:opacity .24s;pointer-events:none;
+    }
+    html.js .dn-scrim.on{opacity:1;pointer-events:auto}
+    html.js .dn-fab{
+      display:inline-flex;align-items:center;gap:8px;position:fixed;z-index:58;
+      right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
+      min-height:48px;padding:0 16px;border-radius:24px;cursor:pointer;
+      border:1px solid var(--vermilion);background:var(--vermilion);color:var(--vermilion-ink);
+      font-family:var(--mono);font-size:13px;letter-spacing:.04em;font-weight:500;
+      box-shadow:var(--shadow);
+    }
+    html.js .dn-fab svg{width:17px;height:17px;flex:none}
+    /* The control floats over the end of the page, so the page ends above it. */
+    html.js footer.site{padding-bottom:92px}
+  }
   .docs-main{min-width:0}
   .docs-title{font-family:var(--mono);font-size:var(--fs-micro);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:var(--sp-3)}
   .docs-title .sep{margin:0 8px;color:var(--hair-strong)}
 
-  .markdown{font-family:var(--body);font-size:16px;color:var(--ink-dim);max-width:74ch}
+  /* THE MEASURE IS ON THE PROSE, NOT ON THE ARTICLE. It used to be
+     `.markdown{max-width:74ch}`, which capped the paragraphs correctly and
+     capped everything else with them — so a Rust block needing 887px was being
+     asked to fit inside a column sized for running text, and had to scroll on a
+     1440px screen. Prose keeps its 74ch, because 74ch is right for prose; code,
+     tables and the section rules take the whole column, because that is what
+     they are for. Same argument as .wrap.wide on the landing. */
+  .markdown{font-family:var(--body);font-size:16px;color:var(--ink-dim)}
+  .markdown p,.markdown ul,.markdown ol,.markdown blockquote{max-width:74ch}
   .markdown>*:first-child{margin-top:0}
   .markdown h1{font-family:var(--disp);font-weight:700;font-size:32px;letter-spacing:-.01em;margin:.2em 0 .6em;border-bottom:1px solid var(--hair);padding-bottom:.4em;color:var(--ink)}
   .markdown h2{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-.005em;margin:1.9em 0 .7em;border-bottom:1px solid var(--hair);padding-bottom:.35em;color:var(--ink)}
@@ -94,18 +239,37 @@
   .markdown a{color:var(--vermilion-deep);text-decoration:none;border-bottom:1px solid currentColor}
   :root:not([data-theme="light"]) .markdown a{color:var(--vermilion)}
   .markdown a:hover{opacity:.82}
-  .markdown code{font-family:var(--mono);font-size:.86em;background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink)}
-  /* Fenced code is re-parented into .codeblock by docs.html's script (see
-     below) — these rules are the fallback for the instant between paint and
-     that script running, and for the (rare, JS-off) case it never runs. */
-  .markdown pre{background:var(--code-surface);border:1px solid var(--hair-strong);padding:18px 20px;overflow:auto;overscroll-behavior-x:contain;border-radius:3px;margin:0 0 1.4em}
-  .markdown pre code{background:none;padding:0;font-size:13.5px;line-height:1.72;color:var(--code-text);border-radius:0;font-family:var(--mono)}
+  /* INLINE code only. Written as `.markdown code` this also hit the <code>
+     inside a dressed .codeblock and, being later in the cascade than
+     patala.css's `.codeblock code{font-size:1em}`, multiplied the block's own
+     12.5px by .86 — 10.75px of Rust on a phone, under this site's 12px floor. */
+  /* max() keeps the site's 12px type floor: .86em is right inside 16px prose
+     and 10.3px inside a 12px table head, which is where it was landing. */
+  .markdown :not(pre)>code{font-family:var(--mono);font-size:max(12px,.86em);background:var(--surface-raised);padding:2px 6px;border-radius:3px;color:var(--ink)}
+  /* Fenced code is re-parented into .codeblock by dressContent() below, so the
+     child selector here is load-bearing: it styles ONLY a <pre> still sitting
+     directly in the article — the instant between paint and that script, and
+     the (rare, JS-off) case where it never runs. Written as `.markdown pre` it
+     also matched the dressed block and, being later in the cascade than
+     patala.css, quietly overrode the component's own padding and type size. */
+  .markdown>pre{background:var(--code-surface);border:1px solid var(--code-edge);padding:18px 20px;overflow:auto;overscroll-behavior-x:contain;border-radius:6px;margin:0 0 1.4em}
+  .markdown>pre code{background:none;padding:0;font-size:13px;line-height:1.62;color:var(--code-text);border-radius:0;font-family:var(--mono)}
   .markdown .codeblock{margin:0 0 1.4em}
-  .markdown .codeblock pre{margin:0;border:none}
   .markdown blockquote{margin:1.1em 0;padding:.6em 1.15em;border-left:3px solid var(--pending);background:var(--surface);color:var(--ink-dim)}
   .markdown table{border-collapse:collapse;width:100%;margin:1.4em 0;font-size:14px}
-  .markdown .table-scroll{overflow-x:auto;overscroll-behavior-x:contain;border:1px solid var(--hair);border-radius:2px;margin:1.4em 0}
+  /* A table is columns, so it is the other half of the code decision: it can
+     never soft-wrap without destroying what it is, and it gets the same
+     affordance instead — a fade at the clipped edge, shown by codeblock.js
+     only while there is more to the right, plus the tab stop it adds.
+     The fade itself is .sc-fade in patala.css, drawn inside the .sc-frame
+     wrapper codeblock.js adds — the same object §06's captured panes use on
+     the landing, so there is one implementation of "this scrolls" on the site. */
+  .markdown .table-scroll{overflow-x:auto;overscroll-behavior-x:contain;border:1px solid var(--hair);border-radius:2px}
   .markdown .table-scroll table{margin:0;border:none}
+  .markdown .sc-frame{margin:1.4em 0}
+  /* Until the script runs (and with JS off) the wrapper does not exist, so the
+     scroller keeps its own margin and simply has no fade. */
+  .markdown>.table-scroll{margin:1.4em 0}
   .markdown th,.markdown td{border-bottom:1px solid var(--hair);padding:11px 14px;text-align:left;vertical-align:top}
   .markdown thead th{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--hair-strong);font-weight:500}
   .markdown img{max-width:100%;border:1px solid var(--hair);margin:1.1em 0;border-radius:2px}
@@ -143,23 +307,28 @@
 </style>
 <script src="./assets/vendor/marked.umd.js"></script>
 <script src="./assets/vendor/highlight.core.js"></script>
+<!-- The shared .codeblock behaviour — highlight, per-line split, wrap/exact,
+     the scroll affordance and copy. Identical file on the landing, so a block
+     generated from markdown here is the same object as one written by hand
+     there. It exposes patalaCode.dress(root), which dressContent() calls after
+     every render. -->
+<script src="./assets/js/codeblock.js"></script>
 </head>
 <body>
-<!-- Language glyphs — the same original, achromatic, non-trademark marks the
-     landing defines; see the long note beside the copy in index.html. -->
+<!-- Language marks — byte-identical to the set index.html defines, so a Rust
+     chip is the same object on both pages; the family rule, and why Go and
+     Python are lettermarks, is documented in full beside the copy there. -->
 <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
-  <defs>
-    <g id="lg-base" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></g>
-  </defs>
   <symbol id="lg-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M20.6 12 16.3 19.45H7.7L3.4 12 7.7 4.55h8.6Z"/><circle cx="12" cy="12" r="3.4"/>
   </symbol>
   <symbol id="lg-python" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14.2 4.6H9.5a4.3 4.3 0 0 0 0 8.6h5"/>
-    <path d="M9.8 19.4h4.7a4.3 4.3 0 0 0 0-8.6h-5"/>
+    <path d="M4.9 17.4V5.4h3.9a3.5 3.5 0 0 1 0 7H4.9"/>
+    <path d="m13.2 10.6 3 6.3"/><path d="M19.6 10.6 14.9 20.4"/>
   </symbol>
   <symbol id="lg-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3.6 5.8v12.4"/><path d="M8.2 6.6 13.6 12l-5.4 5.4"/><path d="M14.4 6.6 19.8 12l-5.4 5.4"/>
+    <path d="M12.6 8.6a4.9 4.9 0 1 0 .2 6.5v-3.2H9.7"/>
+    <circle cx="18.3" cy="14" r="3.4"/>
   </symbol>
   <symbol id="lg-toml" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M8.6 5.2H5.6v13.6h3"/><path d="M15.4 5.2h3v13.6h-3"/>
@@ -190,12 +359,20 @@
 <div class="tooth-rule dim" role="presentation"></div>
 
 <div class="wrap docs-shell">
-  <aside class="docs-nav">
-    <div class="label">patala docs</div>
-    <a data-slug="overview" href="#overview">Overview</a>
-    <a data-slug="rails" href="#rails">The rails &amp; interface</a>
-    <a data-slug="self-host" href="#self-host">Self-host &amp; vendor</a>
-    <a data-slug="status" href="#status">Status</a>
+  <aside class="docs-nav" id="docsNav" aria-label="Documentation contents">
+    <div class="dn-top">
+      <span class="dn-label">patala docs</span>
+      <span class="dn-count">4 documents</span>
+      <button class="dn-close" type="button" aria-label="Close contents">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <nav class="dn-list" id="dnList">
+      <a data-slug="overview" href="#overview"><span class="dn-n">01</span><span class="dn-t">Overview</span></a>
+      <a data-slug="rails" href="#rails"><span class="dn-n">02</span><span class="dn-t">The rails &amp; interface</span></a>
+      <a data-slug="self-host" href="#self-host"><span class="dn-n">03</span><span class="dn-t">Self-host &amp; vendor</span></a>
+      <a data-slug="status" href="#status"><span class="dn-n">04</span><span class="dn-t">Status</span></a>
+    </nav>
   </aside>
   <main class="docs-main">
     <!-- This viewer fetches ./docs/*.md and renders it client-side (marked.js,
@@ -219,6 +396,15 @@
     <nav class="docs-pager" id="pager" aria-label="Previous / next doc"></nav>
   </main>
 </div>
+
+<!-- The phone contents control and its backdrop. Both are display:none until
+     html.js and a <=860px viewport are both true, so a JS-off visitor never
+     gets a dead button and a desktop reader never gets a floating one. -->
+<div class="dn-scrim" id="dnScrim"></div>
+<button class="dn-fab" id="dnFab" type="button" aria-expanded="false" aria-controls="docsNav">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h9"/></svg>
+  Contents
+</button>
 
 <footer class="site"><div class="wrap fwrap">
   <div><a class="vulos-foot" href="https://vulos.org" target="_blank" rel="noopener"><img src="./assets/vulos-logo.png" alt="" width="18" height="18"><span>Part of <strong>Vulos</strong> — open, self-hostable software</span></a></div>
@@ -246,8 +432,120 @@ const pager = document.getElementById('pager');
 
 if (window.marked && marked.setOptions) marked.setOptions({ gfm:true, breaks:false });
 
+/* ── the phone contents sheet ───────────────────────────────────────────────
+   Only ever reachable below 860px (the control is display:none above it), but
+   the handlers are unconditional and harmless: opening a sheet that is not
+   position:fixed simply adds a class nothing styles.
+
+   The three things a sheet must get right, and does:
+     · it can be dismissed three ways — the close button, the backdrop, Esc —
+       because a reader who cannot see how to get out of an overlay is stuck;
+     · focus moves INTO it on open and back to the control on close, so a
+       keyboard or screen-reader user is not left behind the backdrop;
+     · the page behind it does not scroll while it is open, which is what stops
+       a phone "scrolling the wrong thing" under a sheet.
+   Choosing any destination closes it — the point of the sheet is to leave. */
+var nav = document.getElementById('docsNav');
+var fab = document.getElementById('dnFab');
+var scrim = document.getElementById('dnScrim');
+
+function sheetIsMobile(){ return window.matchMedia('(max-width:860px)').matches; }
+
+function sheetFocusables(){
+  return [...nav.querySelectorAll('a[href],button')].filter(function(el){ return el.offsetParent !== null || el.getClientRects().length; });
+}
+function openSheet(){
+  if(!sheetIsMobile()) return;
+  nav.classList.add('open');
+  scrim.classList.add('on');
+  fab.setAttribute('aria-expanded','true');
+  document.body.style.overflow='hidden';
+  // Reading offsetHeight forces the pending style and layout to be flushed
+  // NOW, so the sheet is genuinely out of `visibility:hidden` before it is
+  // asked to take focus. A hidden element refuses focus silently, and a
+  // requestAnimationFrame here is not late enough: rAF callbacks run before
+  // the frame's style recalculation, so the element was still hidden and the
+  // reader was left tabbing through the article behind the backdrop.
+  void nav.offsetHeight;
+  var first = nav.querySelector('.dn-list a');
+  if(first) first.focus({preventScroll:true});
+}
+function closeSheet(){
+  if(!nav.classList.contains('open')) return;
+  nav.classList.remove('open');
+  scrim.classList.remove('on');
+  fab.setAttribute('aria-expanded','false');
+  document.body.style.overflow='';
+  fab.focus({preventScroll:true});
+}
+fab.addEventListener('click', function(){
+  nav.classList.contains('open') ? closeSheet() : openSheet();
+});
+scrim.addEventListener('click', closeSheet);
+nav.querySelector('.dn-close').addEventListener('click', closeSheet);
+document.addEventListener('keydown', function(ev){
+  if(ev.key==='Escape'){ closeSheet(); return; }
+  // Keep Tab inside the open sheet. Without this the next Tab from the last
+  // link lands in the article, which is behind an opaque backdrop and cannot
+  // be reached with a pointer — focus would be somewhere the reader cannot see.
+  if(ev.key!=='Tab' || !nav.classList.contains('open')) return;
+  var f = sheetFocusables();
+  if(!f.length) return;
+  var first=f[0], last=f[f.length-1];
+  if(ev.shiftKey && document.activeElement===first){ ev.preventDefault(); last.focus(); }
+  else if(!ev.shiftKey && document.activeElement===last){ ev.preventDefault(); first.focus(); }
+  else if(!nav.contains(document.activeElement)){ ev.preventDefault(); first.focus(); }
+});
+// A width change can leave the sheet open on a layout that no longer has one.
+window.addEventListener('resize', function(){ if(!sheetIsMobile()) closeSheet(); });
+
 function setActive(slug){
-  document.querySelectorAll('.docs-nav a').forEach(a=>a.classList.toggle('active', a.dataset.slug===slug));
+  document.querySelectorAll('.dn-list > a').forEach(a=>{
+    var on = a.dataset.slug===slug;
+    a.classList.toggle('active', on);
+    // aria-current is the machine-readable half of "you are here"; the pip,
+    // the rail and the ink are the human half. Three signals, one colour.
+    if(on) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current');
+  });
+}
+
+// The open document's own outline, built from what was actually rendered —
+// so it is the document's real shape, never a hand-kept second copy that can
+// disagree with the prose. Each <h2> is given a stable id (slugified, and
+// de-duplicated) and becomes one row under the active document.
+function buildOutline(slug){
+  document.querySelectorAll('.dn-sub').forEach(el=>el.remove());
+  var host = document.querySelector('.dn-list > a[data-slug="'+slug+'"]');
+  if(!host) return;
+  var seen = {};
+  var heads = [...content.querySelectorAll('h2')].map(function(h){
+    var base = (h.textContent||'').trim().toLowerCase()
+      .replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/^-+|-+$/g,'') || 'section';
+    var id = base;
+    while(seen[id]) id = base + '-' + (seen[base] = (seen[base]||1) + 1);
+    seen[id] = 1;
+    h.id = id;
+    return {id:id, text:(h.textContent||'').trim()};
+  });
+  if(!heads.length) return;
+  var ul = document.createElement('ul');
+  ul.className = 'dn-sub';
+  ul.innerHTML = heads.map(function(h){
+    return '<li><a href="#'+slug+'" data-head="'+h.id+'">'+h.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a></li>';
+  }).join('');
+  host.parentNode.insertBefore(ul, host.nextSibling);
+  // An outline entry is an in-page jump, not a document change, so it must not
+  // go through the hash router (the hash is already this document's).
+  ul.querySelectorAll('a').forEach(function(a){
+    a.addEventListener('click', function(ev){
+      ev.preventDefault();
+      var t = document.getElementById(a.dataset.head);
+      if(!t) return;
+      closeSheet();
+      t.scrollIntoView({block:'start'});
+      ul.querySelectorAll('a').forEach(function(x){ x.classList.toggle('here', x===a); });
+    });
+  });
 }
 
 // Every table marked.js renders gets its own horizontal scroller (never the
@@ -260,17 +558,18 @@ function dressContent(){
     if (table.closest('.table-scroll')) return;
     var wrap = document.createElement('div');
     wrap.className = 'table-scroll';
+    // data-scroller opts the wrapper into the shared affordance in
+    // codeblock.js: the edge fade and the keyboard tab stop, measured live.
+    wrap.setAttribute('data-scroller', '');
     table.parentNode.insertBefore(wrap, table);
     wrap.appendChild(table);
   });
   content.querySelectorAll('pre').forEach(function(pre){
     var code = pre.querySelector('code');
     if (!code) return;
+    if (pre.closest('.codeblock')) return;
     var m = (code.className||'').match(/language-([\w-]+)/);
     var lang = m ? m[1] : 'text';
-    if (window.hljs){
-      try { hljs.highlightElement(code); } catch(e){}
-    }
     var box = document.createElement('div');
     box.className = 'codeblock';
     var head = document.createElement('div');
@@ -297,6 +596,11 @@ function dressContent(){
     box.appendChild(head);
     box.appendChild(pre);
   });
+  // Highlighting, the per-line split that makes a hanging indent possible, the
+  // Wrap control, the scroll affordance and copy all live in one file shared
+  // with the landing (./assets/js/codeblock.js), so a block rendered from
+  // markdown here behaves identically to one hand-written there.
+  if (window.patalaCode) patalaCode.dress(content);
 }
 
 function renderPager(slug){
@@ -338,6 +642,7 @@ async function load(slug){
     });
     content.querySelectorAll('a[href^="http"]').forEach(a=>{a.target='_blank';a.rel='noopener';});
     dressContent();
+    buildOutline(doc.slug);
     renderPager(doc.slug);
     window.scrollTo({top:0});
   } catch(err){
@@ -347,7 +652,12 @@ async function load(slug){
 }
 
 function current(){ return (location.hash||'').replace('#','') || DOCS[0].slug; }
-window.addEventListener('hashchange', ()=>load(current()));
+window.addEventListener('hashchange', ()=>{ closeSheet(); load(current()); });
+// Choosing the document you are already on does not change the hash, so it
+// would not fire hashchange and the sheet would stay open over the answer.
+document.querySelectorAll('.dn-list > a').forEach(function(a){
+  a.addEventListener('click', closeSheet);
+});
 load(current());
 
 (function(){
@@ -369,43 +679,8 @@ load(current());
     sync();
   });
 })();
-// Copy-to-clipboard on every code block. Wired from the DOM rather than
-// hard-coded per block, so docs.html's generated blocks get it too by simply
-// including this file's twin. Reads the ORIGINAL text via textContent, which
-// is the un-highlighted source (highlight.js only wraps it in spans), so what
-// lands on the clipboard is exactly what is on screen and nothing else.
-// execCommand is kept as the fallback path because navigator.clipboard is
-// unavailable on a plain http:// origin in some browsers, and a copy button
-// that silently does nothing is worse than no copy button.
-(function(){
-  function copy(text){
-    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
-    return new Promise(function(res, rej){
-      var ta=document.createElement('textarea');
-      ta.value=text; ta.setAttribute('readonly','');
-      ta.style.cssText='position:fixed;top:-1000px;opacity:0';
-      document.body.appendChild(ta); ta.select();
-      var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
-      document.body.removeChild(ta);
-      ok?res():rej(new Error('copy failed'));
-    });
-  }
-  document.addEventListener('click', function(ev){
-    var btn=ev.target.closest ? ev.target.closest('.cb-copy') : null;
-    if(!btn) return;
-    var block=btn.closest('.codeblock');
-    var code=block && block.querySelector('pre code');
-    if(!code) return;
-    copy(code.textContent).then(function(){
-      btn.setAttribute('data-state','done');
-      clearTimeout(btn._t);
-      btn._t=setTimeout(function(){ btn.removeAttribute('data-state'); }, 1600);
-    }).catch(function(){
-      btn.setAttribute('aria-label','Copy failed — select the code and copy manually');
-    });
-  });
-})();
-
+// Copy-to-clipboard, the Wrap control and the scroll affordance are all in
+// ./assets/js/codeblock.js — one implementation, shared with the landing.
 </script>
 </body>
 </html>

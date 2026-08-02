@@ -724,19 +724,41 @@
      narrow phone would make the very JSON/test-count text this section exists
      to prove illegible — same reasoning as the ledger tables. So below 640px
      each pane keeps its true pixel width and scrolls horizontally. */
-  .proof-scroll{position:relative;border-radius:2px;min-width:0}
+  /* A captured pane is an IMAGE, so it is the one thing on this page that can
+     never soft-wrap: 12.5px mono downscaled to a 354px column is not small
+     text, it is no text. So these panes keep their capture width and pan —
+     the deliberate-scroll half of the decision documented beside .codeblock in
+     patala.css — and they earn the same affordance the code blocks get:
+       · a fade at the clipped edge, shown by assets/js/codeblock.js ONLY while
+         there is genuinely more to the right (data-x="more"), so a fully
+         scrolled pane does not keep pretending it has been cut off;
+       · a real tab stop, added by the same file when the pane overflows, so
+         the scroller is reachable from a keyboard and not by pointer alone;
+       · one plain line of text under the pane at the widths where it applies,
+         because an affordance nobody has ever seen before deserves a sentence.
+     The vertical fade on .tall is a separate pseudo-element from the horizontal
+     one on purpose: the previous pass used ::after for both and the phone rule
+     silently replaced the vertical fade on every tall pane. */
+  .proof-scroll{position:relative;border-radius:2px;min-width:0;overflow-x:auto;overscroll-behavior-x:contain}
   .proof-scroll.tall{max-height:430px;overflow-y:auto}
   .proof-scroll img{border-radius:2px}
+  /* The VERTICAL fade on a .tall pane stays a pseudo-element: its height is a
+     concrete 34px, so it works. The HORIZONTAL one is .sc-fade in patala.css,
+     inside the .sc-frame wrapper codeblock.js adds — a right-edge fade cannot
+     be a pseudo-element on the scroller itself, because it needs height:100%
+     and a percentage height against an auto-height box resolves to zero. This
+     one was 30px wide and 0px tall and had never drawn a single pixel. */
   .proof-scroll.tall::after{
     content:"";position:sticky;display:block;bottom:0;left:0;width:100%;height:34px;margin-top:-34px;
-    pointer-events:none;background:linear-gradient(180deg,transparent,var(--canvas));
+    z-index:2;pointer-events:none;background:linear-gradient(180deg,transparent,var(--canvas));
   }
+  .pan-note{display:none}
   @media(max-width:640px){
-    .proof-scroll{overflow-x:auto;overscroll-behavior-x:contain}
     .proof-scroll img{width:640px;max-width:640px}
-    .proof-scroll::after{
-      content:"";position:sticky;top:0;right:0;float:right;width:26px;height:100%;
-      pointer-events:none;background:linear-gradient(90deg,transparent,var(--canvas));
+    .proof-item img.wide{max-width:920px}
+    .pan-note{
+      display:block;margin-top:7px;font-family:var(--mono);font-size:12px;
+      letter-spacing:.02em;color:var(--ink-faint);
     }
   }
 
@@ -772,38 +794,58 @@
 </style>
 </head>
 <body>
-<!-- ═══ LANGUAGE GLYPHS ═══════════════════════════════════════════════════
-     Five marks in one visual family (24-box, 1.8 stroke, round caps/joins —
-     the same family as the rail icons above), drawn here specifically for this
-     page. NONE of them is a reproduction of a language's real logo: the Python,
-     Go and Rust marks are trademarks of the PSF, Google and the Rust
-     Foundation respectively, and several of those trademark policies forbid
-     redistributing or modifying the mark at all. So none is used, hotlinked or
-     redrawn. These are neutral, original glyphs standing for an IDEA the
-     language is known by, and each is paired with the language's plain name in
-     text so recognition never depends on the drawing alone:
-       rust   a machined hex nut       — the engineered-metal register, and
-                                         explicitly NOT the Rust gear-and-R
-       python two interlocking coils   — intertwined snakes, drawn as one
-                                         open stroke each, no eyes, no blocks
-       go     a fixed origin bar and two chevrons — dispatch, speed, goroutines
-       toml   two brackets round a key/value pair — a [section] of config
-       shell  a prompt chevron and an input rule  — universal, owned by nobody
-     They are also ACHROMATIC by design: on this page hue is reserved for
-     settlement class and evidence level, and a language is neither. -->
+<!-- ═══ LANGUAGE MARKS ════════════════════════════════════════════════════
+     Five marks in one visual family (24-box, 1.8 stroke, round caps and
+     joins — the same family as the rail icons), drawn here for this page.
+
+     NONE is a reproduction of a language's real logo. Python's two coloured
+     serpents, Go's blue italic wordmark and the Rust gear-and-R are the marks
+     of the PSF, Google and the Rust Foundation; several of those trademark
+     policies forbid redistributing or modifying the mark at all. So none is
+     used, hotlinked, traced or "abstracted from". What ships is drawn from
+     scratch here, achromatic, and paired with the language's plain name in
+     text so recognition never depends on the drawing alone.
+
+     THE FAMILY RULE, which is what this pass fixed: each mark is the shortest
+     thing a reader would recognise the language BY — its own everyday syntax
+     where it has some, its name where the name is the recognisable part.
+       shell  >_   the prompt and its input rule. Owned by nobody.
+       toml   [-]  a [section] bracketing a key and its value.
+       rust   ⬡    a machined hex nut: the engineered-metal register, and
+                   explicitly not the Rust gear-and-R.
+       go     Go   a plain monoline lettermark.
+       python Py   a plain monoline lettermark.
+
+     Go and Python were the two that failed, and they failed measurably rather
+     than as a matter of taste. The old Python mark was two arcs that read, at
+     the 15px it is actually rendered at, as a capital S — and it was reached
+     by simplifying the PSF's interlocking serpents, which is the one thing
+     that mark's licence does not permit. The old Go mark was an origin bar
+     followed by two chevrons, which reads as a media "skip to end" control,
+     and it collided head-on with the shell mark: two of five marks in the set
+     were both chevrons, so the family had a duplicate where it needed a
+     distinction. Both are now plain letterforms — the honest option when a
+     language's recognisable mark is one you may not draw — built from the same
+     1.8 strokes and round caps as the other three, so the set still reads as
+     one family rather than as three drawings and two pieces of type.
+
+     They are ACHROMATIC by design: on this page hue is reserved for settlement
+     class and evidence level, and a language is neither. -->
 <svg aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
-  <defs>
-    <g id="lg-base" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></g>
-  </defs>
   <symbol id="lg-rust" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M20.6 12 16.3 19.45H7.7L3.4 12 7.7 4.55h8.6Z"/><circle cx="12" cy="12" r="3.4"/>
   </symbol>
+  <!-- "Py" — P on a 12-unit cap height, y hung from the same x-height line and
+       dropping a true descender, so the pair sits on one baseline (y=17.4). -->
   <symbol id="lg-python" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14.2 4.6H9.5a4.3 4.3 0 0 0 0 8.6h5"/>
-    <path d="M9.8 19.4h4.7a4.3 4.3 0 0 0 0-8.6h-5"/>
+    <path d="M4.9 17.4V5.4h3.9a3.5 3.5 0 0 1 0 7H4.9"/>
+    <path d="m13.2 10.6 3 6.3"/><path d="M19.6 10.6 14.9 20.4"/>
   </symbol>
+  <!-- "Go" — G as an open ring with its crossbar, o as a plain ring on the
+       x-height line, both on the same baseline as the Py above. -->
   <symbol id="lg-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M3.6 5.8v12.4"/><path d="M8.2 6.6 13.6 12l-5.4 5.4"/><path d="M14.4 6.6 19.8 12l-5.4 5.4"/>
+    <path d="M12.6 8.6a4.9 4.9 0 1 0 .2 6.5v-3.2H9.7"/>
+    <circle cx="18.3" cy="14" r="3.4"/>
   </symbol>
   <symbol id="lg-toml" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
     <path d="M8.6 5.2H5.6v13.6h3"/><path d="M15.4 5.2h3v13.6h-3"/>
@@ -998,7 +1040,11 @@
         </div>
         <div class="host-foot"><b>One key, one process.</b> Every other process in a polyglot stack reaches the substrate over loopback HTTP — none of them ever holds the key, and nothing off this host can reach the sidecar at all.</div>
       </div>
-      <div class="codeblock" style="margin-top:22px">
+      <!-- data-wrap="never": this pane's COLUMNS are the information — three
+           columns of crate names lining up is the whole point of showing `ls`
+           output — so it keeps exact horizontal scroll where every other block
+           on the page soft-wraps. See the note beside .codeblock in patala.css. -->
+      <div class="codeblock" data-wrap="never" style="margin-top:22px">
         <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-shell"/></svg>shell</span><span class="cb-path">~/patala</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
         <pre><code class="language-bash">$ ls
 patala-core/         patala-hyperswitch/   patala-sidecar/
@@ -1369,24 +1415,24 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
     </div>
 
     <figure class="lang-pane proof-item active" data-pane="proof-boot">
-      <div class="proof-scroll"><img src="./assets/shots/sidecar-boot.webp" width="720" height="222" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
-      <figcaption>The sidecar — <code>cargo run -p patala-sidecar</code>, actually booting.</figcaption>
+      <div class="proof-scroll" data-scroller><img src="./assets/shots/sidecar-boot.webp" width="720" height="222" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
+      <figcaption>The sidecar — <code>cargo run -p patala-sidecar</code>, actually booting.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-http">
-      <div class="proof-scroll tall"><img src="./assets/shots/sidecar-roundtrip.webp" width="720" height="571" alt="Terminal: curl round-trips against the running sidecar — healthz returns ok, capabilities, a charge, verify returning valid true, and a 401 when the Authorization header is missing."></div>
-      <figcaption>Real HTTP round-trips against it: capabilities, charge, verify — and the fail-closed 401 when the token is missing.</figcaption>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/sidecar-roundtrip.webp" width="720" height="571" alt="Terminal: curl round-trips against the running sidecar — healthz returns ok, capabilities, a charge, verify returning valid true, and a 401 when the Authorization header is missing."></div>
+      <figcaption>Real HTTP round-trips against it: capabilities, charge, verify — and the fail-closed 401 when the token is missing.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-tests">
-      <div class="proof-scroll tall"><img class="wide" src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
-      <figcaption><code>cargo test --workspace</code> — the same <b>293</b> offline tests <a href="#status" style="color:var(--ev-exec);text-decoration:underline;text-underline-offset:2px">rung 02</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.</figcaption>
+      <div class="proof-scroll tall" data-scroller><img class="wide" src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
+      <figcaption><code>cargo test --workspace</code> — the same <b>293</b> offline tests <a href="#status" style="color:var(--ev-exec);text-decoration:underline;text-underline-offset:2px">rung 02</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.<span class="pan-note">920px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-py">
-      <div class="proof-scroll tall"><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
-      <figcaption>The Python binding, over a real interpreter — same MockRail round-trip, called from <code>patala-py</code>.</figcaption>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
+      <figcaption>The Python binding, over a real interpreter — same MockRail round-trip, called from <code>patala-py</code>.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-go">
-      <div class="proof-scroll tall"><img src="./assets/shots/binding-go.webp" width="720" height="1309" alt="Terminal: cd patala-go &amp;&amp; make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
-      <figcaption>The Go binding, over real cgo — the same UniFFI surface, generated for Go. Scroll for all 19 tests.</figcaption>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/binding-go.webp" width="720" height="1309" alt="Terminal: cd patala-go &amp;&amp; make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
+      <figcaption>The Go binding, over real cgo — the same UniFFI surface, generated for Go. Scroll for all 19 tests.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
   </div>
 </div></section>
@@ -1418,6 +1464,11 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
 </div></footer>
 
 <script src="./assets/vendor/highlight.core.js"></script>
+<!-- Everything a .codeblock does — highlight, line-split, wrap/exact, the
+     scroll affordance and the copy control — lives in one file shared with
+     docs.html, so the two pages cannot drift. It self-starts on DOMContentLoaded
+     and also treats every [data-scroller] (§06's captured panes). -->
+<script src="./assets/js/codeblock.js"></script>
 <script>
 (function(){
   var btn=document.getElementById('themeToggle');
@@ -1439,52 +1490,12 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
   });
 })();
 
-// Real syntax highlighting (vendored highlight.js core, see ./assets/vendor/)
-// over every code block on the page — including the four language tabs, whose
-// hidden panes are highlighted too, so switching tabs never shows a flash of
-// unhighlighted text.
-(function(){
-  if (window.hljs) {
-    document.querySelectorAll('pre code').forEach(function(el){ hljs.highlightElement(el); });
-  }
-})();
-
-// Copy-to-clipboard on every code block. Wired from the DOM rather than
-// hard-coded per block, so docs.html's generated blocks get it too by simply
-// including this file's twin. Reads the ORIGINAL text via textContent, which
-// is the un-highlighted source (highlight.js only wraps it in spans), so what
-// lands on the clipboard is exactly what is on screen and nothing else.
-// execCommand is kept as the fallback path because navigator.clipboard is
-// unavailable on a plain http:// origin in some browsers, and a copy button
-// that silently does nothing is worse than no copy button.
-(function(){
-  function copy(text){
-    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text);
-    return new Promise(function(res, rej){
-      var ta=document.createElement('textarea');
-      ta.value=text; ta.setAttribute('readonly','');
-      ta.style.cssText='position:fixed;top:-1000px;opacity:0';
-      document.body.appendChild(ta); ta.select();
-      var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
-      document.body.removeChild(ta);
-      ok?res():rej(new Error('copy failed'));
-    });
-  }
-  document.addEventListener('click', function(ev){
-    var btn=ev.target.closest ? ev.target.closest('.cb-copy') : null;
-    if(!btn) return;
-    var block=btn.closest('.codeblock');
-    var code=block && block.querySelector('pre code');
-    if(!code) return;
-    copy(code.textContent).then(function(){
-      btn.setAttribute('data-state','done');
-      clearTimeout(btn._t);
-      btn._t=setTimeout(function(){ btn.removeAttribute('data-state'); }, 1600);
-    }).catch(function(){
-      btn.setAttribute('aria-label','Copy failed — select the code and copy manually');
-    });
-  });
-})();
+// Highlighting, wrap/exact, the scroll affordance and copy-to-clipboard are
+// all in ./assets/js/codeblock.js — one implementation, both pages. The four
+// language tabs' hidden panes are dressed too, so switching tabs never shows
+// a flash of unhighlighted or unmeasured text; the tab switch below simply
+// asks for a re-measure, since a pane that was display:none had no width to
+// measure when it was first dressed.
 
 // ONE tab mechanism, two panels: the "same round trip, four languages" code
 // panel in §05 and the captured-proof viewer in §06. It is SCOPED to its own
@@ -1501,6 +1512,9 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
         var target=tab.dataset.pane;
         tabs.forEach(function(t){ t.setAttribute('aria-selected', String(t===tab)); });
         panes.forEach(function(p){ p.classList.toggle('active', p.dataset.pane===target); });
+        // A pane that was display:none measured 0 wide, so its block could not
+        // know whether it overflows. Now that it is on screen, ask again.
+        if (window.patalaCode) patalaCode.remeasure();
       });
     });
   });

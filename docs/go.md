@@ -108,7 +108,10 @@ receipt := must(rail.Charge(req))
 valid := must(rail.Verify(receipt)) // fail-closed: a tampered receipt verifies false
 ```
 
-Adapted from `patala-go/examples/roundtrip/main.go`.
+Adapted from `patala-go/examples/roundtrip/main.go`. The generated package's
+clause is `patala`, matching its directory, so the import alias above is
+belt-and-braces rather than required — write it either way and every call site
+reads the same.
 
 ## What is exposed
 

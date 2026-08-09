@@ -63,6 +63,40 @@ the Python smoke run, and the Go binding's test suite (CI installs
 `uniffi-bindgen-go` at the pinned tag and uses the C toolchain the runner
 already has).
 
+## Documentation
+
+Seventeen documents in [`docs/`](docs/), readable here on GitHub or in the
+docs viewer at `site/docs.html`. `docs/` is the single source; `site/docs/` is
+generated from it by `node scripts/gen-site-docs.mjs`, and
+`--check` fails the build if the two ever drift, so the site cannot ship a
+stale page.
+
+**Start:** [What patala is](docs/overview.md) ·
+[Quickstart](docs/quickstart.md) ·
+[Choosing a mode](docs/choosing-a-mode.md)
+
+**Architecture:** [The rail interface](docs/rails-interface.md) ·
+[One core, every language](docs/polyglot.md) ·
+[The offline default build](docs/offline-by-default.md)
+
+**Consuming it:** [Rust, embedded](docs/rust.md) ·
+[Python binding](docs/python.md) · [Go binding](docs/go.md) ·
+[The sidecar HTTP API](docs/sidecar.md)
+
+**The rails:** [Solana &amp; Stellar](docs/rails-crypto.md) ·
+[Hyperswitch &amp; fiat](docs/rails-fiat.md) ·
+[Paying a customer back](docs/compensating-payments.md) ·
+[Splits &amp; shared economics](docs/shared-economics.md)
+
+**Operating:** [Self-host &amp; vendor](docs/self-host-vendor.md) ·
+[Troubleshooting](docs/troubleshooting.md) ·
+[Status &amp; verification](docs/status.md)
+
+Not sure where to start? [Quickstart](docs/quickstart.md) gets a `charge` →
+`verify` round trip running in your language against a rail that needs no
+network, and [Choosing a mode](docs/choosing-a-mode.md) is the decision that
+shapes everything after it.
+
 ## The idea
 
 Payment adapters split into two kinds, and patala treats them completely

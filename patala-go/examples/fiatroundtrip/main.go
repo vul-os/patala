@@ -29,7 +29,7 @@
 // then regenerate bindings (see ../../README.md) before running:
 //
 //	CGO_ENABLED=1 \
-//	  CGO_LDFLAGS="-lpatala_py -Lbindings/patala" \
+//	  CGO_LDFLAGS="-lpatala_uniffi -Lbindings/patala" \
 //	  DYLD_LIBRARY_PATH="bindings/patala:$DYLD_LIBRARY_PATH" \
 //	  LD_LIBRARY_PATH="bindings/patala:$LD_LIBRARY_PATH" \
 //	  go run ./examples/fiatroundtrip
@@ -48,10 +48,9 @@ import (
 	"sort"
 	"strings"
 
-	// See ../roundtrip/main.go's identical comment: the generated file's
-	// `package` clause is fixed to `patala_py` regardless of the output
-	// directory name, hence the import alias.
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	// See ../roundtrip/main.go's identical comment: the generated file
+	// declares `package patala`, so no import alias is needed.
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 func must[T any](v T, err error) T {

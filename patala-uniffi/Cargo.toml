@@ -1,0 +1,144 @@
+[package]
+name = "patala-uniffi"
+version = "0.1.0"
+edition = "2021"
+description = "The one UniFFI surface over patala-core, namespaced `patala`. Every UniFFI target language (Python, Go, Swift, Kotlin, ...) is generated from THIS crate's `#[uniffi::export]` definitions — see PATALA.md §5: adapters are written once in Rust, and every language is a generated consumer of that one definition."
+license = "MIT OR Apache-2.0"
+publish = false
+
+# Why this crate exists at all, and why it is not `patala-py`:
+#
+# UniFFI derives a binding's *namespace* from the crate that calls
+# `uniffi::setup_scaffolding!()`, and every generator turns that namespace into
+# the module/package name it emits. While the whole exported surface lived in
+# `patala-py`, the namespace was `patala_py`, so `uniffi-bindgen-go` emitted a
+# file literally beginning `package patala_py` and every Go call site needed an
+# import alias to read naturally. That was already documented as a wrinkle in
+# patala-go/README.md; with ten more languages coming, every one of them would
+# have inherited a Python-flavoured name for a surface that has nothing to do
+# with Python. So the surface moved here and calls
+# `uniffi::setup_scaffolding!("patala")` — one neutral namespace, `patala`, for
+# every target language. `patala-py` and `patala-go` are now both consumers of
+# this crate rather than one of them being a consumer of the other.
+
+# `cdylib` is what `uniffi-bindgen`/`uniffi-bindgen-go` read in `--library`
+# mode and what a non-Rust host ultimately loads: it carries the generic C-ABI
+# scaffolding plus the embedded metadata describing this whole
+# `#[uniffi::export]` surface. `lib` is kept so `cargo test` can run this
+# crate's ordinary Rust unit tests without going through any foreign language,
+# AND so `patala-py` can link this crate's scaffolding into its own cdylib
+# (see patala-py/Cargo.toml).
+[lib]
+name = "patala_uniffi"
+crate-type = ["cdylib", "lib"]
+
+# `uniffi-bindgen` is a tiny binary that just calls into the `uniffi` crate's
+# own bindgen entrypoint. It exists so bindings can be generated with
+# `cargo run -p patala-uniffi --bin uniffi-bindgen` — no separately installed
+# `uniffi-bindgen` CLI, no `maturin`, required.
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
+required-features = ["uniffi/cli"]
+
+[dependencies]
+patala-core = { path = "../patala-core" }
+# `uniffi` is the ONLY new *mandatory* dependency this crate adds beyond
+# patala-core; it never becomes a dependency of patala-core itself, so the
+# default workspace build (`patala-core` alone) stays exactly as offline and
+# dependency-light as before (PATALA.md §8).
+uniffi = { version = "0.29", features = ["cli"] }
+thiserror = "1"
+# Bridges patala-core's async trait to UniFFI's synchronous FFI surface — see
+# `src/lib.rs` module docs ("Async boundary") for why block_on and not a
+# foreign-async export.
+tokio = { version = "1", features = ["rt-multi-thread"] }
+
+# The three real rails are OPTIONAL deps, gated behind the features below.
+# `dep:patala-solana` (etc.) means cargo never resolves/builds/downloads
+# these — or any of their reqwest/ed25519-dalek/stellar-xdr/hmac transitive
+# deps — unless the matching feature is explicitly turned on. A plain
+# `cargo build -p patala-uniffi` / `cargo test -p patala-uniffi` (no
+# `--features`) pulls in none of them, so the default build stays exactly as
+# offline as `patala-core` itself (PATALA.md §8). Each rail crate is already
+# excluded from the workspace `default-members` for the same reason; these
+# features are the *consumer*-side half of that same guarantee.
+patala-solana = { path = "../patala-solana", optional = true }
+patala-stellar = { path = "../patala-stellar", optional = true }
+patala-hyperswitch = { path = "../patala-hyperswitch", optional = true }
+# `patala-fiat`'s 20 processor adapters (Stripe, Paystack, Adyen, ...),
+# exposed through ONE by-name constructor (`PatalaRail::new_fiat`, see
+# `src/fiat.rs`) rather than 20 typed ones. Optional for the same reason as
+# the three rails above: a plain `cargo build -p patala-uniffi` (no
+# `--features`) must stay exactly as offline/dep-free as `patala-core` alone.
+# Even with the `fiat` feature on, `patala-fiat` itself pulls in none of its
+# own per-adapter network/crypto deps unless the matching `patala-fiat/<name>`
+# feature is also enabled (see the `fiat-*` features below) — see
+# `patala-fiat/src/lib.rs`'s own "offline-by-default" docs.
+patala-fiat = { path = "../patala-fiat", optional = true }
+
+[features]
+default = []
+# One feature per real rail (PATALA.md §4), matching the workspace's own
+# per-rail feature-gating convention. Enabling one adds exactly one
+# constructor to `PatalaRail` (`new_solana`/`new_stellar`/`new_hyperswitch`)
+# without changing the shape of any existing method — see `src/lib.rs`.
+solana = ["dep:patala-solana"]
+stellar = ["dep:patala-stellar"]
+hyperswitch = ["dep:patala-hyperswitch"]
+
+# `fiat` alone pulls in `patala-fiat` with ITS OWN default features only
+# (currency table + registry + the always-on, no-network `manual` rail —
+# see `patala-fiat/src/lib.rs`), enough for `PatalaRail::new_fiat("manual",
+# ...)` to work with zero new network/crypto deps. Each of the 20
+# processor adapters needs its own ADDITIONAL feature below, mirroring
+# `patala-fiat/Cargo.toml`'s own per-adapter feature list one-to-one
+# (`fiat-<name>` here enables exactly `patala-fiat/<name>`), namespaced
+# under `fiat-` to avoid colliding with this crate's own `solana`/
+# `stellar`/`hyperswitch` names. `fiat-all` enables every one at once —
+# meant for this crate's own tests and for regenerating the Go binding
+# with the full fiat surface (see `patala-go/Makefile`), not implied by
+# plain `fiat`.
+fiat = ["dep:patala-fiat"]
+fiat-adyen = ["fiat", "patala-fiat/adyen"]
+fiat-btcpay = ["fiat", "patala-fiat/btcpay"]
+fiat-checkoutcom = ["fiat", "patala-fiat/checkoutcom"]
+fiat-coinbasecommerce = ["fiat", "patala-fiat/coinbasecommerce"]
+fiat-flutterwave = ["fiat", "patala-fiat/flutterwave"]
+fiat-iyzico = ["fiat", "patala-fiat/iyzico"]
+fiat-lnbits = ["fiat", "patala-fiat/lnbits"]
+fiat-mercadopago = ["fiat", "patala-fiat/mercadopago"]
+fiat-midtrans = ["fiat", "patala-fiat/midtrans"]
+fiat-mollie = ["fiat", "patala-fiat/mollie"]
+fiat-opennode = ["fiat", "patala-fiat/opennode"]
+fiat-payfast = ["fiat", "patala-fiat/payfast"]
+fiat-paypal = ["fiat", "patala-fiat/paypal"]
+fiat-payu = ["fiat", "patala-fiat/payu"]
+fiat-paystack = ["fiat", "patala-fiat/paystack"]
+fiat-razorpay = ["fiat", "patala-fiat/razorpay"]
+fiat-square = ["fiat", "patala-fiat/square"]
+fiat-stripe = ["fiat", "patala-fiat/stripe"]
+fiat-xendit = ["fiat", "patala-fiat/xendit"]
+fiat-yoco = ["fiat", "patala-fiat/yoco"]
+fiat-all = [
+    "fiat-adyen",
+    "fiat-btcpay",
+    "fiat-checkoutcom",
+    "fiat-coinbasecommerce",
+    "fiat-flutterwave",
+    "fiat-iyzico",
+    "fiat-lnbits",
+    "fiat-mercadopago",
+    "fiat-midtrans",
+    "fiat-mollie",
+    "fiat-opennode",
+    "fiat-payfast",
+    "fiat-paypal",
+    "fiat-payu",
+    "fiat-paystack",
+    "fiat-razorpay",
+    "fiat-square",
+    "fiat-stripe",
+    "fiat-xendit",
+    "fiat-yoco",
+]

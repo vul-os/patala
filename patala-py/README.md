@@ -3,8 +3,31 @@
 A Python binding over `patala-core` (`PATALA.md` §5: "adapters are written
 ONCE in Rust; Python and any other language consume that one core"). This
 crate never reimplements a rail — it wraps whatever `PaymentRail` already
-exists in Rust and exposes it to Python (and, later, any other UniFFI
-target).
+exists in Rust and exposes it to Python.
+
+## Where the binding is actually defined: `patala-uniffi`
+
+**Not here.** Every exported type, constructor and method lives in
+[`../patala-uniffi`](../patala-uniffi/), the crate that owns patala's single
+`#[uniffi::export]` surface and declares its UniFFI namespace as `"patala"`.
+`patala-py` is a `pub use patala_uniffi::*;` plus the packaging (`Cargo.toml`,
+`pyproject.toml`) that turns that surface into a Python wheel:
+`libpatala_py.{dylib,so}` and a generated `patala.py`.
+
+It used to be the other way round — the whole surface lived here, so UniFFI
+derived the *namespace* from this crate and every generated language got a
+module named `patala_py`. `uniffi-bindgen-go` emitted `package patala_py`;
+Swift, Kotlin, PHP and the rest were about to inherit the same. The surface
+moved out; the Python-facing behaviour did not change, with one visible
+consequence:
+
+> **The generated Python module is now `patala`, not `patala_py`.**
+> `from patala import PatalaRail`. The native library it loads is still this
+> crate's `libpatala_py.{dylib,so}` — the module name comes from the UniFFI
+> namespace, the library name from this crate.
+
+Everything below — features, config keys, packaging, the manual flow — is
+unchanged apart from that import.
 
 ## UniFFI, not PyO3 — and why
 
@@ -101,7 +124,7 @@ is invisible to UniFFI.
 
 ```python
 import hashlib, hmac
-from patala_py import PatalaRail, WebhookDelivery, WebhookStatus, PatalaError
+from patala import PatalaRail, WebhookDelivery, WebhookStatus, PatalaError
 
 rail = PatalaRail.new_fiat("stripe", {"secret_key": ..., "webhook_secret": secret, ...})
 
@@ -286,7 +309,7 @@ see the table above and each `build_<name>` function in `src/fiat.rs` for
 the exact default per field.
 
 ```python
-from patala_py import PatalaRail
+from patala import PatalaRail
 
 rail = PatalaRail.new_fiat("manual", {})
 print(rail.id(), rail.capabilities())
@@ -319,17 +342,18 @@ unreachable through this generic by-name FFI surface) confirms it — see
 
 **The shipping story is a maturin-built wheel — not the manual
 `uniffi-bindgen` flow below.** Both use the *exact same* UniFFI binding
-(`src/lib.rs`, `src/bin/uniffi_bindgen.rs`); maturin does not replace or
+(`../patala-uniffi/src/lib.rs`, linked into this crate's cdylib); maturin
+does not replace or
 compete with UniFFI, it is the wheel-packaging frontend around it.
 `pyproject.toml`'s `[tool.maturin] bindings = "uniffi"` tells maturin to
 build this crate's cdylib and then run this crate's own `uniffi-bindgen`
-binary target against it to generate `patala_py.py` — the same generation
+binary target against it to generate `patala.py` — the same generation
 step the manual flow runs by hand — and bundle the result plus the compiled
 native library into a real wheel with proper metadata
-(`dist-info`, platform tag, `import patala_py` from a normal `site-packages`
+(`dist-info`, platform tag, `import patala` from a normal `site-packages`
 install). That is what makes it genuinely `pip install`-able: a wheel a user
 installs with `pip install <file>.whl` (or, once published, `pip install
-patala-py`) and then just `import patala_py` — no `cargo`, no Rust
+patala-py`) and then just `import patala` — no `cargo`, no Rust
 toolchain, no manual bindgen invocation, no `PYTHONPATH` juggling on the
 user's machine. The manual flow (previous wave, still documented below) is
 kept only as the offline/no-maturin fallback and for local iteration; it is
@@ -359,7 +383,7 @@ maturin build --release --features solana,stellar,hyperswitch
 ```bash
 pip install target/wheels/patala_py-*.whl
 python3 -c "
-from patala_py import PatalaRail, RailClass
+from patala import PatalaRail, RailClass
 rail = PatalaRail.new_mock('mock', RailClass.NON_CUSTODIAL_FINAL, ['USDC'], 0, False)
 print(rail.id(), rail.capabilities())
 "
@@ -431,7 +455,7 @@ cargo run -p patala-py --bin uniffi-bindgen -- generate \
     --out-dir patala-py/bindings/python
 # (Linux: target/debug/libpatala_py.so)
 
-# 3. The generated `patala_py.py` loads its native library by name from its
+# 3. The generated `patala.py` loads its native library by name from its
 #    own directory (see `_uniffi_load_indirect` in the generated file), so
 #    copy the freshly built library next to it:
 cp target/debug/libpatala_py.dylib patala-py/bindings/python/
@@ -446,18 +470,54 @@ checked in.
 
 ### Rust-only checks (no Python needed)
 
-`src/lib.rs` also carries ordinary `#[cfg(test)]` Rust unit tests that
-exercise `PatalaRail` directly (charge → verify round-trip, tamper-detection,
-unsupported currency, a failing rail) without going through Python or ctypes
-at all:
+The `PatalaRail` unit tests (charge → verify round-trip, tamper detection,
+unsupported currency, a failing rail, every `DestinationStatus`) live with the
+surface, in `patala-uniffi`:
+
+```bash
+cargo test -p patala-uniffi
+cargo test -p patala-uniffi --features fiat-all   # + the 20 fiat adapters
+```
+
+This crate's own `tests/scaffolding.rs` covers the two things that are true
+*about the split* rather than about the surface: that the UniFFI namespace is
+`patala` (a **link-time** assertion — it references the
+`UNIFFI_META_NAMESPACE_PATALA` symbol, which only exists if
+`setup_scaffolding!("patala")` is still in place), and that the re-export
+keeps `patala_py::PatalaRail` working:
 
 ```bash
 cargo test -p patala-py
 ```
 
-## Verified in this environment (2026-07-21)
+What no Rust test can check is that `libpatala_py.{dylib,so}` re-exports
+`patala-uniffi`'s `#[no_mangle]` scaffolding — that is a property of the
+linked cdylib. `make smoke-python` at the workspace root is the proof, and it
+runs in CI: a real `python3` loads that exact cdylib over ctypes and drives a
+charge → verify round trip through it.
 
-Both steps were actually executed here, not just written:
+## Verified in this environment (2026-08-09) — after the `patala-uniffi` split
+
+- `cargo test -p patala-py` — 3/3 (`tests/scaffolding.rs`: the namespace is
+  `patala`, the re-export resolves, a tampered receipt still fails closed).
+- `cargo test -p patala-uniffi` — 11/11; `--features fiat-all` — 20/20.
+- `make smoke-python` at the workspace root — built
+  `libpatala_py.dylib` with `--features fiat-stripe`, generated
+  **`patala.py`** (not `patala_py.py`) from it, and ran
+  `examples/smoke_test.py` under python3 3.13.9. It printed
+  `ALL PYTHON SMOKE ASSERTIONS PASSED` and exited `0`, which is the empirical
+  proof that this crate's cdylib carries `patala-uniffi`'s scaffolding.
+- `maturin` is **not installed in this environment**, so the wheel flow below
+  ("Packaging") was NOT re-executed after the split. Nothing about it should
+  have changed — `pyproject.toml` is untouched and this crate still produces
+  the same cdylib with the same name — but the wheel's import name follows the
+  UniFFI namespace, so expect `import patala`. Treat the wheel steps as
+  documented-but-unverified-since-the-split.
+
+## Verified in this environment (2026-07-21) — before the split
+
+Historical record, left as observed. At this date the surface lived in this
+crate and the generated module was called `patala_py.py`.
 
 - `cargo test -p patala-py` — 4/4 Rust unit tests pass.
 - The full **Build & run** sequence above was run end-to-end: `cargo build`,
@@ -476,7 +536,11 @@ run". `pip install maturin` was confirmed resolvable from this network
 (`pip3 install --dry-run maturin` succeeded) if a packaged wheel is wanted
 later, but building one was out of scope for proving the binding works.
 
-## `patala-fiat` exposure: verified in this environment
+## `patala-fiat` exposure: verified in this environment (2026-07-21) — before the split
+
+Historical record; the same feature set now lives on `patala-uniffi` and
+`patala-py`'s `fiat-*` features forward to it one for one (enforced by
+`scripts/check-features.sh`).
 
 - `cargo build -p patala-py` (default, no `--features`) — succeeds, and
   `cargo tree -p patala-py -e normal` confirms it pulls in **no**

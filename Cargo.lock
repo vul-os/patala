@@ -1185,12 +1185,7 @@ name = "patala-py"
 version = "0.1.0"
 dependencies = [
  "patala-core",
- "patala-fiat",
- "patala-hyperswitch",
- "patala-solana",
- "patala-stellar",
- "thiserror 1.0.69",
- "tokio",
+ "patala-uniffi",
  "uniffi",
 ]
 
@@ -1246,6 +1241,20 @@ dependencies = [
  "stellar-xdr",
  "thiserror 1.0.69",
  "tokio",
+]
+
+[[package]]
+name = "patala-uniffi"
+version = "0.1.0"
+dependencies = [
+ "patala-core",
+ "patala-fiat",
+ "patala-hyperswitch",
+ "patala-solana",
+ "patala-stellar",
+ "thiserror 1.0.69",
+ "tokio",
+ "uniffi",
 ]
 
 [[package]]

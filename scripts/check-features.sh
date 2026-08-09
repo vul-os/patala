@@ -4,19 +4,33 @@
 # that expose it in lock-step.
 #
 # patala-fiat ships one module directory per processor (patala-fiat/src/<name>/)
-# and a Cargo feature per processor. patala-py re-exports each as `fiat-<name>`
-# (which must enable exactly `patala-fiat/<name>`), and `fiat-all` must enable
-# every one — that is the feature patala-go builds its cdylib with, so a
-# processor missing from `fiat-all` is silently absent from the Go binding.
+# and a Cargo feature per processor. patala-uniffi re-exports each as
+# `fiat-<name>` (which must enable exactly `patala-fiat/<name>`), and
+# `fiat-all` must enable every one — that is the feature patala-go builds its
+# cdylib with, so a processor missing from `fiat-all` is silently absent from
+# the Go binding.
+#
+# patala-py is a FORWARDER: it declares the same `fiat-<name>` names, enabling
+# exactly `patala-uniffi/fiat-<name>`. A forwarder that skips a processor
+# cannot build a wheel with that processor in it, however complete
+# patala-uniffi is — so it is checked too, in the same loop, rather than being
+# trusted to keep up.
 #
 # Nothing enforced this before: it held only because each new processor was
-# added to every list by hand. This script is that enforcement — three source
+# added to every list by hand. This script is that enforcement — four source
 # files must agree, or `make check` fails. Pure bash + coreutils, no toolchain.
 set -uo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fiat_toml="$root/patala-fiat/Cargo.toml"
-py_toml="$root/patala-py/Cargo.toml"
+uniffi_toml="$root/patala-uniffi/Cargo.toml"
+# name:manifest:expected-target — the crates that re-export patala-fiat's
+# per-processor features. patala-uniffi is the authority (it owns the optional
+# `patala-fiat` dependency); the other two forward to it.
+forwarders=(
+  "patala-uniffi:$uniffi_toml:patala-fiat"
+  "patala-py:$root/patala-py/Cargo.toml:patala-uniffi"
+)
 fiat_src="$root/patala-fiat/src"
 webhook_cov="$root/patala-fiat/tests/webhook_coverage.rs"
 
@@ -31,8 +45,10 @@ if [ -z "$processors" ]; then
   exit 2
 fi
 
-# fiat-all's members, one "fiat-<name>" per line.
-fiat_all_members="$(awk '/^fiat-all *= *\[/{f=1} f{print} /\]/{if(f)exit}' "$py_toml" \
+# fiat-all's members in patala-uniffi (the authority), one "fiat-<name>" per
+# line. The forwarders' own fiat-all is a single "patala-uniffi/fiat-all", so
+# there is only ever one enumerated list to keep in step with src/.
+fiat_all_members="$(awk '/^fiat-all *= *\[/{f=1} f{print} /\]/{if(f)exit}' "$uniffi_toml" \
   | grep -oE '"fiat-[a-z0-9]+"' | tr -d '"' | sort -u)"
 
 for p in $processors; do
@@ -40,17 +56,29 @@ for p in $processors; do
   grep -qE "^$p *= *\[" "$fiat_toml" \
     || note "patala-fiat/Cargo.toml is missing a [$p] feature for src/$p/"
 
-  # 2. patala-py maps fiat-<p> to exactly patala-fiat/<p>.
-  py_line="$(grep -E "^fiat-$p *= *\[" "$py_toml" || true)"
-  if [ -z "$py_line" ]; then
-    note "patala-py/Cargo.toml is missing the fiat-$p feature"
-  elif ! printf '%s' "$py_line" | grep -q "patala-fiat/$p\b"; then
-    note "patala-py fiat-$p does not enable patala-fiat/$p (line: $py_line)"
-  fi
+  # 2. Every re-exporting crate maps fiat-<p> onto the crate below it:
+  #    patala-uniffi -> patala-fiat/<p>, and the forwarders -> patala-uniffi/fiat-<p>.
+  for entry in "${forwarders[@]}"; do
+    crate="${entry%%:*}"
+    rest="${entry#*:}"
+    toml="${rest%%:*}"
+    target="${rest##*:}"
+    if [ "$target" = "patala-fiat" ]; then
+      want="patala-fiat/$p"
+    else
+      want="$target/fiat-$p"
+    fi
+    line="$(grep -E "^fiat-$p *= *\[" "$toml" || true)"
+    if [ -z "$line" ]; then
+      note "$crate/Cargo.toml is missing the fiat-$p feature"
+    elif ! printf '%s' "$line" | grep -q "$want\b"; then
+      note "$crate fiat-$p does not enable $want (line: $line)"
+    fi
+  done
 
   # 3. fiat-all includes fiat-<p>.
   printf '%s\n' "$fiat_all_members" | grep -qx "fiat-$p" \
-    || note "patala-py fiat-all is missing fiat-$p (patala-go's cdylib would omit it)"
+    || note "patala-uniffi fiat-all is missing fiat-$p (patala-go's cdylib would omit it)"
 
   # 4. tests/webhook_coverage.rs names the processor, so the trait-surface
   #    coverage tests actually exercise it -- both verify_webhook and
@@ -83,7 +111,7 @@ done
 for m in $fiat_all_members; do
   name="${m#fiat-}"
   [ -d "$fiat_src/$name" ] \
-    || note "patala-py fiat-all lists $m but patala-fiat/src/$name/ does not exist"
+    || note "patala-uniffi fiat-all lists $m but patala-fiat/src/$name/ does not exist"
 done
 
 if [ "$fail" -ne 0 ]; then
@@ -92,5 +120,5 @@ if [ "$fail" -ne 0 ]; then
 fi
 
 n="$(printf '%s\n' "$processors" | grep -c .)"
-echo "check-features: OK — $n fiat processors consistent across patala-fiat + patala-py \
-(fiat-all complete, all covered by tests/webhook_coverage.rs)."
+echo "check-features: OK — $n fiat processors consistent across patala-fiat + patala-uniffi \
++ its patala-py forwarder (fiat-all complete, all covered by tests/webhook_coverage.rs)."

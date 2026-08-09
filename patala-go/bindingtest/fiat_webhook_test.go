@@ -34,7 +34,7 @@ import (
 	"strings"
 	"testing"
 
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 const (

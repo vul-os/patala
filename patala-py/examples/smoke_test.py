@@ -2,12 +2,14 @@
 """Smoke test for the patala-py UniFFI binding.
 
 Imports the *built* module (see patala-py/README.md "Build & run" for how
-`bindings/python/patala_py.py` + its sibling `.dylib`/`.so` get there) and
+`bindings/python/patala.py` + its sibling `libpatala_py.dylib`/`.so` get
+there — the module is named after patala's UniFFI namespace, `patala`, while
+the library it loads is still this crate's own `libpatala_py`) and
 drives a full charge -> verify round trip against `MockRail`, entirely
 offline, entirely from Python. This is not a mock of the binding — it is the
 actual generated Python module calling into the actual compiled Rust cdylib
 over ctypes/UniFFI's FFI, exercising the same `PatalaRail` object
-`patala-py/src/lib.rs` defines.
+`patala-uniffi/src/lib.rs` defines.
 
 If the cdylib was built with `--features solana`/`stellar`/`hyperswitch`
 (README.md "Build & run"), this script also *constructs* the matching real
@@ -24,7 +26,7 @@ import hmac
 import json
 import sys
 
-from patala_py import (
+from patala import (
     DestinationStatus,
     PatalaError,
     PatalaRail,

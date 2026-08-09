@@ -30,7 +30,7 @@ fmt-check:
 lint:
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo clippy -p patala-fiat --all-features --all-targets -- -D warnings
-	cargo clippy -p patala-py --features fiat-all --all-targets -- -D warnings
+	cargo clippy -p patala-uniffi --features fiat-all --all-targets -- -D warnings
 
 # The whole workspace suite. Doctests run here too; the live-network rail tests
 # stay #[ignore]d unless PATALA_SOLANA_LIVE_RPC / PATALA_STELLAR_LIVE are set.
@@ -46,15 +46,16 @@ test:
 # are part of `check`, not an optional extra.
 test-features:
 	cargo test -p patala-fiat --all-features
-	cargo test -p patala-py --features fiat-all
+	cargo test -p patala-uniffi --features fiat-all
 
 # Docs must build clean — a broken intra-doc link fails the build.
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 # Keep the fiat processor set in lock-step with the Cargo feature flags that
-# expose it — a new patala-fiat processor left out of patala-py's `fiat-all`
-# would silently vanish from the Go binding's cdylib. Pure bash + coreutils.
+# expose it — a new patala-fiat processor left out of patala-uniffi's
+# `fiat-all` would silently vanish from every binding's cdylib. Pure bash +
+# coreutils.
 features:
 	./scripts/check-features.sh
 
@@ -64,6 +65,15 @@ features:
 # bindgen is this workspace's own `cargo run --bin uniffi-bindgen`, not an
 # separately installed CLI. Not part of `check` because `check` is the
 # pure-cargo gate; CI runs this as its own job.
+#
+# This target is ALSO the only honest proof of a linker property patala-py now
+# depends on. patala-py holds no `#[uniffi::export]` of its own any more — the
+# surface lives in patala-uniffi, and libpatala_py carries it because rustc
+# re-exports a linked rlib's `#[no_mangle]` symbols from a cdylib. No Rust test
+# can observe that; a real python3 loading that exact cdylib over ctypes and
+# driving a charge -> verify round trip can, and does. The generated module is
+# `patala.py` (the UniFFI namespace), not `patala_py.py`, and the smoke test
+# imports it by that name, so a namespace regression fails here too.
 LIB_EXT := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
 
 smoke-python:

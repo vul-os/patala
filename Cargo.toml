@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "patala-core",
+    "patala-uniffi",
     "patala-py",
     "patala-sidecar",
     "patala-solana",
@@ -18,12 +19,25 @@ members = [
 # only `cargo build -p patala-solana` / `-p patala-stellar` / `-p
 # patala-hyperswitch` does. This is what keeps the *default* build offline
 # even though all three are real members (PATALA.md §8, §9).
-default-members = ["patala-core", "patala-py", "patala-sidecar", "patala-fiat"]
+default-members = [
+    "patala-core",
+    "patala-uniffi",
+    "patala-py",
+    "patala-sidecar",
+    "patala-fiat",
+]
 
-# `patala-py` (Python binding, §5) and `patala-sidecar` (local HTTP server,
-# §5) landed in an earlier wave; both depend only on `patala-core`'s public
-# trait and its `MockRail`, never on a real rail, so they build and test
-# fully offline and stay in `default-members`.
+# `patala-uniffi` (the one `#[uniffi::export]` surface, §5), `patala-py` (its
+# Python packaging, §5) and `patala-sidecar` (local HTTP server, §5) all depend
+# only on `patala-core`'s public trait and its `MockRail`, never on a real
+# rail, so they build and test fully offline and stay in `default-members`.
+#
+# `patala-uniffi` is where every binding's types live and where the UniFFI
+# namespace `"patala"` is declared. It used to be `patala-py`, which made the
+# namespace `patala_py` and put a Python-flavoured package name into every
+# generated language — see that crate's own docs. `patala-py` is now a
+# re-export whose only job is to be the cdylib a Python wheel ships;
+# `patala-go` generates from `patala-uniffi`'s cdylib directly.
 #
 # `patala-fiat` (direct fiat-processor adapters ported from cackle's
 # internal/payments + internal/money — see patala-fiat/PORTING.md) uses the

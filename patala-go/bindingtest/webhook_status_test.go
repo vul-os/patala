@@ -36,13 +36,13 @@ import (
 	"sort"
 	"testing"
 
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 // generatedBindingsPath is the file `make generate` writes. It is build
 // output (gitignored), so it only exists once the Makefile has run — which is
 // also the only way these tests can have been compiled at all.
-const generatedBindingsPath = "../bindings/patala/patala_py.go"
+const generatedBindingsPath = "../bindings/patala/patala.go"
 
 // treatAsPaid is the ONE decision a consumer is allowed to make from a
 // WebhookStatus, stated here so the table below can assert it per variant.

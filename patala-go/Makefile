@@ -4,21 +4,25 @@
 # generate -> build -> run flow is one command, but every step is still
 # runnable by hand (see README.md "Build & run, step by step").
 #
-# Reuses patala-py's already-built cdylib (target/debug/libpatala_py.{dylib,so}):
-# that crate carries the #[uniffi::export] surface (PATALA.md §5) — this is
-# the SAME UniFFI surface, targeted at Go instead of Python. No new Rust
-# crate is added by this package.
+# Builds against patala-uniffi's cdylib (target/debug/libpatala_uniffi.{dylib,so}):
+# that crate carries the one #[uniffi::export] surface (PATALA.md §5) and
+# declares the UniFFI namespace "patala" — this is the SAME surface patala-py
+# ships to Python, targeted at Go instead. No new Rust crate is added by this
+# package; patala-uniffi is a workspace member of its own.
 
 SHELL := /bin/bash
 ROOT_DIR := $(abspath $(CURDIR)/..)
 BINDINGS_DIR := $(CURDIR)/bindings
-# uniffi.toml's [bindings.go] package_name = "patala" makes uniffi-bindgen-go
-# nest its output one level down, at $(BINDINGS_DIR)/patala/ (this also
-# becomes the Go import path's last segment: .../patala-go/bindings/patala).
+# uniffi-bindgen-go nests its output one level down, under the UniFFI
+# NAMESPACE — which patala-uniffi declares as "patala". So the output lands at
+# $(BINDINGS_DIR)/patala/, that is the Go import path's last segment
+# (.../patala-go/bindings/patala), AND that is the generated file's `package`
+# clause. There is no uniffi.toml here any more: it existed only to rename the
+# output directory away from `patala_py`, and the namespace is neutral now.
 PKG_DIR := $(BINDINGS_DIR)/patala
 UNAME_S := $(shell uname -s)
 
-# Cargo features to build patala-py's cdylib with, e.g. `FEATURES=fiat-all`
+# Cargo features to build patala-uniffi's cdylib with, e.g. `FEATURES=fiat-all`
 # or `FEATURES=solana,stellar,hyperswitch,fiat-stripe`. Empty by default —
 # the exact status quo before `patala-fiat` was exposed here: a MockRail-only
 # cdylib with zero extra dependencies. `run-example-fiat`/`test-fiat` below
@@ -69,20 +73,20 @@ GATE_REQUIRE_FIAT := $(GATE_REQUIRE) \
 	--require TestFiatDestinationSurfaceIsReachableFromGo
 
 ifeq ($(UNAME_S),Darwin)
-	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.dylib
+	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_uniffi.dylib
 	LIB_EXT := dylib
 else
-	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_py.so
+	LIB_FILE := $(ROOT_DIR)/target/debug/libpatala_uniffi.so
 	LIB_EXT := so
 endif
 
 .PHONY: rust-lib generate build run-example run-example-fiat test test-fiat clean check-uniffi-bindgen-go
 
-# 1. Build the cdylib patala-go will link against (the same one patala-py
-#    loads — see README.md's "Which cdylib?" section for why reusing it is
-#    correct and not a layering violation). Respects $(FEATURES) — see above.
+# 1. Build the cdylib patala-go will link against — patala-uniffi's, the crate
+#    that owns the one #[uniffi::export] surface (see README.md's "Which
+#    cdylib, which package name?"). Respects $(FEATURES) — see above.
 rust-lib:
-	cd $(ROOT_DIR) && cargo build -p patala-py $(FEATURE_FLAG)
+	cd $(ROOT_DIR) && cargo build -p patala-uniffi $(FEATURE_FLAG)
 
 # 2. Generate the Go bindings from that cdylib's embedded UniFFI metadata.
 #    Requires `uniffi-bindgen-go` v0.5.0+v0.29.5 on PATH (matching the
@@ -100,21 +104,34 @@ check-uniffi-bindgen-go:
 generate: rust-lib check-uniffi-bindgen-go
 	rm -rf $(BINDINGS_DIR)
 	mkdir -p $(BINDINGS_DIR)
-	uniffi-bindgen-go "$(LIB_FILE)" --out-dir $(BINDINGS_DIR) --library --config $(CURDIR)/uniffi.toml
+	uniffi-bindgen-go "$(LIB_FILE)" --out-dir $(BINDINGS_DIR) --library
 	cp "$(LIB_FILE)" $(PKG_DIR)/
+	@# The package clause is the UniFFI namespace. Asserted, not assumed: if it
+	@# ever reverts to `patala_py` (someone dropping the explicit namespace from
+	@# patala-uniffi's setup_scaffolding!), every import in this module breaks in
+	@# a way whose error message points at Go, not at the Rust crate that caused
+	@# it. Fail here instead, naming the cause.
+	@head -1 $(PKG_DIR)/patala.go | grep -qx 'package patala' || { \
+		echo "generate: FAILED — $(PKG_DIR)/patala.go does not start with 'package patala'."; \
+		echo "  It starts with: $$(head -1 $(PKG_DIR)/patala.go)"; \
+		echo "  The Go package clause IS the UniFFI namespace. Check that"; \
+		echo "  patala-uniffi/src/lib.rs still calls uniffi::setup_scaffolding!(\"patala\")."; \
+		exit 1; \
+	}
+	@echo "generate: OK — package clause is 'patala'"
 
 # 3. Build the Go module against the generated bindings. CGO_ENABLED=1 and
 #    a C toolchain are required from here on — see README.md's "The cgo
 #    cost" section.
 build: generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
-		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		CGO_LDFLAGS="-lpatala_uniffi -L$(PKG_DIR)" \
 		go build ./...
 
 # 4. Build and run the MockRail charge -> verify round-trip example.
 run-example: generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
-		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		CGO_LDFLAGS="-lpatala_uniffi -L$(PKG_DIR)" \
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		go run ./examples/roundtrip
@@ -123,14 +140,14 @@ run-example: generate
 # a run where nothing executed is a FAILURE, not a pass.
 test: generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
-		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		CGO_LDFLAGS="-lpatala_uniffi -L$(PKG_DIR)" \
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		$(GATE) --min $(GATE_MIN) $(GATE_REQUIRE) -- ./...
 
-# 5. Same as run-example/test above, but forces patala-py's cdylib to be
+# 5. Same as run-example/test above, but forces patala-uniffi's cdylib to be
 #    rebuilt with every patala-fiat adapter compiled in (`fiat-all`, see
-#    patala-py/Cargo.toml), so `PatalaRailNewFiat`/`PatalaFiatProviders`
+#    patala-uniffi/Cargo.toml), so `PatalaRailNewFiat`/`PatalaFiatProviders`
 #    (examples/fiatroundtrip) are actually reachable. This is the ONLY
 #    difference from `run-example`/`test` above — same generate -> build ->
 #    run pipeline, just with $(FEATURES) pinned to `fiat-all` regardless of
@@ -145,7 +162,7 @@ test: generate
 run-example-fiat:
 	$(MAKE) FEATURES=fiat-all generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
-		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		CGO_LDFLAGS="-lpatala_uniffi -L$(PKG_DIR)" \
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		go run -tags fiat ./examples/fiatroundtrip
@@ -157,7 +174,7 @@ run-example-fiat:
 test-fiat:
 	$(MAKE) FEATURES=fiat-all generate
 	cd $(CURDIR) && CGO_ENABLED=1 \
-		CGO_LDFLAGS="-lpatala_py -L$(PKG_DIR)" \
+		CGO_LDFLAGS="-lpatala_uniffi -L$(PKG_DIR)" \
 		DYLD_LIBRARY_PATH="$(PKG_DIR):$$DYLD_LIBRARY_PATH" \
 		LD_LIBRARY_PATH="$(PKG_DIR):$$LD_LIBRARY_PATH" \
 		$(GATE) --min $(GATE_MIN_FIAT) $(GATE_REQUIRE_FIAT) -- -tags fiat ./...

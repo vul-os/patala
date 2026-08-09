@@ -29,7 +29,7 @@ The core, the rails and the polyglot layer are all in this repo. `make check`
 runs two passes and both are gates: **293 offline tests** across the seven
 landed crates in the default workspace build, and **572 more** once every
 processor feature is compiled in
-(`cargo test -p patala-fiat --all-features` + `cargo test -p patala-py
+(`cargo test -p patala-fiat --all-features` + `cargo test -p patala-uniffi
 --features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
 chain and no processor.
 
@@ -141,7 +141,8 @@ never does. There is no balance table, no payout queue, no ledger.
 | `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 56 (+1 gated) + 2 doctests | **no — testnet step in its README** |
 | `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 84 (+3 gated) + 5 doctests | **no — testnet step in its README** |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |
-| `patala-py` | one UniFFI surface → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-uniffi` | the one UniFFI surface, namespace `patala` → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
+| `patala-py` | the Python wheel over `patala-uniffi` (cdylib + generated `patala.py`) | — | 3 (namespace + re-export) + the CI `smoke-python` job | executed, and now CI-enforced |
 | `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still
@@ -197,9 +198,10 @@ Nothing is reimplemented per language:
 </p>
 
 1. **Rust** — direct, `patala-core` plus whichever rail crates you enable.
-2. **`patala-py`** — one UniFFI surface, generating both the Python binding
-   and (via `uniffi-bindgen-go`) the Go binding in `patala-go/`. Real
-   round-trips, real cgo, CI-enforced on both languages.
+2. **`patala-uniffi`** — the one UniFFI surface (namespace `patala`),
+   generating both the Python binding packaged by `patala-py/` and (via
+   `uniffi-bindgen-go`) the Go binding in `patala-go/`. Real round-trips,
+   real cgo, CI-enforced on both languages.
 3. **`patala-sidecar`** — a thin local HTTP server over the core, token-gated
    and fail-closed. Any language with an HTTP client can drive the substrate
    with zero FFI; keys live in one hardened process instead of being smeared

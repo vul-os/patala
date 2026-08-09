@@ -35,7 +35,7 @@ import (
 	"strings"
 	"testing"
 
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 // destinationProbes spans the shapes a fiat rail's `destination` is documented

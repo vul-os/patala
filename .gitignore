@@ -16,7 +16,8 @@ __pycache__/
 dist/
 *.so
 *.dylib
-# UniFFI-generated Python bindings + the cdylib copied next to them are build
-# output, reproduced by `patala-py/README.md`'s documented `uniffi-bindgen`
-# command — not checked in (same reasoning as `/target`).
+# UniFFI-generated bindings + the cdylib copied next to them are build output,
+# reproduced by the documented `uniffi-bindgen` commands — not checked in
+# (same reasoning as `/target`).
 /patala-py/bindings/
+/patala-uniffi/bindings/

@@ -246,8 +246,9 @@ patala/
   patala-stellar/ (or core feature)
   patala-hyperswitch/        # fiat adapter (HTTP client to self-hosted Hyperswitch)
   patala-fiat/                # direct fiat-processor adapters + the ISO-4217 currency table + the offline `manual` rail
-  patala-py/                 # Python binding (UniFFI/PyO3)
-  patala-go/                  # Go binding, generated via uniffi-bindgen-go from patala-py's UniFFI surface
+  patala-uniffi/             # THE UniFFI surface (namespace "patala") — every UniFFI language generates from this
+  patala-py/                 # Python packaging of patala-uniffi (the cdylib a wheel ships)
+  patala-go/                  # Go binding, generated via uniffi-bindgen-go from patala-uniffi's cdylib
   patala-sidecar/            # thin local HTTP server over the core
   README.md  LICENSE-MIT  LICENSE-APACHE  PATALA.md
 ```

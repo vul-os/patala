@@ -45,7 +45,7 @@ import (
 	"strings"
 	"testing"
 
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 // newOpaqueRail builds the offline stand-in for a rail that cannot check a

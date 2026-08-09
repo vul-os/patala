@@ -7,7 +7,7 @@
 // Run (from patala-go/, after `make generate` — see README.md):
 //
 //	CGO_ENABLED=1 \
-//	  CGO_LDFLAGS="-lpatala_py -Lbindings/patala" \
+//	  CGO_LDFLAGS="-lpatala_uniffi -Lbindings/patala" \
 //	  DYLD_LIBRARY_PATH="bindings/patala:$DYLD_LIBRARY_PATH" \
 //	  LD_LIBRARY_PATH="bindings/patala:$LD_LIBRARY_PATH" \
 //	  go run ./examples/roundtrip
@@ -20,14 +20,10 @@ import (
 	"fmt"
 	"os"
 
-	// The generated Go source still declares `package patala_py` (see
-	// README.md "Which cdylib, which package name?" — uniffi-bindgen-go
-	// v0.5.0's `package_name` config only renames the output directory, not
-	// the `package` clause itself, which is fixed to the crate's UniFFI
-	// namespace baked in by patala-py's own `uniffi::setup_scaffolding!()`
-	// call, which this package does not touch). Aliasing the import to
-	// `patala` keeps the Go call sites reading naturally regardless.
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	// No import alias. The generated file declares `package patala`, because
+	// that is the UniFFI namespace patala-uniffi sets explicitly — see
+	// README.md "Which cdylib, which package name?".
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 func must[T any](v T, err error) T {

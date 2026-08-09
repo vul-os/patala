@@ -14,13 +14,11 @@ import (
 	"errors"
 	"testing"
 
-	// The generated Go source declares `package patala_py` regardless of the
-	// output directory name — uniffi-bindgen-go's `package_name` config only
-	// renames the directory, and the package clause is fixed to the UniFFI
-	// namespace patala-py's `uniffi::setup_scaffolding!()` derives from its
-	// crate name. Aliasing the import is the documented convention for every
-	// call site in this module (see ../README.md).
-	patala "github.com/vul-os/patala/patala-go/bindings/patala"
+	// The generated Go source declares `package patala`: uniffi-bindgen-go
+	// takes the package clause from the UniFFI namespace, and patala-uniffi
+	// sets that namespace explicitly (see ../README.md "Which cdylib, which
+	// package name?"). No import alias is needed anywhere in this module.
+	"github.com/vul-os/patala/patala-go/bindings/patala"
 )
 
 // newMock builds the same offline rail ../examples/roundtrip uses.

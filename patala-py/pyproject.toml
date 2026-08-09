@@ -26,10 +26,17 @@ Repository = "https://github.com/vul-os/patala"
 # maturin's native UniFFI support (`-b uniffi` / `bindings = "uniffi"`) drives
 # this crate's OWN `uniffi-bindgen` binary target (`src/bin/uniffi_bindgen.rs`,
 # already required for the manual `cargo run --bin uniffi-bindgen` flow this
-# crate's README documents) to generate `patala_py.py` and bundles it into the
-# wheel next to the compiled `cdylib`. No hand-written Python package, no
+# crate's README documents) to generate the Python wrapper and bundle it into
+# the wheel next to the compiled `cdylib`. No hand-written Python package, no
 # separately-installed `uniffi-bindgen` CLI, no `[project.scripts]` shim — the
 # exact same generator this crate already ships is what maturin calls.
+#
+# The generated module is named after patala's UniFFI NAMESPACE, which
+# `patala-uniffi` declares as "patala" — so it is `patala.py` and the import is
+# `import patala`, while the native library it loads is still this crate's own
+# `libpatala_py`. That changed when the surface moved out of this crate into
+# `patala-uniffi`; see README.md's first section. `module-name` below is
+# unchanged and still names this crate's cdylib.
 [tool.maturin]
 bindings = "uniffi"
 # `[lib] crate-type = ["cdylib", "lib"]` in Cargo.toml already provides the

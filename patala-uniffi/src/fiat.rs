@@ -12,7 +12,7 @@
 //! always-on `manual` rail, each with its own `<Provider>Config` struct --
 //! different field sets, different requiredness, different defaults (see
 //! each adapter's own `config.rs` in `patala-fiat`). Mirroring
-//! `patala-py`'s existing per-rail pattern (`new_solana`, `new_stellar`,
+//! this crate's existing per-rail pattern (`new_solana`, `new_stellar`,
 //! `new_hyperswitch` in `lib.rs`) would mean 20 more
 //! `#[uniffi::constructor]`s, each with its own bespoke argument list, each
 //! needing its own `#[cfg]`-gated `impl` block (see `lib.rs`'s comment on
@@ -70,7 +70,7 @@
 //! `--all-features`-style tests and the Go binding's regeneration step --
 //! see `patala-go/Makefile`). This mirrors `patala-fiat/Cargo.toml`'s own
 //! per-adapter feature list exactly, just namespaced under `fiat-` on this
-//! crate's side to avoid colliding with `patala-py`'s own
+//! crate's side to avoid colliding with this crate's own
 //! `solana`/`stellar`/`hyperswitch` feature names.
 //!
 //! Requesting a provider whose feature was not compiled in (e.g. calling
@@ -94,7 +94,7 @@ use crate::{PatalaError, PatalaRail};
 fn not_compiled_in(provider: &str, feature: &str) -> PatalaError {
     PatalaError::InvalidRequest {
         message: format!(
-            "patala-py was built without --features {feature}; the {provider:?} fiat rail is not available in this build"
+            "patala-uniffi was built without --features {feature}; the {provider:?} fiat rail is not available in this build"
         ),
     }
 }
@@ -766,7 +766,7 @@ impl PatalaRail {
     }
 }
 
-/// Every fiat provider name this specific build of `patala-py` can actually
+/// Every fiat provider name this specific build of `patala-uniffi` can actually
 /// construct via [`PatalaRail::new_fiat`] -- `"manual"` always, plus
 /// whichever `fiat-<name>` Cargo features were compiled in. Lets a caller
 /// (e.g. cackle) discover what is available at runtime instead of
@@ -900,7 +900,7 @@ mod tests {
     }
 
     // The tests below only run when the matching feature is enabled
-    // (`cargo test -p patala-py --features fiat-stripe,fiat-paystack,...`)
+    // (`cargo test -p patala-uniffi --features fiat-stripe,fiat-paystack,...`)
     // and only ever CONSTRUCT a rail (never `charge`/`verify`, which would
     // dial a real processor) -- exactly the same offline-construction-only
     // precedent `new_solana`/`new_stellar`/`new_hyperswitch`'s own tests in

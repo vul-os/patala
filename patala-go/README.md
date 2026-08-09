@@ -2,13 +2,13 @@
 
 A Go binding over `patala-core`, generated with
 [`uniffi-bindgen-go`](https://github.com/NordSecurity/uniffi-bindgen-go) from
-the **same** `#[uniffi::export]` surface `patala-py` already exposes
-(`patala-py/src/lib.rs`) — the literal "M×1, never M×N" principle `PATALA.md`
-§5 states: adapters are written once in Rust, and every language is a
-generated consumer of that one definition. Nothing in this directory
+the **one** `#[uniffi::export]` surface the workspace has
+(`patala-uniffi/src/lib.rs`) — the literal "M×1, never M×N" principle
+`PATALA.md` §5 states: adapters are written once in Rust, and every language
+is a generated consumer of that one definition. Nothing in this directory
 reimplements `PatalaRail`, `RailClass`, `RailCapabilities`, `Quote`, or
-`Receipt` — it consumes the exact same UniFFI metadata `patala-py`'s cdylib
-already carries, targeted at a different output language.
+`Receipt` — it consumes the exact same UniFFI metadata `patala-py` ships to
+Python, targeted at a different output language.
 
 **Read this before reaching for it:** this binding uses cgo. If your Go
 project needs a pure-static, cross-compiles-trivially binary (see "The cgo
@@ -19,37 +19,51 @@ path over the sidecar.
 
 ## Which cdylib, which package name?
 
-`patala-py`'s crate is named `patala-py` and its `Cargo.toml` builds a
-`cdylib` (`libpatala_py.dylib` / `.so`) so **Python** can load it — but the
-compiled artifact itself is not Python-specific. UniFFI's cdylib carries
-generic C-ABI scaffolding plus embedded metadata describing the whole
-`#[uniffi::export]` surface; that is precisely what lets `uniffi-bindgen-go`,
-`uniffi-bindgen` (Python), and a hypothetical Swift/Kotlin bindgen all target
-the *same* compiled library. So `patala-go` does not add a new Rust crate or
-touch `patala-py`/`patala-core` — it points `uniffi-bindgen-go` directly at
-`target/debug/libpatala_py.dylib` (built by `cargo build -p patala-py`,
-unmodified) and generates a Go package from it.
+`patala-uniffi` owns the workspace's single `#[uniffi::export]` surface and
+builds a `cdylib` (`libpatala_uniffi.dylib` / `.so`). That artifact is not
+specific to any language: a UniFFI cdylib carries generic C-ABI scaffolding
+plus embedded metadata describing the whole exported surface, which is
+precisely what lets `uniffi-bindgen-go`, `uniffi-bindgen` (Python), and the
+Swift/Kotlin generators all target the *same* compiled library. So `patala-go`
+adds no Rust crate and touches no Rust source — it points `uniffi-bindgen-go`
+at `target/debug/libpatala_uniffi.dylib` (built by
+`cargo build -p patala-uniffi`, unmodified) and generates a Go package from
+it.
 
-**One naming wrinkle, stated plainly:** `uniffi.toml`'s
-`[bindings.go] package_name = "patala"` only renames the *output directory*
-(`bindings/patala/` instead of `bindings/patala_py/`) — it does **not**
-rename the Go `package` clause inside the generated file. That clause is
-fixed to the UniFFI *namespace*, which `patala-py`'s own
-`uniffi::setup_scaffolding!()` call derives from the crate name
-(`patala_py`), and this package does not touch `patala-py`'s source to change
-that. So the generated file at `bindings/patala/patala_py.go` genuinely
-starts with `package patala_py`. `examples/roundtrip/main.go` works around
-this with an import alias — `patala "github.com/vul-os/patala/patala-go/bindings/patala"`
-— which is enough for every call site to read naturally (`patala.PatalaRailNewMock(...)`,
-`patala.RailClassNonCustodialFinal`, etc.) without needing to change anything
-upstream. Any Go code importing this package should do the same.
+**The Go package clause is `patala`.** `uniffi-bindgen-go` takes both the
+output directory and the `package` clause from the UniFFI *namespace*, and
+`patala-uniffi/src/lib.rs` declares that namespace explicitly:
+`uniffi::setup_scaffolding!("patala")`. So `make generate` writes
+`bindings/patala/patala.go`, it begins `package patala`, and Go code imports
+it with no alias:
 
-If this two-name situation (directory `patala`, package clause `patala_py`)
-ever feels confusing in practice, the honest fix is to extract a
-neutrally-named `patala-uniffi` crate that both `patala-py` and `patala-go`
-build against, with its own `uniffi::setup_scaffolding!("patala")` call —
-noted here as a legitimate future cleanup, not built now (`PATALA.md`'s
-convention: note deferred items, don't build them speculatively).
+```go
+import "github.com/vul-os/patala/patala-go/bindings/patala"
+```
+
+There is no `uniffi.toml` in this directory any more, and no import alias in
+`examples/roundtrip/main.go`.
+
+### What this used to be, and why it changed
+
+Until the `patala-uniffi` crate existed, the whole exported surface lived in
+`patala-py` — the only cdylib — so UniFFI derived the namespace from *that*
+crate name. The generated file genuinely began `package patala_py`, this
+directory carried a `uniffi.toml` whose `package_name = "patala"` renamed only
+the output *directory* (never the package clause), and every Go call site
+needed `patala "…/bindings/patala"` to read naturally. This README described
+that as a wrinkle and named the fix: "extract a neutrally-named
+`patala-uniffi` crate that both `patala-py` and `patala-go` build against,
+with its own `uniffi::setup_scaffolding!("patala")`". That is what happened,
+and the reason it stopped being a deferrable cosmetic issue is that ten more
+languages are being generated from this surface — every one of them would
+have inherited a Python-flavoured module name for a surface with nothing
+Python-specific in it.
+
+`make generate` now asserts the package clause rather than assuming it: if
+`bindings/patala/patala.go` ever stops beginning with `package patala`, the
+target fails and names the Rust cause, instead of leaving Go call sites to
+break with an error that points nowhere near `setup_scaffolding!`.
 
 ## What's exposed
 
@@ -69,16 +83,16 @@ instead of Python:
   Today its only feature-free constructor is
   `PatalaRailNewMock(...)`, built on `patala_core::MockRail`. When a real rail
   (`patala-solana`/`patala-stellar`/`patala-hyperswitch`) grows a constructor
-  in `patala-py`, that constructor becomes reachable here too, the next time
-  bindings are regenerated — no redesign, same as `patala-py`'s "adding a
+  in `patala-uniffi`, that constructor becomes reachable here too, the next time
+  bindings are regenerated — no redesign, same as `patala-uniffi`'s "adding a
   real rail later" story.
 - `PatalaRailNewFiat(provider string, config map[string]string) (*PatalaRail,
   error)` — reaches `patala-fiat`'s 20 processor adapters (Stripe, Paystack,
   Adyen, ...) plus the always-on `manual` rail through ONE by-name registry
-  constructor, generated the moment `patala-py`'s cdylib was built with
+  constructor, generated the moment `patala-uniffi`'s cdylib was built with
   `--features fiat` (see "`patala-fiat` (20 processor adapters)" below —
   this is generated Go, not hand-written, from the exact same
-  `#[uniffi::export]` surface `patala-py`'s own `src/fiat.rs` defines).
+  `#[uniffi::export]` surface `patala-uniffi/src/fiat.rs` defines).
 - `DestinationStatus` (`Malformed` / `WrongNetwork` / `NotAWallet` /
   `StructurallyValid` / `Unknown`) and `DestinationVerdict` — the offline
   pre-flight check, `rail.ValidateDestination(addr)`. Five variants, never
@@ -147,7 +161,7 @@ optional-feature mechanism the way Cargo does, so
 entirely — this is what keeps the plain `make build`/`make test`/
 `make run-example` targets working unchanged against a MockRail-only
 cdylib (they never pass `-tags fiat`); only `make run-example-fiat`/
-`make test-fiat` do. This is a Go-side concern only — `patala-py`'s own
+`make test-fiat` do. This is a Go-side concern only — `patala-uniffi`'s own
 Rust code has no equivalent tag, since Cargo features already solve this
 for Rust.
 
@@ -155,7 +169,7 @@ for Rust.
 
 This is not a footnote. `uniffi-bindgen-go`'s generated Go file contains
 `import "C"` and hand-written cgo glue that calls into the UniFFI C-ABI
-scaffolding compiled into `libpatala_py.{dylib,so}`. Concretely, choosing this
+scaffolding compiled into `libpatala_uniffi.{dylib,so}`. Concretely, choosing this
 binding over the sidecar means:
 
 - **`CGO_ENABLED=1` is mandatory.** The generated bindings will not compile
@@ -167,12 +181,12 @@ binding over the sidecar means:
   `cgo` shells out to on your platform), not just a Go toolchain. CI images
   that only install Go now need a C compiler too.
 - **This breaks a pure-Go static single binary.** A binary that imports
-  `patala-go` dynamically links against `libpatala_py.{dylib,so}` (see the
+  `patala-go` dynamically links against `libpatala_uniffi.{dylib,so}` (see the
   `CGO_LDFLAGS`/`-L`/`-l` flags in `Makefile`) — it is no longer a single
   self-contained static executable. Verified concretely in this environment:
   `otool -L` on the built `examples/roundtrip` binary shows a direct
   `LC_LOAD_DYLIB` entry pointing at the **build-time absolute path** of
-  `libpatala_py.dylib` (Rust's default dylib install name is not
+  `libpatala_uniffi.dylib` (Rust's default dylib install name is not
   rpath-relative), alongside `CoreFoundation`/`libSystem`. The compiled Rust
   library has to travel with the binary (or the install name has to be
   fixed up with `install_name_tool`/`-rpath`, or `LD_LIBRARY_PATH`/
@@ -182,11 +196,11 @@ binding over the sidecar means:
   static Go binary that just runs.
 - **Cross-compilation gets much harder.** Plain `GOOS=linux GOARCH=arm64 go
   build` from a macOS/amd64 host, which "just works" for pure Go, now needs a
-  matching cross C toolchain *and* a `libpatala_py` built for that same
+  matching cross C toolchain *and* a `libpatala_uniffi` built for that same
   target triple. This is exactly the pain `CGO_ENABLED=0` exists to avoid.
 - **Slower, more fragile builds.** cgo compilation is slower than pure Go,
   and adds a second build system's (Cargo's) failure modes to your Go build:
-  if `libpatala_py.{dylib,so}` isn't already built and on the linker's
+  if `libpatala_uniffi.{dylib,so}` isn't already built and on the linker's
   search path, `go build` fails at the link step, not with a Go-shaped error.
 
 **If your Go project prizes a pure-static binary — `cackle`
@@ -207,7 +221,7 @@ hard requirement, that trade is almost always worth it.
 
 ### 1. Install `uniffi-bindgen-go` — pin the version to match this workspace
 
-The workspace's `patala-py/Cargo.toml` pins `uniffi = "0.29"` (`Cargo.lock`
+The workspace's `patala-uniffi/Cargo.toml` pins `uniffi = "0.29"` (`Cargo.lock`
 resolves it to `0.29.5`). `uniffi-bindgen-go` is versioned against a specific
 `uniffi-rs` release (its own README documents this table), so the installed
 generator **must** target `0.29.5` too, or generation can fail against
@@ -232,11 +246,11 @@ code.
 
 ```bash
 # From the patala workspace root.
-cargo build -p patala-py
+cargo build -p patala-uniffi
 ```
 
-This produces `target/debug/libpatala_py.dylib` (macOS) or
-`target/debug/libpatala_py.so` (Linux) — see "Which cdylib, which package name?" above for why
+This produces `target/debug/libpatala_uniffi.dylib` (macOS) or
+`target/debug/libpatala_uniffi.so` (Linux) — see "Which cdylib, which package name?" above for why
 `patala-go` reuses this rather than adding a new Rust crate.
 
 ### 3. Generate the Go bindings
@@ -244,12 +258,11 @@ This produces `target/debug/libpatala_py.dylib` (macOS) or
 ```bash
 # From patala-go/.
 mkdir -p bindings
-uniffi-bindgen-go ../target/debug/libpatala_py.dylib \
+uniffi-bindgen-go ../target/debug/libpatala_uniffi.dylib \
     --out-dir bindings \
-    --library \
-    --config uniffi.toml
-cp ../target/debug/libpatala_py.dylib bindings/patala/
-# (Linux: libpatala_py.so throughout.)
+    --library
+cp ../target/debug/libpatala_uniffi.dylib bindings/patala/
+# (Linux: libpatala_uniffi.so throughout.)
 ```
 
 `--library` is the auto-detecting mode added for UniFFI's "library mode" —
@@ -257,17 +270,16 @@ it reads the compiled cdylib's embedded metadata directly, the same way
 `patala-py`'s own `--library` invocation works for Python (see
 `patala-py/README.md`'s "Build & run"); there is no `.udl` file in this
 tree, only proc-macro (`#[uniffi::export]`) definitions, so `--library` mode
-is required, not optional. This produces `bindings/patala/patala_py.go` +
-`bindings/patala/patala.h` — see "Which cdylib, which package name?" above
-for why the directory is `patala` but the file's `package` clause still
-reads `patala_py`.
+is required, not optional. This produces `bindings/patala/patala.go` +
+`bindings/patala/patala.h` — directory, filename and `package` clause all
+taken from the UniFFI namespace, `patala`.
 
 ### 4. Build / run against it (cgo flags required — see "The cgo cost")
 
 ```bash
 cd patala-go
 CGO_ENABLED=1 \
-  CGO_LDFLAGS="-lpatala_py -Lbindings/patala" \
+  CGO_LDFLAGS="-lpatala_uniffi -Lbindings/patala" \
   DYLD_LIBRARY_PATH="bindings/patala:$DYLD_LIBRARY_PATH" \
   LD_LIBRARY_PATH="bindings/patala:$LD_LIBRARY_PATH" \
   go run ./examples/roundtrip
@@ -379,7 +391,7 @@ wrong variant on the Rust side (which neither static check can see).
 currency surfaces as a typed error rather than a crash.
 
 `examples/fiatroundtrip/main.go` (`//go:build fiat`, see "`patala-fiat`"
-above) is the Go analogue of `patala-py/src/fiat.rs`'s own tests: it lists
+above) is the Go analogue of `patala-uniffi/src/fiat.rs`'s own tests: it lists
 `PatalaFiatProviders()`, builds `"manual"` via `PatalaRailNewFiat` and does
 a genuine, fully offline `Charge` → `Verify` round trip against it
 (asserting the honestly-pending contract: `AmountMinor == 0` and
@@ -391,7 +403,42 @@ charges/verifies, which would dial a real processor) a `"stripe"` rail from
 a config map to prove `RailClass`/`HoldsFunds` come through correctly for a
 feature-gated processor adapter too.
 
-## Verified in this environment (2026-07-21)
+## Verified in this environment (2026-08-09) — after the `patala-uniffi` split
+
+The whole pipeline was re-run here after the surface moved out of `patala-py`
+into `patala-uniffi`. Real commands, real output:
+
+- **`cargo build -p patala-uniffi`** (via `make generate`) — built
+  `target/debug/libpatala_uniffi.dylib`.
+- **`uniffi-bindgen-go <lib> --out-dir bindings --library`** — no
+  `--config`, because `uniffi.toml` was deleted along with the wrinkle it
+  worked around. Produced `bindings/patala/patala.go` +
+  `bindings/patala/patala.h`.
+- **The generated file's first line is `package patala`.** `make generate`
+  asserts it; the target printed `generate: OK — package clause is 'patala'`.
+- **No import alias anywhere in this module.** `examples/roundtrip/main.go`,
+  `examples/fiatroundtrip/main.go` and all five `bindingtest` files now
+  import `"github.com/vul-os/patala/patala-go/bindings/patala"` plainly.
+- **`make test`** — `go-test-gate: OK — 19 top-level tests passed (min 19),
+  10 required tests present.` (13 subtests.)
+- **`make test-fiat`** — `go-test-gate: OK — 34 top-level tests passed
+  (min 34), 19 required tests present.` (22 subtests.) Neither floor nor any
+  `--require`d test name was touched: the surface's *shape* did not change,
+  only its namespace, which is the point.
+- **`make run-example`** and **`make run-example-fiat`** — both printed the
+  same assertions as the 2026-07-21 runs above, through cgo into the new
+  cdylib, ending `ALL GO ROUNDTRIP ASSERTIONS PASSED` and `ALL GO FIAT
+  ROUNDTRIP ASSERTIONS PASSED`.
+
+## Verified in this environment (2026-07-21) — before the `patala-uniffi` split
+
+Historical record, left as observed. Everything below ran against
+`cargo build -p patala-py` and `libpatala_py.dylib`, because at that date
+`patala-py` was the only cdylib and the whole `#[uniffi::export]` surface
+lived in it — which is exactly the situation "Which cdylib, which package
+name?" above describes as having been fixed. The pipeline is otherwise
+identical; see "Verified in this environment (2026-08-09)" below for the same
+steps re-run against `patala-uniffi`.
 
 Every step in "Build & run, step by step" was actually executed here, against
 a real toolchain, not just written:
@@ -460,7 +507,7 @@ output shown above is from that final, in-tree run.
 `maturin`/Python tooling was not needed anywhere in this pipeline — this is a
 pure Rust+Go+cgo flow.
 
-## `patala-fiat` exposure: verified in this environment (2026-07-21)
+## `patala-fiat` exposure: verified in this environment (2026-07-21) — same caveat
 
 Every step below was actually executed here, against the same real
 toolchain as above:
@@ -514,7 +561,7 @@ toolchain as above:
   `PatalaRailNewFiat`/`PatalaFiatProviders`.
 
 **UNVERIFIED AGAINST LIVE** for all 20 processor adapters, same as
-`patala-py`'s own fiat tests and `patala-fiat` itself — the Go example only
+`patala-uniffi`'s own fiat tests and `patala-fiat` itself — the Go example only
 ever constructs `stripe` (never charges/verifies it) and only ever
 charges/verifies `manual` (which never touches the network at all).
 
@@ -523,8 +570,8 @@ charges/verifies `manual` (which never touches the network at all).
 - `PatalaRailNewFiat`/`PatalaFiatProviders` only exist in bindings
   generated from a cdylib built with `--features fiat` (plus whichever
   `fiat-<name>` features you actually need) — a plain `cargo build -p
-  patala-py` (what `make build`/`make test`/`make run-example` still do by
-  default) does **not** include them. Regenerate with
+  patala-uniffi` (what `make build`/`make test`/`make run-example` still do
+  by default) does **not** include them. Regenerate with
   `make FEATURES=fiat-all generate` (or a narrower feature list) before
   wiring cackle onto this path.
 - Every `config` value is a string, even for numeric/boolean fields (Go's

@@ -181,8 +181,72 @@
     font-family:var(--mono);font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.12em;
     color:var(--ink-faint);
   }
-  .dn-count{font-family:var(--mono);font-size:var(--fs-micro);color:var(--hair-strong);color:var(--ink-faint);opacity:.75}
+  /* No opacity here. This used to be `color:var(--ink-faint);opacity:.75`,
+     which is not a colour you can measure from the token: it composites to
+     #656c8a on the dark rail (3.19:1) and #7d8299 on the light one (3.65:1),
+     both under WCAG AA's 4.5:1 for normal text — a contrast failure invisible
+     to anyone reading the stylesheet, because the token itself passes. The
+     tier is now stated as a real colour and measured as one: 5.00:1 dark,
+     5.08:1 light, both against the rail's own ground. */
+  .dn-count{font-family:var(--mono);font-size:var(--fs-micro);color:var(--ink-faint)}
   .dn-list{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:6px}
+
+  /* ── THE FILTER ───────────────────────────────────────────────────────────
+     Seventeen documents is past the point where a list can be scanned, so the
+     rail gets a way to be asked. It filters document titles and — for the
+     document you have open — its headings, which is the half that makes it
+     worth having: "webhook" finds the section, not just the page. */
+  .dn-find{position:relative;display:flex;align-items:center;flex:none;padding:8px 10px;border-bottom:1px solid var(--hair)}
+  html:not(.js) .dn-find{display:none}
+  .dn-find svg{position:absolute;left:20px;width:14px;height:14px;color:var(--ink-faint);pointer-events:none}
+  .dn-find input{
+    width:100%;min-height:36px;padding:6px 34px;border:1px solid var(--hair);border-radius:3px;
+    background:var(--canvas);color:var(--ink);font-family:var(--body);font-size:13px;
+  }
+  .dn-find input::placeholder{color:var(--ink-faint)}
+  /* The default search affordance is a UA-drawn "x" that appears mid-typing and
+     shifts the text; Esc already clears, and the kbd hint occupies that corner. */
+  .dn-find input::-webkit-search-cancel-button{display:none}
+  .dn-find kbd{
+    position:absolute;right:20px;font-family:var(--mono);font-size:11px;line-height:1;
+    padding:3px 6px;border:1px solid var(--hair);border-radius:3px;color:var(--ink-faint);
+    background:var(--surface-raised);pointer-events:none;
+  }
+  .dn-find input:focus{outline:none;border-color:var(--vermilion);box-shadow:0 0 0 3px color-mix(in srgb, var(--vermilion) 26%, transparent)}
+  .dn-find input:focus ~ kbd{opacity:0}
+  .dn-empty{margin:14px 12px;font-size:12.5px;color:var(--ink-faint)}
+  /* Available to assistive technology, absent from the layout. Not
+     `display:none`, which would take it out of the accessibility tree too and
+     leave aria-describedby pointing at nothing. */
+  .vh{
+    position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+    clip-path:inset(50%);white-space:nowrap;border:0;
+  }
+
+  /* ── GROUPS ───────────────────────────────────────────────────────────────
+     A flat list of seventeen says nothing about how the documentation is
+     shaped. Five named groups do: where to start, how it is put together, how
+     to consume it, what the rails are, how to run it. Each collapses, and the
+     collapsed set is remembered across page loads — the whole point of
+     collapsing something is that it stays collapsed. */
+  .dn-group + .dn-group{margin-top:2px}
+  .dn-gtoggle{
+    display:flex;align-items:center;gap:7px;width:100%;min-height:34px;padding:7px 8px;
+    background:none;border:0;cursor:pointer;text-align:left;
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;
+    color:var(--ink-faint);border-radius:2px;
+  }
+  .dn-gtoggle:hover{color:var(--ink-dim);background:var(--surface-raised)}
+  .dn-caret{width:13px;height:13px;flex:none;transition:transform .18s ease}
+  .dn-gtoggle[aria-expanded="true"] .dn-caret{transform:rotate(90deg)}
+  .dn-gitems{overflow:hidden}
+  .dn-gtoggle[aria-expanded="false"] + .dn-gitems{display:none}
+  /* A group holding the open document may not be collapsed away silently —
+     the rail would then claim you are nowhere. */
+  .dn-group.has-current .dn-gtoggle{color:var(--ink-dim)}
+  @media(prefers-reduced-motion:reduce){.dn-caret{transition:none}}
+  /* Filtering hides rows, and a group whose rows are all hidden is noise. */
+  .dn-group[hidden],.dn-list a[hidden]{display:none}
   /* The transition names its properties. As the bare shorthand `transition:.15s`
      it meant `all`, which includes VISIBILITY — and visibility is inherited, so
      when the phone sheet flipped from hidden to visible every link inside it
@@ -289,6 +353,10 @@
   .docs-main{min-width:0}
   .docs-title{font-family:var(--mono);font-size:var(--fs-micro);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:var(--sp-3)}
   .docs-title .sep{margin:0 8px;color:var(--hair-strong)}
+  /* The crumb now names the section as well as the document — seventeen
+     documents in five groups, so "which part of the docs am I in" is a real
+     question. Below 600px the section is dropped rather than wrapped. */
+  @media(max-width:600px){.docs-title .crumb-sec,.docs-title .crumb-sec + .sep{display:none}}
 
   /* THE MEASURE IS ON THE PROSE, NOT ON THE ARTICLE. It used to be
      `.markdown{max-width:74ch}`, which capped the paragraphs correctly and
@@ -510,16 +578,71 @@
   <aside class="docs-nav" id="docsNav" aria-label="Documentation contents">
     <div class="dn-top">
       <span class="dn-label">patala docs</span>
-      <span class="dn-count">4 documents</span>
+      <span class="dn-count">17 documents</span>
       <button class="dn-close" type="button" aria-label="Close contents">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </div>
-    <nav class="dn-list" id="dnList">
-      <a data-slug="overview" href="#overview"><span class="dn-n">01</span><span class="dn-t">Overview</span></a>
-      <a data-slug="rails" href="#rails"><span class="dn-n">02</span><span class="dn-t">The rails &amp; interface</span></a>
-      <a data-slug="self-host" href="#self-host"><span class="dn-n">03</span><span class="dn-t">Self-host &amp; vendor</span></a>
-      <a data-slug="status" href="#status"><span class="dn-n">04</span><span class="dn-t">Status</span></a>
+    <!-- The filter is a real control, not decoration: seventeen documents with
+         their own outlines is more than a rail can show at once, so there has
+         to be a way to ask for one by name. It searches document titles AND
+         the headings inside the open document, types straight into from "/",
+         and clears with Esc. With JS off it is display:none — a search box
+         that cannot search is worse than none. -->
+    <div class="dn-find">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.4"/><path d="m16 16 4 4"/></svg>
+      <input id="dnFilter" type="search" autocomplete="off" spellcheck="false"
+             placeholder="Filter&hellip;" aria-label="Filter documents and headings"
+             aria-describedby="dnFilterHint">
+      <kbd aria-hidden="true">/</kbd>
+    </div>
+    <p class="vh" id="dnFilterHint">Type to filter the contents. Press slash to focus this field, Escape to clear it.</p>
+    <nav class="dn-list" id="dnList" aria-label="Documents">
+      <!-- BEGIN generated:nav -->
+      <div class="dn-group" data-group="dng-start">
+        <button class="dn-gtoggle" type="button" aria-expanded="true" aria-controls="dng-start"><svg class="dn-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span>Start</span></button>
+        <div class="dn-gitems" id="dng-start">
+          <a data-slug="overview" href="#overview"><span class="dn-n">01</span><span class="dn-t">What patala is</span></a>
+          <a data-slug="quickstart" href="#quickstart"><span class="dn-n">02</span><span class="dn-t">Quickstart</span></a>
+          <a data-slug="choose" href="#choose"><span class="dn-n">03</span><span class="dn-t">Choosing a mode</span></a>
+        </div>
+      </div>
+      <div class="dn-group" data-group="dng-architecture">
+        <button class="dn-gtoggle" type="button" aria-expanded="true" aria-controls="dng-architecture"><svg class="dn-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span>Architecture</span></button>
+        <div class="dn-gitems" id="dng-architecture">
+          <a data-slug="interface" href="#interface"><span class="dn-n">04</span><span class="dn-t">The rail interface</span></a>
+          <a data-slug="polyglot" href="#polyglot"><span class="dn-n">05</span><span class="dn-t">One core, every language</span></a>
+          <a data-slug="offline" href="#offline"><span class="dn-n">06</span><span class="dn-t">The offline default build</span></a>
+        </div>
+      </div>
+      <div class="dn-group" data-group="dng-consuming-it">
+        <button class="dn-gtoggle" type="button" aria-expanded="true" aria-controls="dng-consuming-it"><svg class="dn-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span>Consuming it</span></button>
+        <div class="dn-gitems" id="dng-consuming-it">
+          <a data-slug="rust" href="#rust"><span class="dn-n">07</span><span class="dn-t">Rust, embedded</span></a>
+          <a data-slug="python" href="#python"><span class="dn-n">08</span><span class="dn-t">Python binding</span></a>
+          <a data-slug="go" href="#go"><span class="dn-n">09</span><span class="dn-t">Go binding</span></a>
+          <a data-slug="sidecar" href="#sidecar"><span class="dn-n">10</span><span class="dn-t">The sidecar HTTP API</span></a>
+        </div>
+      </div>
+      <div class="dn-group" data-group="dng-the-rails">
+        <button class="dn-gtoggle" type="button" aria-expanded="true" aria-controls="dng-the-rails"><svg class="dn-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span>The rails</span></button>
+        <div class="dn-gitems" id="dng-the-rails">
+          <a data-slug="crypto" href="#crypto"><span class="dn-n">11</span><span class="dn-t">Solana &amp; Stellar</span></a>
+          <a data-slug="fiat" href="#fiat"><span class="dn-n">12</span><span class="dn-t">Hyperswitch &amp; fiat</span></a>
+          <a data-slug="refunds" href="#refunds"><span class="dn-n">13</span><span class="dn-t">Paying a customer back</span></a>
+          <a data-slug="economics" href="#economics"><span class="dn-n">14</span><span class="dn-t">Splits &amp; shared economics</span></a>
+        </div>
+      </div>
+      <div class="dn-group" data-group="dng-operating">
+        <button class="dn-gtoggle" type="button" aria-expanded="true" aria-controls="dng-operating"><svg class="dn-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg><span>Operating</span></button>
+        <div class="dn-gitems" id="dng-operating">
+          <a data-slug="self-host" href="#self-host"><span class="dn-n">15</span><span class="dn-t">Self-host &amp; vendor</span></a>
+          <a data-slug="trouble" href="#trouble"><span class="dn-n">16</span><span class="dn-t">Troubleshooting</span></a>
+          <a data-slug="status" href="#status"><span class="dn-n">17</span><span class="dn-t">Status &amp; verification</span></a>
+        </div>
+      </div>
+<!-- END generated:nav -->
+      <p class="dn-empty" id="dnEmpty" hidden>No document or heading matches.</p>
     </nav>
   </aside>
   <main class="docs-main">
@@ -531,12 +654,41 @@
          the styled render, since every listed file is itself readable text. -->
     <noscript>
       <div class="docs-error" style="margin-bottom:20px">
-        This page renders markdown with JavaScript. With it off, read the source files directly:
-        <a href="./docs/overview.md">Overview</a>,
-        <a href="./docs/rails-interface.md">The rails &amp; interface</a>,
-        <a href="./docs/self-host-vendor.md">Self-host &amp; vendor</a>,
-        <a href="./docs/status.md">Status</a> —
-        or browse them on <a href="https://github.com/vul-os/patala/tree/main/site/docs" target="_blank" rel="noopener">GitHub</a>.
+        <p style="margin:0 0 .6em">This page renders markdown with JavaScript. With it off, read the source files directly, or browse them on <a href="https://github.com/vul-os/patala/tree/main/docs" target="_blank" rel="noopener">GitHub</a>.</p>
+        <!-- BEGIN generated:noscript -->
+        <p style="margin:.8em 0 .2em"><b>Start</b></p>
+        <ul style="margin:0;padding-left:1.3em">
+          <li><a href="./docs/overview.md">What patala is</a></li>
+          <li><a href="./docs/quickstart.md">Quickstart</a></li>
+          <li><a href="./docs/choosing-a-mode.md">Choosing a mode</a></li>
+        </ul>
+        <p style="margin:.8em 0 .2em"><b>Architecture</b></p>
+        <ul style="margin:0;padding-left:1.3em">
+          <li><a href="./docs/rails-interface.md">The rail interface</a></li>
+          <li><a href="./docs/polyglot.md">One core, every language</a></li>
+          <li><a href="./docs/offline-by-default.md">The offline default build</a></li>
+        </ul>
+        <p style="margin:.8em 0 .2em"><b>Consuming it</b></p>
+        <ul style="margin:0;padding-left:1.3em">
+          <li><a href="./docs/rust.md">Rust, embedded</a></li>
+          <li><a href="./docs/python.md">Python binding</a></li>
+          <li><a href="./docs/go.md">Go binding</a></li>
+          <li><a href="./docs/sidecar.md">The sidecar HTTP API</a></li>
+        </ul>
+        <p style="margin:.8em 0 .2em"><b>The rails</b></p>
+        <ul style="margin:0;padding-left:1.3em">
+          <li><a href="./docs/rails-crypto.md">Solana &amp; Stellar</a></li>
+          <li><a href="./docs/rails-fiat.md">Hyperswitch &amp; fiat</a></li>
+          <li><a href="./docs/compensating-payments.md">Paying a customer back</a></li>
+          <li><a href="./docs/shared-economics.md">Splits &amp; shared economics</a></li>
+        </ul>
+        <p style="margin:.8em 0 .2em"><b>Operating</b></p>
+        <ul style="margin:0;padding-left:1.3em">
+          <li><a href="./docs/self-host-vendor.md">Self-host &amp; vendor</a></li>
+          <li><a href="./docs/troubleshooting.md">Troubleshooting</a></li>
+          <li><a href="./docs/status.md">Status &amp; verification</a></li>
+        </ul>
+<!-- END generated:noscript -->
       </div>
     </noscript>
     <div class="docs-title" id="crumb"></div>
@@ -557,12 +709,27 @@
 
 <script>
 // The site is served statically; docs render straight from this repo's own markdown.
+// BEGIN generated:manifest
 const DOCS = [
-  {"slug":"overview","title":"Overview","path":"./docs/overview.md"},
-  {"slug":"rails","title":"The rails & interface","path":"./docs/rails-interface.md"},
-  {"slug":"self-host","title":"Self-host & vendor","path":"./docs/self-host-vendor.md"},
-  {"slug":"status","title":"Status","path":"./docs/status.md"}
+  {"slug":"overview","title":"What patala is","section":"Start","path":"./docs/overview.md"},
+  {"slug":"quickstart","title":"Quickstart","section":"Start","path":"./docs/quickstart.md"},
+  {"slug":"choose","title":"Choosing a mode","section":"Start","path":"./docs/choosing-a-mode.md"},
+  {"slug":"interface","title":"The rail interface","section":"Architecture","path":"./docs/rails-interface.md"},
+  {"slug":"polyglot","title":"One core, every language","section":"Architecture","path":"./docs/polyglot.md"},
+  {"slug":"offline","title":"The offline default build","section":"Architecture","path":"./docs/offline-by-default.md"},
+  {"slug":"rust","title":"Rust, embedded","section":"Consuming it","path":"./docs/rust.md"},
+  {"slug":"python","title":"Python binding","section":"Consuming it","path":"./docs/python.md"},
+  {"slug":"go","title":"Go binding","section":"Consuming it","path":"./docs/go.md"},
+  {"slug":"sidecar","title":"The sidecar HTTP API","section":"Consuming it","path":"./docs/sidecar.md"},
+  {"slug":"crypto","title":"Solana & Stellar","section":"The rails","path":"./docs/rails-crypto.md"},
+  {"slug":"fiat","title":"Hyperswitch & fiat","section":"The rails","path":"./docs/rails-fiat.md"},
+  {"slug":"refunds","title":"Paying a customer back","section":"The rails","path":"./docs/compensating-payments.md"},
+  {"slug":"economics","title":"Splits & shared economics","section":"The rails","path":"./docs/shared-economics.md"},
+  {"slug":"self-host","title":"Self-host & vendor","section":"Operating","path":"./docs/self-host-vendor.md"},
+  {"slug":"trouble","title":"Troubleshooting","section":"Operating","path":"./docs/troubleshooting.md"},
+  {"slug":"status","title":"Status & verification","section":"Operating","path":"./docs/status.md"}
 ];
+// END generated:manifest
 const bySlug = Object.fromEntries(DOCS.map(d=>[d.slug,d]));
 const byFile = Object.fromEntries(DOCS.map(d=>[d.path.split('/').pop().toLowerCase(),d]));
 const content = document.getElementById('content');
@@ -591,7 +758,10 @@ var scrim = document.getElementById('dnScrim');
 function sheetIsMobile(){ return window.matchMedia('(max-width:860px)').matches; }
 
 function sheetFocusables(){
-  return [...nav.querySelectorAll('a[href],button')].filter(function(el){ return el.offsetParent !== null || el.getClientRects().length; });
+  // input included: the filter is inside the sheet, and a focus trap that
+  // skips the one control a reader is most likely to want is a trap with a
+  // hole in it.
+  return [...nav.querySelectorAll('a[href],button,input')].filter(function(el){ return el.offsetParent !== null || el.getClientRects().length; });
 }
 function openSheet(){
   if(!sheetIsMobile()) return;
@@ -638,15 +808,154 @@ document.addEventListener('keydown', function(ev){
 // A width change can leave the sheet open on a layout that no longer has one.
 window.addEventListener('resize', function(){ if(!sheetIsMobile()) closeSheet(); });
 
+/* Every document row, in DOM order. The rows now live inside collapsible
+   groups, so this is an attribute selector rather than a child combinator —
+   the child combinator was the reason the old code could only ever see a flat
+   list. */
+function docRows(){ return [...document.querySelectorAll('.dn-list a[data-slug]')]; }
+
 function setActive(slug){
-  document.querySelectorAll('.dn-list > a').forEach(a=>{
+  docRows().forEach(a=>{
     var on = a.dataset.slug===slug;
     a.classList.toggle('active', on);
     // aria-current is the machine-readable half of "you are here"; the pip,
     // the rail and the ink are the human half. Three signals, one colour.
     if(on) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current');
+    var grp = a.closest('.dn-group');
+    if(on && grp){
+      grp.classList.add('has-current');
+      // A collapsed group holding the document you just opened would leave the
+      // rail claiming you are nowhere. Opening it is not overriding the
+      // reader's choice — it is answering the navigation they just performed.
+      var t = grp.querySelector('.dn-gtoggle');
+      if(t && t.getAttribute('aria-expanded')==='false') setGroup(t, true);
+    } else if(grp && !grp.querySelector('a.active')){
+      grp.classList.remove('has-current');
+    }
   });
 }
+
+/* ── collapsible groups, remembered ────────────────────────────────────────
+   Collapsing something that springs back open on the next page load is worse
+   than not offering it, so the collapsed set is persisted. Only the COLLAPSED
+   ids are stored: the default is open, so a group added to the manifest later
+   appears rather than inheriting somebody's stale preference. */
+var GROUP_KEY = 'patala-docs-collapsed';
+function collapsedSet(){
+  try{ return new Set(JSON.parse(localStorage.getItem(GROUP_KEY)||'[]')); }
+  catch(e){ return new Set(); }
+}
+function setGroup(toggle, open){
+  toggle.setAttribute('aria-expanded', String(open));
+  var id = toggle.closest('.dn-group').dataset.group;
+  var set = collapsedSet();
+  if(open) set.delete(id); else set.add(id);
+  try{ localStorage.setItem(GROUP_KEY, JSON.stringify([...set])); }catch(e){}
+}
+(function initGroups(){
+  var collapsed = collapsedSet();
+  document.querySelectorAll('.dn-group').forEach(function(g){
+    var t = g.querySelector('.dn-gtoggle');
+    if(!t) return;
+    t.setAttribute('aria-expanded', String(!collapsed.has(g.dataset.group)));
+    t.addEventListener('click', function(){
+      setGroup(t, t.getAttribute('aria-expanded')!=='true');
+    });
+  });
+})();
+
+/* ── the rail's own scroll position ────────────────────────────────────────
+   The rail scrolls in its own box. Without this, choosing document 15 reloads
+   the list scrolled back to document 1 and the reader has to find their place
+   again — every single time. Written on a rAF-coalesced scroll, restored
+   before first paint of the next render. */
+var SCROLL_KEY = 'patala-docs-railscroll';
+var dnList = document.getElementById('dnList');
+var railPending = false;
+dnList.addEventListener('scroll', function(){
+  if(railPending) return;
+  railPending = true;
+  requestAnimationFrame(function(){
+    railPending = false;
+    try{ sessionStorage.setItem(SCROLL_KEY, String(dnList.scrollTop)); }catch(e){}
+  });
+}, {passive:true});
+(function restoreRailScroll(){
+  try{
+    var v = parseFloat(sessionStorage.getItem(SCROLL_KEY)||'0');
+    if(v > 0) dnList.scrollTop = v;
+  }catch(e){}
+})();
+
+/* ── the filter ────────────────────────────────────────────────────────────
+   Matches a document by its title and by its section name, and — for the open
+   document — by the text of its own headings, which is the half that earns the
+   control: "webhook" should find the section, not only the page. A group with
+   no surviving row is hidden entirely, and a filtered view expands every group
+   so a match can never be hiding inside a collapsed one. */
+var filterInput = document.getElementById('dnFilter');
+var emptyMsg = document.getElementById('dnEmpty');
+function applyFilter(){
+  var q = (filterInput.value||'').trim().toLowerCase();
+  var any = false;
+  docRows().forEach(function(a){
+    // The outline, if this is the open document. It is inserted immediately
+    // after its own row, so the next sibling is the only place it can be —
+    // querying the group would find another document's outline.
+    var sub = (a.nextElementSibling && a.nextElementSibling.classList.contains('dn-sub'))
+      ? a.nextElementSibling : null;
+    var title = (a.textContent||'').toLowerCase();
+    var section = (a.closest('.dn-group') ? a.closest('.dn-group').textContent : '').toLowerCase();
+    var headHit = false;
+    if(sub){
+      sub.querySelectorAll('a').forEach(function(h){
+        var hit = !q || (h.textContent||'').toLowerCase().indexOf(q) > -1;
+        h.parentNode.hidden = !hit;
+        if(hit && q) headHit = true;
+      });
+    }
+    var hit = !q || title.indexOf(q) > -1 || section.indexOf(q) > -1 || headHit;
+    a.hidden = !hit;
+    if(sub) sub.hidden = !hit;
+    // A document matched by its own title shows its whole outline again.
+    if(hit && sub && !headHit) sub.querySelectorAll('li').forEach(function(li){ li.hidden = false; });
+    if(hit) any = true;
+  });
+  document.querySelectorAll('.dn-group').forEach(function(g){
+    var visible = g.querySelector('a[data-slug]:not([hidden])');
+    g.hidden = !visible;
+    var t = g.querySelector('.dn-gtoggle');
+    if(q && t) t.setAttribute('aria-expanded','true');
+    else if(!q && t) t.setAttribute('aria-expanded', String(!collapsedSet().has(g.dataset.group)));
+  });
+  emptyMsg.hidden = any;
+}
+filterInput.addEventListener('input', applyFilter);
+filterInput.addEventListener('keydown', function(ev){
+  if(ev.key==='Escape'){
+    // Esc inside the field clears it rather than closing the phone sheet: the
+    // reader's most recent action was typing, so undoing that is what they mean.
+    ev.stopPropagation();
+    if(filterInput.value){ filterInput.value=''; applyFilter(); }
+    else filterInput.blur();
+  }
+  if(ev.key==='Enter'){
+    var first = document.querySelector('.dn-list a[data-slug]:not([hidden]), .dn-sub a:not([hidden])');
+    if(first) first.click();
+  }
+});
+// "/" focuses the filter from anywhere on the page — but never while the
+// reader is typing into something else, which is how that shortcut usually
+// goes wrong.
+document.addEventListener('keydown', function(ev){
+  if(ev.key!=='/' || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  var el = document.activeElement;
+  if(el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable)) return;
+  ev.preventDefault();
+  if(sheetIsMobile()) openSheet();
+  filterInput.focus();
+  filterInput.select();
+});
 
 // The open document's own outline, built from what was actually rendered —
 // so it is the document's real shape, never a hand-kept second copy that can
@@ -654,7 +963,7 @@ function setActive(slug){
 // de-duplicated) and becomes one row under the active document.
 function buildOutline(slug){
   document.querySelectorAll('.dn-sub').forEach(el=>el.remove());
-  var host = document.querySelector('.dn-list > a[data-slug="'+slug+'"]');
+  var host = document.querySelector('.dn-list a[data-slug="'+slug+'"]');
   if(!host) return;
   var seen = {};
   var heads = [...content.querySelectorAll('h2')].map(function(h){
@@ -669,24 +978,44 @@ function buildOutline(slug){
   if(!heads.length) return;
   var ul = document.createElement('ul');
   ul.className = 'dn-sub';
+  // The href is a real, shareable deep link — `#slug/heading` — not a dead
+  // `#` a script has to intercept. Middle-click, "copy link address" and a
+  // pasted URL all land on the right section of the right document.
   ul.innerHTML = heads.map(function(h){
-    return '<li><a href="#'+slug+'" data-head="'+h.id+'">'+h.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a></li>';
+    return '<li><a href="#'+slug+'/'+h.id+'" data-head="'+h.id+'">'+h.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</a></li>';
   }).join('');
   host.parentNode.insertBefore(ul, host.nextSibling);
-  // An outline entry is an in-page jump, not a document change, so it must not
-  // go through the hash router (the hash is already this document's).
+  // An outline entry inside the document you are already reading is an in-page
+  // jump, not a document change, so it is handled here rather than through the
+  // hash router — but the hash is still updated, so the address bar keeps
+  // describing where you are.
   ul.querySelectorAll('a').forEach(function(a){
     a.addEventListener('click', function(ev){
-      ev.preventDefault();
       var t = document.getElementById(a.dataset.head);
       if(!t) return;
+      ev.preventDefault();
       closeSheet();
-      t.scrollIntoView({block:'start'});
+      goToHeading(t);
       markHere(a);
+      suppressHash = true;
+      location.hash = '#'+slug+'/'+a.dataset.head;
+      // The hashchange this fires is the one we just caused; the flag is
+      // cleared by the listener rather than on a timer, so a slow frame cannot
+      // leave it stuck on and swallow a real navigation.
     });
   });
   spyHeads = heads.map(function(h){ return document.getElementById(h.id); }).filter(Boolean);
+  applyFilter();
   spy();
+}
+
+/* Scroll a heading to just under the fixed header, honouring the reader's
+   motion preference. `scrollIntoView({block:'start'})` puts it under the
+   header, where it cannot be read. */
+function goToHeading(el){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var y = el.getBoundingClientRect().top + window.scrollY - 88;
+  window.scrollTo({top:Math.max(0,y), behavior: reduce ? 'auto' : 'smooth'});
 }
 
 /* ── where you are, without being asked ────────────────────────────────────
@@ -886,43 +1215,72 @@ function renderPager(slug){
   }
 }
 
-async function load(slug){
+async function load(slug, head){
   const doc = bySlug[slug] || DOCS[0];
   setActive(doc.slug);
-  crumb.innerHTML = 'patala docs<span class="sep">/</span>'+doc.title;
+  crumb.innerHTML = 'patala docs<span class="sep">/</span>'+
+    '<span class="crumb-sec">'+doc.section+'</span><span class="sep">/</span>'+doc.title;
   content.innerHTML = 'Loading…';
   try {
     const res = await fetch(doc.path, {cache:'no-cache'});
     if(!res.ok) throw new Error('HTTP '+res.status);
     const md = await res.text();
     content.innerHTML = marked.parse(md);
-    // Cross-doc links become sidebar navigation.
+    // Cross-doc links become sidebar navigation. A link that carries a
+    // fragment keeps it, in this viewer's own `#slug/heading` form, so
+    // `status.md#destination-validation-by-rail` lands on the section rather
+    // than the top of the page — the fragment used to be dropped on the floor.
     content.querySelectorAll('a[href]').forEach(a=>{
       const h=a.getAttribute('href')||'';
       if(/^(https?:|#|mailto:)/i.test(h)) return;
-      const m=h.match(/([^\/]+\.md)(#.*)?$/i);
+      const m=h.match(/([^\/]+\.md)(#(.*))?$/i);
       const target = m && byFile[m[1].toLowerCase()];
-      if(target) a.setAttribute('href','#'+target.slug);
+      if(target) a.setAttribute('href','#'+target.slug+(m[3]?'/'+m[3]:''));
     });
     content.querySelectorAll('a[href^="http"]').forEach(a=>{a.target='_blank';a.rel='noopener';});
     dressContent();
     buildOutline(doc.slug);
     renderPager(doc.slug);
-    window.scrollTo({top:0});
+    var target = head && document.getElementById(head);
+    if(target) goToHeading(target); else window.scrollTo({top:0});
   } catch(err){
     content.innerHTML = '<div class="docs-error">Could not load <code>'+doc.path.split('/').pop()+'</code> — '+err.message+'</div>';
     pager.innerHTML = '';
   }
 }
 
-function current(){ return (location.hash||'').replace('#','') || DOCS[0].slug; }
-window.addEventListener('hashchange', ()=>{ closeSheet(); load(current()); });
+/* The hash is `#slug` or `#slug/heading-id`. Splitting on the first slash is
+   the whole router. */
+function current(){
+  var raw = (location.hash||'').replace(/^#/,'');
+  if(!raw) return {slug:DOCS[0].slug, head:null};
+  var i = raw.indexOf('/');
+  return i === -1 ? {slug:raw, head:null} : {slug:raw.slice(0,i), head:raw.slice(i+1)};
+}
+var suppressHash = false;
+var loadedSlug = null;
+window.addEventListener('hashchange', function(){
+  closeSheet();
+  var c = current();
+  if(suppressHash){
+    // This hashchange is the one an outline click just caused; the document is
+    // already rendered and already scrolled.
+    suppressHash = false;
+    loadedSlug = c.slug;
+    return;
+  }
+  // Same document, different heading: no refetch, no reparse, no rehighlight.
+  if(c.slug === loadedSlug && c.head){
+    var t = document.getElementById(c.head);
+    if(t){ goToHeading(t); spy(); return; }
+  }
+  loadedSlug = c.slug;
+  load(c.slug, c.head);
+});
 // Choosing the document you are already on does not change the hash, so it
 // would not fire hashchange and the sheet would stay open over the answer.
-document.querySelectorAll('.dn-list > a').forEach(function(a){
-  a.addEventListener('click', closeSheet);
-});
-load(current());
+docRows().forEach(function(a){ a.addEventListener('click', closeSheet); });
+(function(){ var c = current(); loadedSlug = c.slug; load(c.slug, c.head); })();
 
 (function(){
   var btn=document.getElementById('themeToggle');

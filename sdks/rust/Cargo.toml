@@ -1,0 +1,47 @@
+# The Rust examples for patala.
+#
+# This is a STANDALONE workspace (`[workspace]` below, deliberately empty), not
+# a member of patala's root workspace. Two reasons:
+#
+#   1. The root workspace's `default-members` is what keeps `cargo build` at the
+#      repo root offline and reqwest-free. Examples that spawn a sidecar and
+#      speak HTTP have no business widening that set.
+#   2. It is what a consumer's own crate looks like. `patala-core` is reached
+#      here by a `path` dependency only because it lives in the same checkout;
+#      swap it for a version and this manifest is exactly what you would write.
+#
+# Note what is NOT here: no build script, no `bindgen`, no `cc`, no `-sys`
+# crate, no cdylib to locate at runtime. Rust's direct mode is a dependency
+# line. That is the whole story.
+[workspace]
+
+[package]
+name = "patala-rust-examples"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Runnable direct (in-process) and sidecar examples for patala from Rust."
+
+[dependencies]
+# DIRECT MODE. This one line is it.
+patala-core = { path = "../../patala-core" }
+
+# `PaymentRail`'s methods are `async fn`, so an executor is needed to call
+# them — patala-core does not pick one for you and has no tokio dependency of
+# its own (its Cargo.toml is async-trait + serde + thiserror). Any executor
+# works; tokio is used here because the rest of the workspace does.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+# The sidecar example only. patala-core's types are `Serialize`/`Deserialize`,
+# so the sidecar's JSON deserializes straight back into `Receipt`, `Quote` and
+# `RailCapabilities` — the same structs the direct example uses.
+serde_json = "1"
+
+[[example]]
+name = "direct"
+path = "examples/direct.rs"
+
+[[example]]
+name = "sidecar"
+path = "examples/sidecar.rs"

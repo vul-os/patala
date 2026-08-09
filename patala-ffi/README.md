@@ -3,14 +3,20 @@
 A plain `extern "C"` shared library over `patala-core`. JSON in, JSON out,
 `uint64` handles, six exported symbols.
 
-`patala-uniffi` covers the languages UniFFI has a backend for — Python, Go,
-Swift, Kotlin, Ruby. It has **no backend for C, C++, Node/Deno/Bun, PHP or
-Elixir**. Those load this instead:
+`patala-uniffi` covers the languages UniFFI generates usable bindings for —
+Python, Go, Kotlin and Swift. It has **no backend at all for C, C++,
+Node/Deno/Bun, PHP, Elixir, Java or C#**, and its **Ruby** backend emits Ruby
+that does not parse (`make probe-ruby` reproduces it). Eleven of the fifteen
+`sdks/` packages therefore load this instead:
 
 | Host | How it loads this |
 |---|---|
 | C / C++ | link, or `dlopen` + `dlsym` — see [`include/patala.h`](include/patala.h) |
-| Node / Deno / Bun | `node:ffi`/`ffi-napi`, `Deno.dlopen`, `bun:ffi` |
+| Java | `java.lang.foreign` (FFM, JDK 22+) — no UniFFI Java backend exists |
+| .NET | `LibraryImport` + `SafeHandle` |
+| Swift | `dlopen` + `@convention(c)`, so the SwiftPM package needs no `unsafeFlags` |
+| Node / Deno / Bun | koffi, `Deno.dlopen`, `bun:ffi` |
+| Ruby | `fiddle`, from the stdlib |
 | PHP | the FFI extension (`FFI::cdef`) |
 | Elixir / Erlang | a NIF wrapper, or a Port around a small C shim |
 | anything else with a C FFI | the same six symbols |
@@ -113,7 +119,7 @@ document. It is the file to read; this section is the summary.
   languages than two.
 - **Errors are plain UTF-8 strings**, never JSON, freed with `patala_free`
   like results. One free function for everything the library returns is the
-  only rule a binding in twelve languages can be relied on to follow. Do not
+  only rule a binding in eleven languages can be relied on to follow. Do not
   use your own `free()`: this is Rust's allocator.
 - **Handles are `uint64` registry keys**, never pointers, and are **never
   reused**. A closed or invented handle is a clean error rather than a

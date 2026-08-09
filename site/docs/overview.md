@@ -103,7 +103,7 @@ Then, as you need them:
 
 - [Fifteen language packages](language-packages.md) — a working package per
   language in `sdks/`, two modes each, with a run command for every one.
-- [The C ABI](c-abi.md) — the six-function `extern "C"` surface twelve of those
+- [The C ABI](c-abi.md) — the six-function `extern "C"` surface eleven of those
   packages are built on.
 - [One core, every language](polyglot.md) — the "M×1, never M×N" principle
   this repo is built on.

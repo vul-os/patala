@@ -183,7 +183,7 @@ never does. There is no balance table, no payout queue, no ledger.
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |
 | `patala-uniffi` | the one UniFFI surface, namespace `patala` → Python, Go, Kotlin and Swift today, wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
 | `patala-py` | the Python wheel over `patala-uniffi` (cdylib + generated `patala.py`) | — | 3 (namespace + re-export) + the CI `smoke-python` job | executed, and now CI-enforced |
-| `patala-ffi` | a plain `extern "C"` cdylib (JSON in/out, `uint64` handles) for the languages UniFFI has no backend for — C, C++, Node/Deno/Bun, PHP, Elixir | — | 23 Rust (25 with `fiat-all`) + 55 checks driven through C by `ctest/smoke.c` | executed, and now CI-enforced |
+| `patala-ffi` | a plain `extern "C"` cdylib (JSON in/out, `uint64` handles) for the eleven languages UniFFI cannot serve — C, C++, Swift, Java, Node/Deno/Bun, Ruby, PHP, .NET, Elixir | — | 23 Rust (25 with `fiat-all`) + 55 checks driven through C by `ctest/smoke.c` | executed, and now CI-enforced |
 | `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still
@@ -301,7 +301,7 @@ is mock-only**, so in-process is the only path to a real rail today.
 
 → **[Fifteen language packages](docs/language-packages.md)** has a run command
 for every row · **[The C ABI](docs/c-abi.md)** is the six-function contract
-twelve of them are built on · **[Choosing a mode](docs/choosing-a-mode.md)** puts
+eleven of them are built on · **[Choosing a mode](docs/choosing-a-mode.md)** puts
 all five surfaces side by side.
 
 ## Security

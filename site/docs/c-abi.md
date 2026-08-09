@@ -4,8 +4,8 @@
 
 `patala-ffi` is a plain `extern "C"` shared library over `patala-core`. JSON
 in, JSON out, `uint64` handles, **six exported symbols**. It exists for the
-languages [UniFFI](polyglot.md) has no backend for, and it is what twelve of
-the fifteen [language packages](language-packages.md) load.
+languages [UniFFI](polyglot.md) has no usable backend for, and it is what
+eleven of the fifteen [language packages](language-packages.md) load.
 
 ```c
 const char* patala_abi_version(void);
@@ -30,14 +30,17 @@ built straight off `patala-core`; everything ends up as the same
 
 | Route | Languages |
 |---|---|
-| Loads `libpatala_ffi` | C, C++, Swift, Java, Kotlin, Node, Deno, Bun, Ruby, PHP, .NET, Elixir |
-| Typed UniFFI bindings instead | [Python](python.md) (`patala-py`), [Go](go.md) (`patala-go`) |
+| Loads `libpatala_ffi` | C, C++, Swift, Java, Node, Deno, Bun, Ruby, PHP, .NET, Elixir |
+| Typed UniFFI bindings instead | [Python](python.md) (`patala-py`), [Go](go.md) (`patala-go`), Kotlin (`sdks/kotlin`, generated in place) |
 | No boundary at all | [Rust](rust.md) — a Cargo dependency |
 
-Python and Go take the UniFFI route because it gives them real records and real
-enums — `RailClass`, `DestinationStatus`, five typed `PatalaError` variants —
-where the C ABI gives JSON. Binding the C ABI a second time from those two
-languages would be a strictly worse copy of a binding that already exists.
+Python, Go and Kotlin take the UniFFI route because it gives them real records
+and real enums — `RailClass`, `DestinationStatus`, five typed `PatalaError`
+variants — where the C ABI gives JSON. Binding the C ABI a second time from
+those languages would be a strictly worse copy of a binding that already
+exists. Swift is in both columns on purpose: its SwiftPM package `dlopen`s the
+C ABI so it can be a dependency of another package, and `sdks/swift/uniffi/`
+carries the generated typed bindings alongside it.
 
 ## The advantage: no runtime in your process
 
@@ -100,7 +103,7 @@ round-trip tests over a real socket.
 
 **Free everything with `patala_free`, never your own `free()`.** Results and
 error strings are both Rust allocations. One free function for everything the
-library returns is the only rule a binding in twelve languages can be relied on
+library returns is the only rule a binding in eleven languages can be relied on
 to follow. `patala_abi_version` is the single exception: it returns a static
 string that must never be freed. This rule matters most on Windows, where a CRT
 mismatch is a real crash rather than a leak — which is one more reason there is

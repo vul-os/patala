@@ -2,12 +2,13 @@
 
 Use patala from any of fifteen languages, **two ways**:
 
-- **Direct** — in-process. Twelve of the fifteen load a C ABI shared library
+- **Direct** — in-process. Eleven of the fifteen load a C ABI shared library
   (`patala_new`/`call`/`close`/`free`/`abi_version`/`abi_check`), built by
-  [`patala-ffi`](../patala-ffi/README.md). Python and Go instead use the typed
-  UniFFI bindings in [`patala-py`](../patala-py/) and
-  [`patala-go`](../patala-go/). Rust has no boundary at all — it takes a Cargo
-  dependency.
+  [`patala-ffi`](../patala-ffi/README.md). Python, Go and Kotlin instead use
+  typed UniFFI bindings generated from [`patala-uniffi`](../patala-uniffi/) —
+  packaged as [`patala-py`](../patala-py/) and [`patala-go`](../patala-go/),
+  and generated in place by [`kotlin/`](kotlin/). Rust has no boundary at all —
+  it takes a Cargo dependency.
 - **Sidecar** — [`patala-sidecar`](../patala-sidecar/) as a separate process,
   either one you run or one the package spawns and manages for you on
   `127.0.0.1`.
@@ -29,7 +30,7 @@ openrate**. That reversal was measured, not reasoned about; see below.
 | [cpp](cpp/) | ✓ header-only RAII (`patala.hpp`, `patala::Rail`) | ✓ forks and reaps it | **direct** |
 | [swift](swift/) | ✓ `dlopen` + `@convention(c)` — no module map, no `unsafeFlags` | ✓ spawned, `URLSession` | **direct** on macOS |
 | [java](java/) | ✓ FFM (JDK 22+) | ✓ managed | **direct** — *reversed from llmux/openrate* |
-| [kotlin](kotlin/) | ✓ FFM, through the Java classes | ✓ managed | **direct** — *reversed from llmux/openrate* |
+| [kotlin](kotlin/) | ✓ generated UniFFI over JNA — loads `libpatala_uniffi`, **not** the C ABI | ✓ managed, through the Java client | **direct** — *reversed from llmux/openrate* |
 | [node](node/) | ✓ koffi, with a working `callAsync` | ✓ managed | direct — its README argues both; key isolation is the one reason to move |
 | [deno](deno/) | ✓ `Deno.dlopen`, `callAsync` declared `nonblocking` | ✓ managed | direct — same, and `--allow-ffi` is effectively "allow anything" |
 | [bun](bun/) | ✓ `bun:ffi` — synchronous only, `bun:ffi` offers nothing else | ✓ managed | direct — same |
@@ -83,8 +84,11 @@ and four more, ending `Consider using jsig library.`; patala prints nothing.
 
 So `libjsig` is not needed, the argument that made the siblings choose the
 sidecar does not exist here, and **direct is the recommended default on the
-JVM**. Kotlin inherits this: it is a thin layer over the Java binding, not a
-second binding to the same ABI.
+JVM**. Kotlin inherits the verdict but no longer the binding: it used to be a
+thin layer over the Java C-ABI classes and is now the *generated UniFFI Kotlin*
+(see [Two libraries, not one](#two-libraries-not-one)). The signal measurement
+carries over because it is a property of the Rust cdylib, not of which of the
+two cdylibs you load.
 
 ### Node: `worker_threads` and `callAsync` actually work
 
@@ -117,9 +121,11 @@ rail, which answers in 0.44 ms.
 
 **15.1× smaller** on the default build, and it is a consequence of the language
 rather than of doing less: the offline mock rail here is the same `MockRail`
-every other patala surface exercises. Kotlin's package makes the sharpest use
-of that figure — it declined JNA partly because JNA's own per-platform native
-stub is not far off the size of the library it would be loading.
+every other patala surface exercises. The Kotlin package is where that figure
+cuts both ways: generated UniFFI Kotlin is a `com.sun.jna.Library`, so it ships
+JNA's own per-platform native stub *as well as* the cdylib — two native
+artifacts, which its README states plainly rather than netting out.
+`libpatala_uniffi.dylib`, the one Kotlin loads, is **881,696 bytes**.
 
 ## Two libraries, not one
 
@@ -129,8 +135,8 @@ them:
 
 | Surface | What it is | Who loads it |
 |---|---|---|
-| `libpatala_ffi` | a plain `extern "C"` cdylib — JSON in, JSON out, `uint64` handles, six symbols | c, cpp, swift, java, kotlin, node, deno, bun, ruby, php, dotnet, elixir |
-| `libpatala_uniffi` / `patala-py` / `patala-go` | typed UniFFI bindings generated from one `#[uniffi::export]` surface | python, go |
+| `libpatala_ffi` | a plain `extern "C"` cdylib — JSON in, JSON out, `uint64` handles, six symbols | c, cpp, swift, java, node, deno, bun, ruby, php, dotnet, elixir |
+| `libpatala_uniffi` / `patala-py` / `patala-go` | typed UniFFI bindings generated from one `#[uniffi::export]` surface | python, go, kotlin — and, alongside its C-ABI package, [swift/uniffi](swift/uniffi/) |
 | — | no boundary | rust |
 
 The JSON the C ABI speaks is the *same* JSON `patala-sidecar` serves, built
@@ -138,19 +144,26 @@ from the same Rust types, so a body that works against
 `POST /v1/rails/:id/charge` works against `patala_call(h, "charge", …)`
 unchanged. The UniFFI route gives real records and real enums instead —
 `RailClass`, `DestinationStatus`, five typed `PatalaError` variants — which is
-why Python and Go take it rather than binding the C ABI a second time.
+why Python, Go and Kotlin take it rather than binding the C ABI a second time.
 
 UniFFI's **Kotlin** backend was blocked until commit `79e5002`: `patala_core::Error`
 had two variants with a field named `message`, and UniFFI renders a flat error
 enum as a subclass of `kotlin.Exception`, which already has an open `message`
 property — the field was emitted twice and `kotlinc` gave 12 errors. Renaming
 the field to `detail` was the honest fix; patala has never been tagged, so this
-was the cheapest moment in its life to change a public field name. The Kotlin
-package still uses the Java FFM binding, but typed Kotlin bindings are now
-possible rather than blocked, and
-[`kotlin/uniffi-kotlin-probe.sh`](kotlin/uniffi-kotlin-probe.sh) keeps that
-claim from rotting — its exit code is **inverted**, so it fails the moment the
-justification stops being true.
+was the cheapest moment in its life to change a public field name. **That
+unblocked the Kotlin package, which is now the generated bindings themselves**
+— the old Java-FFM wrapper is deleted, not deprecated — and
+[`kotlin/uniffi-kotlin-probe.sh`](kotlin/uniffi-kotlin-probe.sh) keeps the
+`detail` rename from being re-litigated: its exit code is **inverted**, so it
+fails the moment the upstream bug is fixed and the name can be reconsidered.
+
+**Ruby is the one UniFFI backend patala does not use.** UniFFI has one, but it
+emits Ruby that does not parse — an interface argument named `class`, which
+`RailCapabilities` has, is renamed in the `def` line and left alone in the
+body. `make probe-ruby` ([`scripts/uniffi-ruby-probe.sh`](../scripts/uniffi-ruby-probe.sh))
+reproduces it and is inverted the same way, so [ruby/](ruby/) stays on the C
+ABI with a reason that is checked rather than remembered.
 
 ## Costs that are real, and are not the siblings' costs
 
@@ -220,12 +233,14 @@ than assumed. These are patala's:
 
 ## Prebuilt libraries — what actually exists
 
-Direct mode needs a shared library for your platform. Today:
+Direct mode needs a shared library for your platform — `libpatala_ffi` for the
+eleven C-ABI packages, `libpatala_uniffi` for kotlin, and their own cdylibs for
+python and go. Today:
 
 | Target | Status |
 |---|---|
 | darwin/arm64 | **built and executed** — every number on this page was measured on it |
-| linux/amd64 | the `.so` is built and the C smoke test runs on it in CI's `c abi` job; **no language package here has been run there** |
+| linux/amd64 | the `.so` is built and the C smoke test runs on it in CI's `c abi` job; **no package in this directory has been run there.** (CI's `python binding` and `go binding` jobs do build and execute the *UniFFI* bindings on `ubuntu-latest` — `patala-py`'s and `patala-go`'s own suites, not these example scripts.) |
 | **linux/arm64** | **not built** |
 | **darwin/amd64** | **not built** |
 | **windows/amd64** | **does not exist — no DLL ships, and nobody has tried** |

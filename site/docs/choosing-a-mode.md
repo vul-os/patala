@@ -22,7 +22,8 @@ rather than discovered at link time three weeks later.
 | You write Python | [`patala-py`](python.md) | Synchronous calls, native-ish types, no server to supervise. |
 | You write Go **and** can accept cgo | [`patala-go`](go.md) | Same generated surface, native Go types, in-process. |
 | You write Go **and** need a pure-static binary | [the sidecar](sidecar.md) | `CGO_ENABLED=0` survives. This is what `cackle` chose. |
-| You write Java or Kotlin | **in-process**, over [the C ABI](c-abi.md) | Loading it replaces **zero** of HotSpot's signal handlers, so `libjsig` is not needed. This is the reverse of the advice in llmux and openrate, and it was measured. |
+| You write Java | **in-process**, over [the C ABI](c-abi.md) | Loading it replaces **zero** of HotSpot's signal handlers, so `libjsig` is not needed. This is the reverse of the advice in llmux and openrate, and it was measured. UniFFI has no Java backend, so `java.lang.foreign` binds the C ABI directly. |
+| You write Kotlin | **in-process**, over the **generated UniFFI bindings** | Same measurement, same verdict, typed records instead of JSON — `sdks/kotlin` *is* the generated Kotlin. The cost it accepts is JNA, a second native artifact. |
 | You write C, C++, Swift, Node/Deno/Bun, Ruby, PHP or Elixir **and** want in-process | [the C ABI](c-abi.md) | JSON in and out, six functions. patala is Rust, so it puts no runtime in your process. |
 | You write C# / .NET | [the sidecar](sidecar.md) | **No Windows DLL exists.** Not a runtime problem — a platform-coverage one. |
 | Several services in a polyglot stack need the same signing key | [the sidecar](sidecar.md) | The key lives in one process instead of every process. |

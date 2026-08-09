@@ -52,11 +52,11 @@ crate. Every other language is a *generated consumer* of that one definition:
         │                  │                  │                    │
   #[uniffi::export]  #[uniffi::export]   patala-ffi           patala-sidecar
   generated Python   generated Go        extern "C" cdylib    (HTTP + JSON)
-  (patala-py)        (patala-go)         JSON in / JSON out
+  (patala-py)        + Kotlin + Swift    JSON in / JSON out
         │                  │                  │                    │
         │                  │                  │                    │
         │                  │        C, C++, Swift, Java,           │
-        │                  │        Kotlin, Node, Deno, Bun,       │
+        │                  │        Node, Deno, Bun,               │
         │                  │        Ruby, PHP, .NET, Elixir        │
         │                  │                  │                    │
         └──────────────────┴──────────────────┴────────────────────┘
@@ -74,8 +74,11 @@ The Go binding is the clearest proof that this is real rather than a slogan.
 not `PatalaRail`, not `RailClass`, not `RailCapabilities`, not `Quote`, not
 `Receipt`. It points `uniffi-bindgen-go` at the *same compiled cdylib* the
 Python binding loads, reads the UniFFI metadata embedded in it, and emits Go.
-Adding Swift or Kotlin is the same command with a different `--language`, not
-a new binding crate and not a new adapter.
+Swift and Kotlin were then added exactly that way — the same command with a
+different `--language`, no new binding crate and no new adapter — and both are
+generated, built and run: [`sdks/kotlin`](https://github.com/vul-os/patala/blob/main/sdks/kotlin/README.md) *is* the
+generated Kotlin, and [`sdks/swift/uniffi`](https://github.com/vul-os/patala/blob/main/sdks/swift/uniffi/) sits
+alongside that language's C-ABI package.
 
 ## Why UniFFI and not PyO3
 
@@ -94,10 +97,10 @@ call; that is not the situation today.
 ## Two in-process surfaces, and why there are two
 
 UniFFI has backends for Python, Go, Swift, Kotlin and Ruby. It has none for C,
-C++, Node, Deno, Bun, PHP, Elixir, Java or C#. Rather than leave nine languages
-with only HTTP, [`patala-ffi`](c-abi.md) exposes the same core as a plain
-`extern "C"` cdylib — JSON in, JSON out, six symbols — and twelve of the fifteen
-packages load that.
+C++, Node, Deno, Bun, PHP, Elixir, Java or C#, and its Ruby backend does not
+work on patala (below). Rather than leave ten languages with only HTTP,
+[`patala-ffi`](c-abi.md) exposes the same core as a plain `extern "C"` cdylib —
+JSON in, JSON out, six symbols — and eleven of the fifteen packages load that.
 
 It is still M×1. `patala_new`'s configurations are built by `patala-uniffi`'s
 own constructors and the mock straight off `patala-core`; everything ends up as
@@ -105,16 +108,28 @@ the same `Arc<dyn PaymentRail>`, and the JSON it speaks is the *same* JSON the
 sidecar serves, from the same Rust types. Two surfaces, one implementation, one
 wire contract.
 
-Python and Go stay on UniFFI because it gives them real records and real enums
-where the C ABI gives JSON. Java and Kotlin are on the C ABI despite UniFFI
-having a Kotlin backend: that backend did not compile until commit `79e5002`,
+Python, Go and Kotlin stay on UniFFI because it gives them real records and
+real enums where the C ABI gives JSON. **Java** is on the C ABI because UniFFI
+has no Java backend at all and `java.lang.foreign` needs no JNA.
+
+Kotlin was on the C ABI too, until it was not, and the reason is worth keeping:
+UniFFI's Kotlin backend did not compile against patala until commit `79e5002`,
 because `patala_core::Error` had two variants with a field named `message` and
 UniFFI renders a flat error enum as a subclass of `kotlin.Exception`, which
 already has an open `message` property — the field was emitted twice, and
 `kotlinc` gave 12 errors. Renaming it to `detail` was the honest fix; patala has
 never been tagged, so it was the cheapest moment in its life to change a public
-field name. `sdks/kotlin/uniffi-kotlin-probe.sh` guards that story with an
-**inverted** exit code, so the justification cannot outlive the bug.
+field name. `sdks/kotlin` is now the generated Kotlin itself, and
+`sdks/kotlin/uniffi-kotlin-probe.sh` guards the rename with an **inverted** exit
+code — `0` while the upstream bug is still there, `1` when it is fixed and
+`detail` can be reconsidered — so the justification cannot outlive the bug.
+
+**Ruby** has a UniFFI backend and does not use it, for a defect of the same
+family: the generated Ruby does not parse, because an interface argument named
+`class` — `RailCapabilities` has one — is renamed in the `def` line and left
+alone in the body. `make probe-ruby` (`scripts/uniffi-ruby-probe.sh`)
+reproduces it from a minimal UDL and is inverted the same way, so `sdks/ruby`
+stays on the C ABI for a reason that is checked rather than remembered.
 
 ## What this forces onto the trait
 

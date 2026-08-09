@@ -86,8 +86,14 @@ verdict is "unchanged and still working", not "unchanged and untested".
 
 `libjsig` is therefore not needed, the argument that decided the siblings does
 not exist here, and **direct is the recommended default on the JVM**. Kotlin
-inherits it: that package is a thin layer over the Java FFM binding, because two
-bindings to one C ABI is two places for a use-after-free.
+inherits the verdict but not the binding. That package used to be a thin layer
+over the Java FFM classes; since the `detail` rename (commit `79e5002`)
+unblocked UniFFI's Kotlin backend it *is* the generated UniFFI Kotlin, loading
+`libpatala_uniffi` over JNA and handing back real records instead of JSON
+strings. The signal result carries over unchanged, because zero handlers is a
+property of the Rust cdylib rather than of which cdylib you load. The Java
+package stays on the C ABI — `java.lang.foreign` needs no JNA, and UniFFI has
+no Java backend.
 
 ## Node: the worker threads actually terminate
 

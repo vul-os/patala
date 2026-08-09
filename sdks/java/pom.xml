@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.vulos</groupId>
+  <artifactId>patala</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>patala</name>
+  <description>A sovereign, centerless payment-rail substrate — embedded, or as a local sidecar.</description>
+  <url>https://vulos.org/projects/patala/</url>
+
+  <licenses>
+    <license><name>MIT</name></license>
+    <license><name>Apache-2.0</name></license>
+  </licenses>
+
+  <properties>
+    <!--
+      The SIDECAR half (Patala, PatalaException, Json) targets Java 11. The
+      DIRECT half (PatalaDirect) needs java.lang.foreign, permanent from Java
+      22, so it is compiled by a second execution of the compiler plugin at a
+      higher release. Two class-file versions in one artifact rather than a
+      floor of 22 for everybody: an 11 consumer that never touches
+      PatalaDirect never loads it and never sees its version.
+
+      Building this module therefore needs a JDK 22+ toolchain even though the
+      output is usable from 11.
+
+      Note the direction of the dependency: PatalaDirect (22) may reference
+      Json (11), and does. The reverse is forbidden and the split compilation
+      is what enforces it — Patala.java referencing PatalaDirect is a compile
+      error in the release-11 pass, which is how the JSON escaper ended up in
+      its own class rather than on the FFM one.
+    -->
+    <maven.compiler.release>11</maven.compiler.release>
+    <direct.release>22</direct.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <!--
+    No dependencies. The sidecar uses ProcessBuilder and java.net.http; the
+    direct path uses java.lang.foreign. Neither parses JSON, because neither
+    needs to: patala's documents are handed to you as strings, for the parser
+    you already have — and that is not only about weight. A Receipt's
+    amount_minor is an integer number of minor units, and a JSON binding
+    configured to hand you a double for every number is a rounding bug in a
+    payments library.
+  -->
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <executions>
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <excludes>
+                <exclude>org/vulos/patala/PatalaDirect.java</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <execution>
+            <id>compile-direct</id>
+            <phase>compile</phase>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <release>${direct.release}</release>
+              <includes>
+                <include>org/vulos/patala/PatalaDirect.java</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

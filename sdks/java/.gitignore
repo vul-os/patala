@@ -1,0 +1,8 @@
+# Maven / javac output
+/target/
+/out/
+
+# The patala-sidecar binary, if you stage one here for the sidecar example.
+# run-examples.sh uses target/release/patala-sidecar directly and writes
+# nothing here; this exists for anyone who follows the README's "bin/" lookup.
+/bin/

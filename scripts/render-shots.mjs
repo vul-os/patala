@@ -18,7 +18,10 @@
 //
 // Falls back to a plain `import('playwright')` first (in case it's ever
 // installed locally), then to the path below as a last resort for this
-// development environment.
+// development environment. (Previously pointed at openrate/web/node_modules;
+// openrate's web/ was renamed to serve/web/ in its library-first refactor and
+// never carried a node_modules of its own, so the fallback now points at a
+// sibling repo that actually vendors playwright.)
 
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, unlinkSync } from 'node:fs';
@@ -36,7 +39,7 @@ try {
   ({ chromium } = await import('playwright'));
 } catch {
   const fallback = process.env.PATALA_PLAYWRIGHT_NODE_MODULES
-    || '/Users/pc/code/vulos/openrate/web/node_modules';
+    || '/Users/pc/code/vulos/diwan/web/node_modules';
   const require = createRequire(resolve(fallback, 'x.js'));
   ({ chromium } = require('playwright'));
 }

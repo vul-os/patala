@@ -73,7 +73,7 @@ library in the *same* environment as a control:
 | Node process threads across a round trip | **7 → 7** | 7 → 13 |
 | A `worker_threads` worker that entered the library | **exits 0 in ~33 ms** | never exits — killed at 15 s |
 | Python process threads, after `dlopen` → after a round trip | **1 → 1** | `libllmux` 7 → 8 |
-| A `fork()`ed child calling a real method | charge, verify and a fresh handle, all in 0.00 s | `libllmux` answers `models`, then **hangs on `chat`** — SIGKILLed at 6 s |
+| A `fork()`ed child calling a real method | charge, verify and a fresh handle, all in 0.00 s | `libllmux` answers `models`, then **hangs on `chat`** — never answers, SIGKILLed by the 5 s watchdog (`PATALA_FORK_TIMEOUT`) |
 | Real php-fpm, library loaded *and charged through* in the master pre-fork | **24 requests, 0 hung** | llmux's exact failure scenario |
 | Release library, mock-only build | **844,656 bytes** | `libllmux.dylib` 12,787,504 |
 

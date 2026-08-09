@@ -218,7 +218,8 @@ than assumed. These are patala's:
   thread** after `dlopen` and still 1 after a full round trip, and a forked
   child ran charge, verify and a fresh handle in 0.00 s — where `libllmux` goes
   to 7 threads, answers `models` in the child, and then **hangs on `chat`**,
-  SIGKILLed at 6 s. Real php-fpm (`pm = static`, `opcache.preload` loading *and
+  never answering before the probe's watchdog (5 s by default,
+  `PATALA_FORK_TIMEOUT`) `SIGKILL`ed it. Real php-fpm (`pm = static`, `opcache.preload` loading *and
   charging through* the library in the master before the fork) answered **24
   requests, 0 hung**, including on the handle the master itself opened — llmux's
   exact failure scenario with the opposite outcome. The handle side is the real

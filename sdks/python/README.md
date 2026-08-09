@@ -44,13 +44,17 @@ and after `os.fork()`, running a real operation in the child:
 
 | library | in the forked child |
 | --- | --- |
-| `libllmux` (Go, c-shared) | `models` returns; **`chat` HUNG** — SIGKILLed after 6 s |
+| `libllmux` (Go, c-shared) | `models` returns; **`chat` HUNG** — never answered, SIGKILLed by the watchdog |
 | `libpatala_ffi` (Rust) | charge, verify, and a fresh handle all returned in 0.00 s |
 
-Same machine, same Python 3.13.9, same probe harness, 2026-08-09. Reproduce the
-patala half with [`examples/fork_probe.py`](examples/fork_probe.py); the llmux
-half needs llmux's own `ffi/fakeupstream` and its prebuilt
-`dist/ffi/darwin_arm64/libllmux.dylib`.
+Same machine, same Python 3.13.9, same probe harness, 2026-08-09. "HUNG" means
+the child produced nothing before the watchdog fired and was then `SIGKILL`ed;
+the watchdog is **5 s by default** and is set by `PATALA_FORK_TIMEOUT`
+([`examples/fork_probe.py`](examples/fork_probe.py) line 44). The distinction
+that matters is answered-vs-never-answered, not the wall-clock figure — patala
+returned in 0.00 s and llmux never returned at all. Reproduce the patala half
+with that probe; the llmux half needs llmux's own `ffi/fakeupstream` and its
+prebuilt `dist/ffi/darwin_arm64/libllmux.dylib`.
 
 So the reasons to choose the sidecar here are **not** hazard-avoidance. They
 are:

@@ -1,27 +1,51 @@
 #!/usr/bin/env bash
 #
-# uniffi-kotlin-probe.sh — the evidence behind this SDK's build decision.
+# uniffi-kotlin-probe.sh — the upstream codegen bug that decides a field name
+# in patala-uniffi, reproduced from first principles.
 #
-# UniFFI has a first-class Kotlin backend, patala-uniffi carries the workspace's
-# one #[uniffi::export] surface under the namespace `patala`, and patala-py and
-# patala-go are both generated from it. So the obvious question for a Kotlin SDK
-# is: why is this one a wrapper over sdks/java's C-ABI binding instead of
-# generated Kotlin with real `PayRequest`/`Receipt`/`DestinationVerdict` types?
+# HISTORY. This script used to generate patala's OWN Kotlin bindings and hand
+# them to kotlinc, because they did not compile: `patala-uniffi`'s error enum
+# had two variants carrying a field called `message`, UniFFI's Kotlin backend
+# renders an error enum as a subclass of `kotlin.Exception` with a synthesised
+# `override val message`, and a class cannot declare `message` twice. That was
+# 12 kotlinc errors, and it is why this SDK was a wrapper over sdks/java's
+# C-ABI binding, passing JSON strings around.
 #
-# Because the generated Kotlin does not compile. This script is that claim,
-# executable: it generates the bindings with the bindgen this workspace already
-# pins (uniffi 0.29.x, via `cargo run -p patala-uniffi --bin uniffi-bindgen` —
-# no separately installed CLI, so nothing here can drift from the scaffolding
-# the cdylib carries) and then hands them to kotlinc.
+# The field was renamed to `detail` (commit 79e5002). patala's generated Kotlin
+# now compiles, this SDK IS that generated Kotlin, and the probe's original
+# subject is gone.
+#
+# The probe is not, because the CONSTRAINT is not. `detail` is a slightly worse
+# public field name than `message` in every language patala generates, and the
+# only reason it is not `message` is this bug. A constraint that lives in a
+# commit message is a constraint the next person re-litigates; so this script
+# now reproduces the bug ITSELF, in isolation, from a six-line UDL that has
+# nothing to do with patala:
+#
+#   [Error]
+#   interface ProbeError {
+#     Rail(string message);        <- the subject: must NOT compile
+#     InvalidRequest(string detail);
+#   };
+#
+# It needs no cdylib and no cargo build — uniffi-bindgen generates Kotlin
+# straight from the UDL — so it stays fast and stays honest.
 #
 # EXIT CODES ARE INVERTED, on purpose:
 #
-#   0  the generated Kotlin FAILED to compile, as README.md documents.
-#   1  the generated Kotlin COMPILED — the blocker is gone, and this SDK's
-#      justification for wrapping the Java binding is now stale. Re-decide.
+#   0  a `message` field still breaks UniFFI's Kotlin backend, as documented.
+#      patala-uniffi's `detail` naming is still load-bearing. Nothing to do.
+#   1  it has been FIXED upstream. `PatalaError`'s variants can go back to
+#      `message`, which reads better everywhere; the rename is a public API
+#      change across every generated binding, so it is a decision, not a
+#      cleanup. README.md's "why `detail`" section is now stale.
+#   2  the probe itself could not run — a missing tool, or the CONTROL case
+#      (the identical UDL with only a `detail` field) failing to compile,
+#      which would mean a red result here proves nothing.
 #
-# A README that quotes a compiler error is only honest while the error is still
-# there. This is the thing that notices when it stops being.
+# The control is the whole reason this is evidence rather than a coin flip: a
+# probe whose only outcome is "kotlinc said no" cannot tell a codegen bug from
+# a missing JNA jar.
 #
 # Usage:  sdks/kotlin/uniffi-kotlin-probe.sh
 #
@@ -30,90 +54,114 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "${here}/../.." && pwd)"
 
+# shellcheck source=lib.sh
+source "${here}/lib.sh"
+
 fail() { echo "uniffi-probe: FAIL — $*" >&2; exit 2; }
 
-if ! command -v java >/dev/null 2>&1 && [ -n "${JAVA_HOME:-}" ]; then
-  PATH="${JAVA_HOME}/bin:${PATH}"
-  export PATH
-fi
+jdk_bin="$(patala_find_jdk_bin)" || exit 2
+PATH="${jdk_bin}:${PATH}"
+export PATH
 command -v cargo >/dev/null 2>&1 || fail "cargo is not on PATH"
-command -v kotlinc >/dev/null 2>&1 || fail "kotlinc is not on PATH"
+command -v kotlinc >/dev/null 2>&1 || fail "kotlinc is not on PATH (brew install kotlin)"
 
-case "$(uname -s)" in
-  Darwin) libext="dylib" ;;
-  *)      libext="so" ;;
-esac
+jna_version="$(make -s -C "${here}" print-jna-version)"
+[ -n "${jna_version}" ] || fail "could not read JNA_VERSION from the Makefile"
+jna="$(patala_find_jna "${jna_version}")" || exit 2
+
+uniffi_version="$(cd "${root}" && cargo tree -p patala-uniffi -i uniffi --depth 0 2>/dev/null \
+  | head -1 | awk '{print $2}')"
+echo "uniffi-probe: uniffi ${uniffi_version:-unknown}, $(kotlinc -version 2>&1 | head -1)"
+echo "uniffi-probe: jna $(basename "${jna}")"
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
 
-# --- 1. the cdylib carrying the UniFFI metadata ------------------------------
-echo "uniffi-probe: building patala-uniffi…"
-( cd "${root}" && cargo build -q -p patala-uniffi --release ) \
-  || fail "patala-uniffi did not build"
-lib="${root}/target/release/libpatala_uniffi.${libext}"
-[ -f "${lib}" ] || fail "no cdylib at ${lib}"
-
-uniffi_version="$(cd "${root}" && cargo tree -p patala-uniffi -i uniffi --depth 0 2>/dev/null \
-  | head -1 | awk '{print $2}')"
-echo "uniffi-probe: cdylib $(wc -c < "${lib}" | tr -d ' ') bytes, uniffi ${uniffi_version:-unknown}"
-
-# --- 2. generate the Kotlin bindings -----------------------------------------
+# uniffi-bindgen locates a crate root next to the UDL, so each case is a
+# throwaway crate directory. Neither is ever compiled by cargo.
 #
-# --no-format: the generator shells out to ktlint for cosmetics and warns when
-# it is absent. Formatting is not what is being measured.
-echo "uniffi-probe: generating Kotlin bindings…"
-( cd "${root}" && cargo run -q -p patala-uniffi --bin uniffi-bindgen -- generate \
-    --library "${lib}" --language kotlin --no-format --out-dir "${tmp}/bindings" ) \
-  || fail "uniffi-bindgen could not generate Kotlin"
+#   $1 = case name, $2 = the error variant line
+generate_case() {
+  local name="$1"
+  local variant="$2"
+  # Separate `local` statements on purpose: the builtin's arguments are
+  # expanded before it runs, so `local a=1 b=$a` reads the OUTER a — which,
+  # under `set -u`, is an unbound-variable abort rather than a wrong value.
+  local dir="${tmp}/${name}"
+  mkdir -p "${dir}/src"
+  cat > "${dir}/Cargo.toml" <<EOF
+[package]
+name = "${name}"
+version = "0.0.0"
+edition = "2021"
+EOF
+  cat > "${dir}/src/${name}.udl" <<EOF
+namespace ${name} {};
 
-generated="${tmp}/bindings/uniffi/patala/patala.kt"
-[ -f "${generated}" ] || fail "expected generated Kotlin at ${generated}"
-echo "uniffi-probe: generated $(wc -l < "${generated}" | tr -d ' ') lines at uniffi/patala/patala.kt"
+[Error]
+interface ProbeError {
+  ${variant}
+};
+EOF
+  ( cd "${root}" && cargo run -q -p patala-uniffi --bin uniffi-bindgen -- generate \
+      "${dir}/src/${name}.udl" --language kotlin --no-format --crate "${name}" \
+      --out-dir "${dir}/out" ) || fail "uniffi-bindgen could not generate Kotlin for ${name}"
+  local generated="${dir}/out/uniffi/${name}/${name}.kt"
+  [ -f "${generated}" ] || fail "expected generated Kotlin at ${generated}"
+  echo "${generated}"
+}
 
-# --- 3. the JNA jar the generated code imports -------------------------------
-#
-# Generated UniFFI Kotlin is a com.sun.jna.Library. That dependency is itself
-# part of the finding — see README.md — but it must be present for the compile
-# to be a fair test of anything else.
-jna="$(ls "${HOME}"/.m2/repository/net/java/dev/jna/jna/*/jna-*.jar 2>/dev/null | head -1 || true)"
-if [ -z "${jna}" ]; then
-  if command -v mvn >/dev/null 2>&1; then
-    echo "uniffi-probe: fetching net.java.dev.jna:jna…"
-    mvn -q dependency:get -Dartifact=net.java.dev.jna:jna:5.14.0 >/dev/null 2>&1 || true
-    jna="$(ls "${HOME}"/.m2/repository/net/java/dev/jna/jna/*/jna-*.jar 2>/dev/null | head -1 || true)"
-  fi
-fi
-[ -n "${jna}" ] || fail "no JNA jar available; the generated bindings cannot be compiled without one"
-echo "uniffi-probe: jna $(basename "${jna}")"
+# $1 = generated file, $2 = log path; prints nothing, returns kotlinc's status
+compile_case() {
+  local generated="$1" log="$2" rc=0
+  set +e
+  kotlinc -nowarn -jvm-target 11 -classpath "${jna}" -d "$(dirname "${log}")/out" \
+    "${generated}" >"${log}" 2>&1
+  rc=$?
+  set -e
+  return "${rc}"
+}
 
-# --- 4. compile it -----------------------------------------------------------
-echo "uniffi-probe: compiling with $(kotlinc -version 2>&1 | head -1)…"
-set +e
-kotlinc -nowarn -jvm-target 22 -classpath "${jna}" -d "${tmp}/out" "${generated}" \
-  >"${tmp}/kotlinc.log" 2>&1
-rc=$?
-set -e
-
-errors="$(grep -c 'error:' "${tmp}/kotlinc.log" || true)"
-
+# --- the control: the same shape, with a field name that is not `message` ----
 echo
-if [ "${rc}" -eq 0 ]; then
-  echo "uniffi-probe: the generated Kotlin COMPILED."
+echo "uniffi-probe: control — an error variant with a \`detail\` field…"
+control="$(generate_case control 'InvalidRequest(string detail);')"
+if compile_case "${control}" "${tmp}/control.log"; then
+  echo "uniffi-probe: control COMPILED, as it must. The toolchain is sound."
+else
+  echo "uniffi-probe: the CONTROL case did not compile:" >&2
+  grep 'error:' "${tmp}/control.log" | head -10 >&2
+  fail "the control must compile, or a failure below proves nothing"
+fi
+
+# --- the subject: a field named `message` ------------------------------------
+echo
+echo "uniffi-probe: subject — an error variant with a \`message\` field…"
+subject="$(generate_case subject 'Rail(string message);')"
+if compile_case "${subject}" "${tmp}/subject.log"; then
   echo
-  echo "  This SDK wraps sdks/java's C-ABI binding because it did not. If it"
-  echo "  does now — a newer uniffi, or patala-uniffi's PatalaError variants"
-  echo "  renamed away from a field called \`message\` — then README.md's"
-  echo "  justification is stale and the UniFFI route should be reconsidered:"
-  echo "  it would give real PayRequest/Receipt/DestinationVerdict types"
-  echo "  instead of JSON strings."
+  echo "uniffi-probe: the \`message\` case COMPILED — the upstream bug is FIXED."
+  echo
+  echo "  This is a real change, not a flake. UniFFI ${uniffi_version} no longer"
+  echo "  emits a duplicate \`message\` declaration for an error variant that"
+  echo "  carries one, which means patala-uniffi's PatalaError variants can go"
+  echo "  back to \`message\` — a better name in every generated language, and"
+  echo "  the only reason they are called \`detail\` is this bug."
+  echo
+  echo "  That rename is a public API change across every binding (Kotlin,"
+  echo "  Swift, Python, Go), so it is a decision to make deliberately. Start"
+  echo "  with README.md's \"Why the error field is called detail\" section,"
+  echo "  which this probe exists to keep honest."
   exit 1
 fi
 
-echo "uniffi-probe: the generated Kotlin did NOT compile — ${errors} error(s)."
-echo "This is the documented state. README.md quotes it."
+errors="$(grep -c 'error:' "${tmp}/subject.log" || true)"
 echo
-grep 'error:' "${tmp}/kotlinc.log" | sed 's|^.*/patala.kt|patala.kt|' | head -20
+echo "uniffi-probe: the \`message\` case did NOT compile — ${errors} error(s)."
+echo "This is the documented state, and it is why patala-uniffi's error"
+echo "variants carry \`detail\`. README.md quotes it."
 echo
-echo "uniffi-probe: OK (expected failure reproduced)"
+grep 'error:' "${tmp}/subject.log" | sed 's|^.*/subject.kt|subject.kt|' | head -10
+echo
+echo "uniffi-probe: OK (expected failure reproduced; control compiled)"
 exit 0

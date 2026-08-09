@@ -3,7 +3,8 @@
 /build/
 /target/
 
-# Generated UniFFI Kotlin, when uniffi-kotlin-probe.sh is run by hand outside
-# its own mktemp dir. Never committed: it is generated output, and the probe
-# regenerates it every run.
+# The generated UniFFI Kotlin this SDK is built from, plus anything the probe
+# leaves behind. Never committed: it is build output, reproduced exactly by
+# `make -C sdks/kotlin generate` — same reasoning as /target,
+# /patala-py/bindings and /patala-go/bindings.
 /bindings/

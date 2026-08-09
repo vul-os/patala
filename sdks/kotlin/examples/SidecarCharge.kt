@@ -2,6 +2,7 @@ import org.vulos.patala.Json
 import org.vulos.patala.PatalaException
 import org.vulos.patala.kotlin.PatalaSidecar
 import org.vulos.patala.kotlin.payRequest
+import org.vulos.patala.kotlin.toJson
 
 /**
  * patala as a child process on `127.0.0.1` — the same charge -> verify round
@@ -36,7 +37,9 @@ fun main() {
         println("  all five verdicts are HTTP 200. A 200 means the rail ANSWERED,")
         println("  not that the address is good — read the body, not the status.")
 
-        val request = payRequest(1250, "USDC", ALICE, "order-4711")
+        // The same typed PayRequest the direct path takes, serialised at the
+        // wire boundary and nowhere earlier.
+        val request = payRequest(1250, "USDC", ALICE, "order-4711").toJson()
 
         println()
         println("-- quote -> charge -> verify --")

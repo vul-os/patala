@@ -5,6 +5,27 @@ package org.vulos.patala.kotlin
 import java.time.Duration
 import org.vulos.patala.Json
 import org.vulos.patala.Patala as JavaPatala
+import uniffi.patala.PayRequest
+
+/**
+ * A [PayRequest] as the JSON document `patala-sidecar` expects on the wire.
+ *
+ * The sidecar speaks JSON — that is what an HTTP boundary is — so this path
+ * keeps taking and returning strings. What it does not do any more is make you
+ * *build* one: [payRequest] produces the same typed record the direct path
+ * takes, and this turns it into bytes at the last possible moment.
+ *
+ * `amountMinor` is written as the `ULong` it is. It is spelled out here rather
+ * than handed to a JSON library on purpose: a `Receipt` whose `amount_minor`
+ * went through a `Double` is a payments bug that type-checks, and the default
+ * number handling of whichever JSON library is already in your build is not
+ * this SDK's business.
+ */
+public fun PayRequest.toJson(): String =
+    "{\"amount_minor\":${this.amountMinor}" +
+        ",\"currency\":${Json.quote(this.currency)}" +
+        ",\"destination\":${Json.quote(this.destination)}" +
+        ",\"reference\":${Json.quote(this.reference)}}"
 
 /**
  * Kotlin over [org.vulos.patala.Patala] — patala as a child process on

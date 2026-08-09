@@ -59,7 +59,7 @@ something the Rust type already knew, and are now just fields:
 ```kotlin
 verdict.isRefusal          // was: Json.field(verdictJson, "is_refusal") == "true"
 rail.verify(receipt)       // was: verify(receiptJson).trim() == "{\"valid\":true}"
-caps.railClass             // was: a String compared against "NonCustodialFinal"
+caps.railClass             // a RailClass enum, not a String compared against "NonCustodialFinal"
 ```
 
 The last one is the one that matters most. `RailClass` is an enum with two
@@ -144,7 +144,6 @@ lines of defaults and spelling:
 | `Patala.mock(...)` | the five-argument generated constructor with Kotlin default arguments, and a `destinationChecks` flag picking between the two generated constructors |
 | `payRequest(...)` | a `Long` amount, checked non-negative before it becomes the record's `ULong` |
 | `Patala.useLibrary` / `findLibrary` | where the cdylib is loaded from — a build concern, not an API one |
-| `caps.railClass` | `caps.\`class\`` without the backticks |
 | `settlement.describe()` | `instant` instead of `Settlement$Instant@16c0663d` |
 | `PayRequest.toJson()` | the sidecar path's wire format, and the only JSON left |
 
@@ -419,7 +418,7 @@ sdks/kotlin/
   uniffi-kotlin-probe.sh       the inverted probe behind the `detail` field name
   bindings/                    GENERATED, gitignored — uniffi/patala/patala.kt
   src/main/kotlin/org/vulos/patala/kotlin/
-      Direct.kt                Patala.mock(), payRequest(), railClass, describe()
+      Direct.kt                Patala.mock(), payRequest(), describe()
       Sidecar.kt               PatalaSidecar, PayRequest.toJson()
   examples/DirectCharge.kt     runnable — offline, MockRail, typed end to end
   examples/SidecarCharge.kt    runnable — loopback only, MockRail

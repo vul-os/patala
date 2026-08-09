@@ -687,6 +687,20 @@
   html.js .lang-pane.active{display:block}
   .cb-note{margin-top:10px;font-size:13.5px;color:var(--ink-dim);line-height:1.6;max-width:70ch}
   .cb-note b{color:var(--ink);font-weight:600}
+  /* The one claim about embedding that is genuinely unusual, so it is stated
+     under the four stations rather than inside one of them — it is true of all
+     four. Hung off the same hairline the stations sit on. */
+  .stations-foot{
+    border-top:1px solid var(--hair);padding:15px 0 0;margin-top:2px;
+    font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:88ch;
+  }
+  .stations-foot b{color:var(--ink);font-weight:600}
+  .stations-foot .no-rt{color:var(--cls-final)}
+  /* The site's default anchor is colour:inherit, which inside a paragraph of
+     dim body text is indistinguishable from the prose around it. */
+  .stations-foot a{color:var(--vermilion);border-bottom:1px solid currentColor}
+  :root[data-theme="light"] .stations-foot a{color:var(--vermilion-deep)}
+  .stations-foot a:hover{opacity:.82}
   .cb-note code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
 
   /* ══ 06 · PROOF (instrument band) ══════════════════════════════════════ */
@@ -1303,13 +1317,19 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
         <p><code>patala-sidecar</code> — <code>quote</code> / <code>charge</code> / <code>verify</code> / <code>webhook</code> as JSON on <code>127.0.0.1</code> only, token-gated, fail-closed. Any language, zero FFI.</p>
       </div>
     </div>
+    <p class="stations-foot"><span class="no-rt">Whichever you pick, embedding patala puts <b>no language runtime in your process.</b></span> The core is Rust: no garbage collector to pause your threads, no second scheduler competing with yours, no signal handlers installed behind your back, no <code>fork()</code> hazard, nothing to initialise before your <code>main</code>. The costs that <em>do</em> exist are named rather than buried — a Tokio runtime created lazily inside the bindings so a Python caller never has to run an event loop, and cgo if you choose Go. <a href="./docs.html#choose">Choosing a mode</a> lays all four out side by side.</p>
   </div>
 
   <div class="cb-panel" data-tabgroup>
-    <div class="lang-tabs" role="tablist" aria-label="The same charge round trip, in four languages">
+    <div class="lang-tabs" role="tablist" aria-label="The same charge round trip, in four languages, plus the manifest that vendors it">
       <button class="lang-tab" role="tab" type="button" data-pane="rust" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-rust"/></svg>Rust</button>
       <button class="lang-tab" role="tab" type="button" data-pane="python" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-python"/></svg>Python</button>
       <button class="lang-tab" role="tab" type="button" data-pane="go" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-go"/></svg>Go</button>
+      <!-- The stations above promise four ways in and this panel showed three
+           of them plus a manifest. The sidecar is the one that needs no
+           binding at all, so leaving it out of the panel understated the
+           easiest path in the whole product. -->
+      <button class="lang-tab" role="tab" type="button" data-pane="http" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-shell"/></svg>Any language</button>
       <button class="lang-tab" role="tab" type="button" data-pane="toml" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-toml"/></svg>Cargo.toml</button>
     </div>
 
@@ -1378,6 +1398,26 @@ receipt := must(rail.Charge(req))
 valid := must(rail.Verify(receipt)) // fail-closed: a tampered receipt verifies false</code></pre>
       </div>
       <p class="cb-note">The same charge round trip again, over cgo — the same generated UniFFI surface.</p>
+    </div>
+
+    <div class="lang-pane" data-pane="http">
+      <div class="codeblock">
+        <div class="cb-head"><span class="lang"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#lg-shell"/></svg>bash</span><span class="cb-path">patala-sidecar</span><button class="cb-copy" type="button" aria-label="Copy this code"><span class="idle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2.2"/><path d="M15 5.6A2.6 2.6 0 0 0 12.4 3H6.6A3.6 3.6 0 0 0 3 6.6v5.8A2.6 2.6 0 0 0 5.6 15"/></svg>Copy</span><span class="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.6 9.4 17.5 19.5 6.8"/></svg>Copied</span></button></div>
+        <pre><code class="language-bash"># No token, no process — there is no unauthenticated-by-default path.
+export PATALA_SIDECAR_TOKEN=$(openssl rand -hex 32)
+cargo run -p patala-sidecar
+# patala-sidecar listening on 127.0.0.1:8420 (loopback only)
+
+curl -s http://127.0.0.1:8420/v1/rails/mock/charge \
+  -H "Authorization: Bearer $PATALA_SIDECAR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"amount_minor":1250,"currency":"USDC","destination":"dest","reference":"order-1"}'
+
+# Then POST that receipt to /verify and read `valid`. An unverifiable
+# receipt is 200 with {"valid": false} — a fail-closed answer is data,
+# never an HTTP error.</code></pre>
+      </div>
+      <p class="cb-note">The same round trip with <b>no FFI and no generated binding</b> — an HTTP client and a JSON parser are the whole dependency list. It also buys the one thing the in-process paths cannot: a signing key that lives in <b>one</b> process instead of every process that links the core.</p>
     </div>
 
     <div class="lang-pane" data-pane="toml">

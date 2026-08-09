@@ -62,20 +62,39 @@ unsafe fn set_err(errp: *mut *mut c_char, message: String) {
     }
 }
 
-/// A possibly-NULL C string as a Rust `&str`. NULL becomes `""`, which callers
-/// treat as "not supplied": a host passing NULL for an optional argument must
-/// not be a crash. Invalid UTF-8 also becomes `""` rather than panicking; the
-/// method dispatcher then rejects it as invalid JSON, which is the truthful
-/// thing to say about bytes that are not text.
+/// A possibly-NULL C string as a Rust `&str`, distinguishing "absent" from
+/// "present but not text".
+///
+/// Both used to collapse to `""`. For `patala_call` that was harmless — the
+/// dispatcher rejects `""` as invalid JSON. For `patala_new` it was a money
+/// bug: `open()` treats an empty document as "the offline default", so a single
+/// non-UTF-8 byte anywhere in a configuration asking for Stripe silently
+/// produced a `MockRail`. `charge` then succeeded, `verify` returned
+/// `{"valid":true}`, and entitlement was granted against a payment that never
+/// happened. It is the one place in this library where an error mapped onto
+/// valid, which is the direction the whole design exists to prevent.
+///
+/// A host whose config bytes are latin-1, or that splices a byte-string, hits
+/// it without doing anything exotic.
 ///
 /// # Safety
 /// `p` must be null or point to a NUL-terminated C string that stays valid for
 /// the duration of the call.
-unsafe fn as_str<'a>(p: *const c_char) -> &'a str {
+unsafe fn as_str_opt<'a>(p: *const c_char) -> Option<&'a str> {
     if p.is_null() {
-        return "";
+        return Some("");
     }
-    CStr::from_ptr(p).to_str().unwrap_or("")
+    CStr::from_ptr(p).to_str().ok()
+}
+
+/// `as_str_opt` for the arguments where non-text is indistinguishable from
+/// nonsense and the dispatcher will reject it anyway (a method name, a request
+/// body). Never use this for anything whose empty value carries meaning.
+///
+/// # Safety
+/// As [`as_str_opt`].
+unsafe fn as_str<'a>(p: *const c_char) -> &'a str {
+    as_str_opt(p).unwrap_or("")
 }
 
 /// Returns the patala version this library was built from, e.g. `"0.1.0"`, as
@@ -138,7 +157,22 @@ pub unsafe extern "C" fn patala_abi_check(
 /// be null or point to a writable `*mut c_char`.
 #[no_mangle]
 pub unsafe extern "C" fn patala_new(config_json: *const c_char, err: *mut *mut c_char) -> u64 {
-    let config = as_str(config_json).to_string();
+    // Refuse non-UTF-8 rather than letting it fall through as "" — an empty
+    // document means "the offline default MockRail", so collapsing the two
+    // turned a corrupt Stripe config into a mock that reports every charge as
+    // settled. Failing here is the only answer that cannot be mistaken for a
+    // payment.
+    let config = match as_str_opt(config_json) {
+        Some(c) => c.to_string(),
+        None => {
+            set_err(
+                err,
+                "patala: configuration is not valid UTF-8. It is refused rather than                  treated as absent, because an absent configuration means the offline                  MockRail — which would report a charge that never happened as settled."
+                    .to_string(),
+            );
+            return 0;
+        }
+    };
     match catch_unwind(AssertUnwindSafe(move || crate::open(&config))) {
         Ok(Ok(handle)) => handle,
         Ok(Err(message)) => {
@@ -278,5 +312,68 @@ mod tests {
     #[test]
     fn freeing_null_is_safe() {
         unsafe { patala_free(std::ptr::null_mut()) };
+    }
+}
+
+#[cfg(test)]
+mod utf8_refusal_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    /// The security review demonstrated this against the real ABI: a non-UTF-8
+    /// byte in a configuration asking for a real processor produced
+    /// `handle=1 err=<NULL>`, then `id` reported `mock`, `charge` succeeded for
+    /// 999999 minor units, and `verify` returned `{"valid":true}` — a settled
+    /// receipt for money that never moved.
+    ///
+    /// The cause was `as_str` collapsing invalid UTF-8 to `""`, which `open()`
+    /// reads as "use the offline default MockRail". An error became a valid
+    /// receipt, which is the one direction this library is built to prevent.
+    #[test]
+    fn a_non_utf8_config_is_refused_and_never_becomes_a_mock() {
+        // 0xFF is not valid UTF-8 in any position.
+        let bytes = b"{\"kind\":\"stripe\",\"secret\":\"sk_\xff\"}".to_vec();
+        let cfg = CString::new(bytes).expect("no interior NUL");
+        let mut err: *mut c_char = std::ptr::null_mut();
+
+        let handle = unsafe { patala_new(cfg.as_ptr(), &mut err) };
+
+        assert_eq!(
+            handle, 0,
+            "a non-UTF-8 configuration produced handle {handle}. If it opened, it opened \
+             a MockRail: charge succeeds, verify returns valid, and no money moved."
+        );
+        assert!(
+            !err.is_null(),
+            "a refusal must say why; the host has no other signal"
+        );
+        let msg = unsafe { CStr::from_ptr(err) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { patala_free(err) };
+        assert!(
+            msg.contains("UTF-8"),
+            "the error should name the cause, got: {msg}"
+        );
+    }
+
+    /// The other half: NULL and empty still mean "absent", which is a documented
+    /// and useful thing to pass. Without this the fix above could be "refuse
+    /// everything", which would pass the test above and break every host.
+    #[test]
+    fn null_and_empty_still_select_the_documented_offline_default() {
+        for (label, ptr) in [
+            ("NULL", std::ptr::null()),
+            (
+                "empty",
+                CString::new("").unwrap().into_raw() as *const c_char,
+            ),
+        ] {
+            let mut err: *mut c_char = std::ptr::null_mut();
+            let handle = unsafe { patala_new(ptr, &mut err) };
+            assert_ne!(handle, 0, "{label} config should open the offline MockRail");
+            assert!(err.is_null(), "{label} config should not set an error");
+            patala_close(handle);
+        }
     }
 }

@@ -118,6 +118,13 @@ int patala_abi_check(const char* expected, char** err);
  * network, so a consumer in any language can drive a full charge -> verify
  * round trip before a single secret exists.
  *
+ * Bytes that are not valid UTF-8 are REFUSED (0 with *err set) rather than
+ * treated as absent. The distinction is load-bearing: absent means the offline
+ * MockRail, so collapsing the two turned a corrupt configuration asking for a
+ * real processor into a mock that reported every charge as settled. If your
+ * host builds this string from a byte-string or a latin-1 source, that is the
+ * path — encode it as UTF-8 first.
+ *
  *   {"rail":"mock"}
  *   {"rail":"mock", "id":"mock", "class":"non-custodial-final",
  *    "currencies":["USDC","USD"], "fee_minor":0, "failing":false,

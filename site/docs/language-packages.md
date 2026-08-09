@@ -17,8 +17,10 @@ about patala's version of it.
 
 Every command is from the workspace root and needs the artifact its mode uses:
 `cargo build -p patala-ffi --release` for direct, `cargo build -p patala-sidecar
---release` for the sidecar. Python and Go build their own — see
-[Python binding](python.md) and [Go binding](go.md).
+--release` for the sidecar. Python, Go and Kotlin build their own — they are
+generated UniFFI bindings over `patala-uniffi`, not C-ABI callers — see
+[Python binding](python.md), [Go binding](go.md) and
+[`sdks/kotlin/README.md`](https://github.com/vul-os/patala/blob/main/sdks/kotlin/README.md).
 
 | Language | Direct | Sidecar |
 |---|---|---|

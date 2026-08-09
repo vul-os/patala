@@ -20,7 +20,9 @@ ruby sdks/ruby/examples/fork_probe.rb
 
 ## Which one to pick
 
-**Either.** If you have read llmux's or openrate's Ruby page, this is the point
+**Direct**, which is what [`sdks/README.md`](../README.md)'s index says for
+Ruby — and the point is that here it is a genuine choice rather than a forced
+one. If you have read llmux's or openrate's Ruby page, this is the point
 where they tell you the answer depends on whether your process forks, and send
 Unicorn, clustered Puma, Passenger, Resque and Spring to the sidecar. That
 advice is correct for them and **wrong here**, and the difference is not an
@@ -41,7 +43,8 @@ Nothing was started, so there is nothing to be left half-alive by a fork. The
 same probe against `libllmux.dylib` from a comparable host goes 1 → 7 threads on
 `dlopen` and the forked child **hangs** on the first real call.
 
-So pick on the merits instead:
+So neither Unicorn nor clustered Puma disqualifies direct mode, and you pick on
+the merits instead:
 
 - **Direct** when you want one fewer process: no port, no supervision, no
   loopback surface, and an 844,656-byte library (mock-only, release build) that

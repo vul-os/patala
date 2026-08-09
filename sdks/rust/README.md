@@ -8,7 +8,10 @@ trait.
 
 ```toml
 [dependencies]
-patala-core = "0.1"
+# patala is not on crates.io — nothing in this repo is published yet
+# (`SECURITY.md`). Vendor it by path, as this directory's own Cargo.toml does,
+# or by git URL. Swap in a version when it publishes; nothing else changes.
+patala-core = { path = "../../patala-core" }
 ```
 
 ```rust

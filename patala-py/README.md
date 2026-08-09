@@ -37,8 +37,10 @@ Swift/Kotlin are effectively free once a UniFFI IDL exists. This crate
 follows that call:
 
 - **UniFFI** generates bindings for *every* target language from one
-  `#[uniffi::export]` surface (`src/lib.rs`). Adding Swift or Kotlin later is
-  a bindgen invocation with a different `--language`, not a new crate. That
+  `#[uniffi::export]` surface (`src/lib.rs`). Adding Swift and Kotlin was a
+  bindgen invocation with a different `--language`, not a new crate — both now
+  exist and run, in [`sdks/swift/uniffi`](../sdks/swift/uniffi/) and
+  [`sdks/kotlin`](../sdks/kotlin/README.md). That
   is the literal "M×1, never M×N" principle §5 states — one Rust surface,
   many language consumers, and every consumer is generated from the *same*
   definition rather than hand-written per language.

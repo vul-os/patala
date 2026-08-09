@@ -190,11 +190,17 @@ through it is one. See [Status](status.md).
 
 ## 5. Your language, already packaged
 
-The four above are the four surfaces. You probably do not have to wire one up
-by hand: `sdks/` holds a **working package for fifteen languages**, each with an
-in-process path and a managed-sidecar path, and each with two runnable examples
-that do the exact round trip on this page. Pick a row, run it, read the README
-next to it.
+The four above are four of the five surfaces. The fifth is **the C ABI** — a
+plain `extern "C"` shared library, six symbols, JSON in and JSON out — and the
+shortest way to try it is the first row of the table below:
+`sdks/c/run-demo.sh direct` builds a C program that `dlopen`s
+`libpatala_ffi` and drives this same round trip. [The C ABI](c-abi.md) is its
+contract; `patala-ffi/README.md` has a 30-line version you can paste.
+
+You probably do not have to wire any of them up by hand: `sdks/` holds a
+**working package for fifteen languages**, each with an in-process path and a
+managed-sidecar path, and each with two runnable examples that do the exact
+round trip on this page. Pick a row, run it, read the README next to it.
 
 | | Direct | Sidecar |
 |---|---|---|
@@ -214,8 +220,10 @@ next to it.
 | [go](../sdks/go/README.md) | `sdks/go/examples/run.sh direct` | `sdks/go/examples/run.sh sidecar` |
 | [elixir](../sdks/elixir/README.md) | `cd sdks/elixir && mix run examples/direct_charge.exs` | `cd sdks/elixir && mix run examples/sidecar_charge.exs` |
 
-Direct mode needs `cargo build -p patala-ffi --release` first (Python and Go
-build their own binding); the sidecar rows need
+Direct mode needs `cargo build -p patala-ffi --release` first — except for
+python, go and kotlin, which are generated UniFFI bindings over
+`patala-uniffi` and whose own `make`/`run-examples.sh` build what they need;
+the sidecar rows need
 `cargo build -p patala-sidecar --release`. Which of the two a given language
 *should* default to is a real question with a per-language answer —
 [Fifteen language packages](language-packages.md) is that answer, and

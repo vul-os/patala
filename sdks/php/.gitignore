@@ -1,0 +1,7 @@
+# A platform package would ship the shared library in lib/; it is build output,
+# reproduced by `cargo build -p patala-ffi`, and is not checked in.
+/lib/*.dylib
+/lib/*.so
+/lib/*.dll
+/vendor/
+composer.lock

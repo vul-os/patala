@@ -1,0 +1,29 @@
+{
+    "name": "vulos/patala",
+    "description": "patala from PHP: in-process over the C ABI (ext-ffi), or over the local patala-sidecar",
+    "type": "library",
+    "license": "MIT OR Apache-2.0",
+    "authors": [
+        {
+            "name": "imranparuk"
+        }
+    ],
+    "homepage": "https://vulos.org/projects/patala",
+    "require": {
+        "php": ">=7.4",
+        "ext-json": "*"
+    },
+    "suggest": {
+        "ext-ffi": "Required for \\Patala\\Ffi (in-process). \\Patala\\Sidecar needs nothing beyond ext-json."
+    },
+    "autoload": {
+        "psr-4": {
+            "Patala\\": "src/"
+        }
+    },
+    "scripts": {
+        "example:direct": "php examples/direct_charge.php",
+        "example:sidecar": "php examples/sidecar_charge.php",
+        "example:fork": "php examples/fork_probe.php"
+    }
+}

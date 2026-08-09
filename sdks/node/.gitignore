@@ -1,0 +1,15 @@
+# patala's root .gitignore covers the Rust tree, not a node package, so this
+# package ignores its own install tree and TypeScript output here rather than
+# editing a shared file other sessions are committing to.
+node_modules/
+
+# tsc output. `npm run build` regenerates it; the "files" list in package.json
+# is what a publish would ship, built in CI, not committed here.
+/index.js
+/index.d.ts
+/direct.js
+/direct.d.ts
+/sidecar.js
+/sidecar.d.ts
+/types.js
+/types.d.ts

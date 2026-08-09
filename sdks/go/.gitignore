@@ -1,0 +1,6 @@
+# Compiled example binaries. `go run` leaves nothing behind, but `go build`
+# without -o drops the binary next to the package.
+/direct
+/sidecar
+/examples/direct/direct
+/examples/sidecar/sidecar

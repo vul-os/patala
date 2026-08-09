@@ -216,9 +216,49 @@ mod tests {
                 key: "amount_gross".into(),
                 value: "100.00".into(),
             },
+            Kv {
+                key: "pf_payment_id".into(),
+                value: "pf_1".into(),
+            },
         ];
         let body = signed_body(&fields, PASSPHRASE);
         let event = verify_and_parse(PASSPHRASE, &body).unwrap();
         assert!(!event.settled);
+        assert_eq!(
+            event.event_id, "pf_1",
+            "a non-settling ITN still has to be nameable"
+        );
+    }
+
+    /// The same defect one layer up, through the signature check: a
+    /// CORRECTLY SIGNED failure ITN with no `pf_payment_id` used to be
+    /// accepted with `event_id: ""`.
+    #[test]
+    fn a_correctly_signed_itn_with_no_pf_payment_id_is_refused() {
+        let fields = vec![
+            Kv {
+                key: "m_payment_id".into(),
+                value: "ord_1".into(),
+            },
+            Kv {
+                key: "payment_status".into(),
+                value: "FAILED".into(),
+            },
+            Kv {
+                key: "amount_gross".into(),
+                value: "100.00".into(),
+            },
+        ];
+        let body = signed_body(&fields, PASSPHRASE);
+        match verify_and_parse(PASSPHRASE, &body) {
+            Err(e) => assert!(
+                e.to_string().contains("pf_payment_id"),
+                "refused, but not for the missing id: {e}"
+            ),
+            Ok(ev) => panic!(
+                "a signed ITN with no pf_payment_id reached Ok with event_id {:?}",
+                ev.event_id
+            ),
+        }
     }
 }

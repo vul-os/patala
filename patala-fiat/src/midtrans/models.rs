@@ -67,6 +67,17 @@ pub fn evaluate_status(s: &MidtransTransactionStatus) -> Result<StatusOutcome, E
     if s.order_id.is_empty() {
         return Err(malformed("missing order_id"));
     }
+    // `transaction_id` becomes `WebhookEvent::event_id`, which is documented
+    // "Never empty: a caller cannot suppress a duplicate it cannot name." It
+    // was checked only inside the two settling arms, so a signed
+    // `transaction_status=deny` / `expire` notification — the ones Midtrans
+    // actually redelivers — arrived with no dedup key. Required before the
+    // status is looked at: the status is not what makes an event nameable.
+    if s.transaction_id.is_empty() {
+        return Err(malformed(
+            "no transaction_id: this notification carries no id to deduplicate on",
+        ));
+    }
     let currency = s.currency_or_idr();
     let amount_minor = crate::currency::major_string_to_minor(&s.gross_amount, &currency)
         .map_err(|e| malformed(&format!("gross_amount {:?}: {e}", s.gross_amount)))?;
@@ -81,10 +92,8 @@ pub fn evaluate_status(s: &MidtransTransactionStatus) -> Result<StatusOutcome, E
                     currency,
                 });
             }
-            if amount_minor == 0 || s.transaction_id.is_empty() {
-                return Err(malformed(
-                    "capture/accept with non-positive amount or no transaction_id",
-                ));
+            if amount_minor == 0 {
+                return Err(malformed("capture/accept with non-positive amount"));
             }
             Ok(StatusOutcome {
                 event_id: s.transaction_id.clone(),
@@ -94,10 +103,8 @@ pub fn evaluate_status(s: &MidtransTransactionStatus) -> Result<StatusOutcome, E
             })
         }
         "settlement" => {
-            if amount_minor == 0 || s.transaction_id.is_empty() {
-                return Err(malformed(
-                    "settlement with non-positive amount or no transaction_id",
-                ));
+            if amount_minor == 0 {
+                return Err(malformed("settlement with non-positive amount"));
             }
             Ok(StatusOutcome {
                 event_id: s.transaction_id.clone(),
@@ -199,6 +206,7 @@ mod tests {
         for status in ["deny", "cancel", "expire", "failure", "pending"] {
             let s = MidtransTransactionStatus {
                 order_id: "ord_1".into(),
+                transaction_id: "txn_1".into(),
                 transaction_status: status.into(),
                 gross_amount: "10000.00".into(),
                 currency: "IDR".into(),
@@ -206,6 +214,51 @@ mod tests {
             };
             let outcome = evaluate_status(&s).unwrap();
             assert!(!outcome.settled, "{status}");
+            assert!(
+                !outcome.event_id.is_empty(),
+                "{status}: a non-settling notification still has to be nameable"
+            );
+        }
+    }
+
+    /// `WebhookEvent::event_id` is documented "Never empty: a caller cannot
+    /// suppress a duplicate it cannot name", and `transaction_id` is where
+    /// this rail's comes from. The check used to live inside the two SETTLING
+    /// arms only — which is the half of the traffic that never needs
+    /// deduplicating, since a `deny`/`expire` is what Midtrans redelivers.
+    /// Delete the guard at the top of `evaluate_status` and this test reports:
+    /// `deny: reached Ok with event_id "" -- a signed notification with no
+    /// transaction_id has no dedup key`.
+    #[test]
+    fn a_notification_with_no_transaction_id_is_refused_whatever_its_status() {
+        for status in [
+            "settlement",
+            "capture",
+            "deny",
+            "cancel",
+            "expire",
+            "pending",
+        ] {
+            let s = MidtransTransactionStatus {
+                order_id: "ord_1".into(),
+                transaction_id: String::new(),
+                transaction_status: status.into(),
+                fraud_status: "accept".into(),
+                gross_amount: "10000.00".into(),
+                currency: "IDR".into(),
+                ..Default::default()
+            };
+            match evaluate_status(&s) {
+                Err(e) => assert!(
+                    e.to_string().contains("transaction_id"),
+                    "{status}: refused, but not for the missing id: {e}"
+                ),
+                Ok(o) => panic!(
+                    "{status}: reached Ok with event_id {:?} -- a signed notification \
+                     with no transaction_id has no dedup key",
+                    o.event_id
+                ),
+            }
         }
     }
 

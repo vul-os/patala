@@ -101,14 +101,26 @@ pub fn verify_and_parse(
         return Err(PayUWebhookError::InvalidHash);
     }
 
+    // `mihpayid` is this event's id, and `WebhookEvent::event_id` is documented
+    // "Never empty: a caller cannot suppress a duplicate it cannot name." It
+    // was checked only inside the `"success"` arm, so a SIGNED failure
+    // redelivery — PayU retries those — arrived with no dedup key at all.
+    // Checked before the status is even looked at, because the status is not
+    // what makes an event nameable.
+    if mihpayid.is_empty() {
+        return Err(PayUWebhookError::MalformedResponse(
+            "no mihpayid: this delivery carries no id to deduplicate on".to_string(),
+        ));
+    }
+
     let amount_minor = crate::currency::major_string_to_minor(amount, "INR")
         .map_err(|e| PayUWebhookError::MalformedResponse(format!("amount {amount:?}: {e}")))?;
 
     let settled = match status {
         "success" => {
-            if amount_minor == 0 || mihpayid.is_empty() {
+            if amount_minor == 0 {
                 return Err(PayUWebhookError::MalformedResponse(
-                    "success status with non-positive amount or no mihpayid".to_string(),
+                    "success status with non-positive amount".to_string(),
                 ));
             }
             true
@@ -221,10 +233,39 @@ mod tests {
 
     #[test]
     fn failure_status_is_not_paid() {
-        let body = signed_body("failure", "");
+        let body = signed_body("failure", "mihpay123");
         let event = verify_and_parse(MERCHANT_KEY, SALT, &body).unwrap();
         assert!(!event.settled);
         assert_eq!(event.amount_minor, 0);
+        assert_eq!(
+            event.event_id, "mihpay123",
+            "a non-settling delivery still has to be nameable"
+        );
+    }
+
+    /// `WebhookEvent::event_id` is documented "Never empty: a caller cannot
+    /// suppress a duplicate it cannot name", and `mihpayid` is where this
+    /// rail's comes from. The check used to live inside the `"success"` arm
+    /// only, so this exact body — CORRECTLY SIGNED, PayU's own hash over it —
+    /// was accepted with `event_id: ""`. Delete the guard and this reports:
+    /// `failure: reached Ok with event_id "" -- a correctly signed delivery
+    /// with no mihpayid has no dedup key`.
+    #[test]
+    fn a_correctly_signed_delivery_with_no_mihpayid_is_refused() {
+        for status in ["failure", "pending", "success"] {
+            let body = signed_body(status, "");
+            match verify_and_parse(MERCHANT_KEY, SALT, &body) {
+                Err(e) => assert!(
+                    e.to_string().contains("mihpayid"),
+                    "{status}: refused, but not for the missing id: {e}"
+                ),
+                Ok(ev) => panic!(
+                    "{status}: reached Ok with event_id {:?} -- a correctly signed \
+                     delivery with no mihpayid has no dedup key",
+                    ev.event_id
+                ),
+            }
+        }
     }
 
     #[test]

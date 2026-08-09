@@ -177,15 +177,24 @@ pub fn evaluate_notification(
     if reference.is_empty() || amount_str.is_empty() {
         return Err(malformed("missing m_payment_id or amount_gross"));
     }
+    // `pf_payment_id` becomes `WebhookEvent::event_id`, which is documented
+    // "Never empty: a caller cannot suppress a duplicate it cannot name." It
+    // used to be checked only inside the `"COMPLETE"` arm, so a genuine
+    // (server-confirmed) `payment_status=FAILED` ITN arrived with no dedup key.
+    // Required first, before the status is looked at: the status is not what
+    // makes an event nameable.
+    if pf_payment_id.is_empty() {
+        return Err(malformed(
+            "no pf_payment_id: this notification carries no id to deduplicate on",
+        ));
+    }
     let amount_minor = crate::currency::major_string_to_minor(&amount_str, "ZAR")
         .map_err(|e| malformed(&format!("amount_gross {amount_str:?}: {e}")))?;
 
     match payment_status.as_str() {
         "COMPLETE" => {
-            if amount_minor == 0 || pf_payment_id.is_empty() {
-                return Err(malformed(
-                    "COMPLETE status with non-positive amount or no pf_payment_id",
-                ));
+            if amount_minor == 0 {
+                return Err(malformed("COMPLETE status with non-positive amount"));
             }
             Ok(NotificationOutcome {
                 reference,
@@ -296,8 +305,40 @@ mod tests {
         values.insert("m_payment_id".to_string(), "ord_1".to_string());
         values.insert("payment_status".to_string(), "FAILED".to_string());
         values.insert("amount_gross".to_string(), "100.00".to_string());
+        values.insert("pf_payment_id".to_string(), "pf_1".to_string());
         let outcome = evaluate_notification(&values).unwrap();
         assert!(!outcome.settled);
+        assert_eq!(
+            outcome.event_id, "pf_1",
+            "a non-settling ITN still has to be nameable"
+        );
+    }
+
+    /// `WebhookEvent::event_id` is documented "Never empty: a caller cannot
+    /// suppress a duplicate it cannot name", and `pf_payment_id` is where this
+    /// rail's comes from. The check used to live inside the `"COMPLETE"` arm
+    /// only. Delete the guard at the top of `evaluate_notification` and this
+    /// reports: `FAILED: reached Ok with event_id "" -- a server-confirmed ITN
+    /// with no pf_payment_id has no dedup key`.
+    #[test]
+    fn an_itn_with_no_pf_payment_id_is_refused_whatever_its_status() {
+        for status in ["COMPLETE", "FAILED", "CANCELLED"] {
+            let mut values = HashMap::new();
+            values.insert("m_payment_id".to_string(), "ord_1".to_string());
+            values.insert("payment_status".to_string(), status.to_string());
+            values.insert("amount_gross".to_string(), "100.00".to_string());
+            match evaluate_notification(&values) {
+                Err(e) => assert!(
+                    e.to_string().contains("pf_payment_id"),
+                    "{status}: refused, but not for the missing id: {e}"
+                ),
+                Ok(o) => panic!(
+                    "{status}: reached Ok with event_id {:?} -- a server-confirmed ITN \
+                     with no pf_payment_id has no dedup key",
+                    o.event_id
+                ),
+            }
+        }
     }
 
     #[test]

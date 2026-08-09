@@ -97,6 +97,16 @@ pub fn verify_and_parse(
             "missing reference or non-positive amount".to_string(),
         ));
     }
+    // `data.id` is `i64` with `#[serde(default)]`, so a body without one
+    // produced `event_id: "0"` — not empty, and therefore invisible to the
+    // "never empty" contract, but WORSE than empty: every such delivery gets
+    // the SAME id, so a consumer deduplicating on it discards the second and
+    // subsequent distinct events as replays of the first.
+    if envelope.data.id == 0 {
+        return Err(PaystackWebhookError::MalformedResponse(
+            "no data.id: this delivery carries no id to deduplicate on".to_string(),
+        ));
+    }
     Ok(PaystackWebhookEvent {
         event_id: envelope.data.id.to_string(),
         reference: envelope.data.reference,
@@ -119,6 +129,35 @@ mod tests {
     }
 
     // Ported from cackle's internal/payments/paystack_test.go (webhook section).
+
+    /// `data.id` is `i64` with `#[serde(default)]`, so a delivery without one
+    /// produced `event_id: "0"` — never empty, so invisible to
+    /// `WebhookEvent::event_id`'s "never empty" contract, and worse than
+    /// empty: EVERY such delivery gets the same id, so a consumer
+    /// deduplicating on it discards distinct events as replays of the first.
+    /// The signature here is GENUINE — Paystack's own HMAC-SHA512 over these
+    /// exact bytes — so nothing else in the pipeline stops it. Delete the
+    /// `data.id == 0` guard and this reports: `a signed delivery with no
+    /// data.id was named "0" -- every such delivery collides`.
+    #[test]
+    fn a_delivery_with_no_data_id_is_refused_rather_than_named_zero() {
+        let body =
+            br#"{"event":"charge.success","data":{"status":"success","reference":"ord_1","amount":5000,"currency":"ZAR"}}"#
+                .to_vec();
+        let sig = sign(&body);
+        match verify_and_parse(SECRET, &body, &sig) {
+            Err(PaystackWebhookError::MalformedResponse(m)) => assert!(
+                m.contains("data.id"),
+                "refused, but not for the missing id: {m}"
+            ),
+            Err(e) => panic!("refused, but not as malformed: {e}"),
+            Ok(ev) => panic!(
+                "a signed delivery with no data.id was named {:?} -- every such \
+                 delivery collides",
+                ev.event_id
+            ),
+        }
+    }
 
     #[test]
     fn valid_signature_succeeds() {

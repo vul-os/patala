@@ -140,6 +140,19 @@ pub fn verify_and_parse(
             last_err = AdyenWebhookError::MalformedResponse("missing merchantReference".into());
             continue;
         }
+        // `pspReference` becomes `WebhookEvent::event_id`, which is documented
+        // "Never empty: a caller cannot suppress a duplicate it cannot name."
+        // Both return arms below copied it out unchecked, so an item that
+        // passed the HMAC (which is computed over a payload whose pspReference
+        // field may itself be empty) produced an unnameable event. Adyen
+        // redelivers until acknowledged, so this is precisely the rail where a
+        // missing dedup key costs the most.
+        if item.psp_reference.is_empty() {
+            last_err = AdyenWebhookError::MalformedResponse(
+                "no pspReference: this notificationItem carries no id to deduplicate on".into(),
+            );
+            continue;
+        }
 
         let currency = item.amount.currency.trim().to_ascii_uppercase();
         if item.success == "true" {
@@ -218,6 +231,34 @@ mod tests {
             r#"{{"live":"false","notificationItems":[{{"NotificationRequestItem":{{"additionalData":{{"hmacSignature":"{sig}"}},"amount":{{"value":{value},"currency":"{currency}"}},"eventCode":"{event_code}","merchantReference":"{merchant_ref}","pspReference":"{psp}","success":"{success}"}}}}]}}"#
         )
         .into_bytes()
+    }
+
+    /// `WebhookEvent::event_id` is documented "Never empty: a caller cannot
+    /// suppress a duplicate it cannot name", and `pspReference` is where this
+    /// rail's comes from. Both return arms copied it out unchecked, so this
+    /// body — whose HMAC is GENUINE, computed over a signing string with an
+    /// empty pspReference exactly as Adyen constructs it — was accepted with
+    /// `event_id: ""`. Adyen redelivers until acknowledged, so a consumer
+    /// deduplicating on that id discards every distinct unacknowledged event
+    /// after the first. Delete the `psp_reference.is_empty()` guard and this
+    /// reports: `success=true: reached Ok with event_id "" -- a correctly
+    /// HMAC'd notificationItem with no pspReference has no dedup key`.
+    #[test]
+    fn a_correctly_hmacd_item_with_no_psp_reference_is_refused() {
+        for success in ["true", "false"] {
+            let body = notification_body("", "ord_1", 5000, "EUR", "AUTHORISATION", success);
+            match verify_and_parse(HMAC_KEY, &body) {
+                Err(e) => assert!(
+                    e.to_string().contains("pspReference"),
+                    "success={success}: refused, but not for the missing id: {e}"
+                ),
+                Ok(ev) => panic!(
+                    "success={success}: reached Ok with event_id {:?} -- a correctly \
+                     HMAC'd notificationItem with no pspReference has no dedup key",
+                    ev.event_id
+                ),
+            }
+        }
     }
 
     #[test]

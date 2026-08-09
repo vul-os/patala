@@ -142,7 +142,13 @@ pub fn parse_capture_completed(raw_body: &[u8]) -> Result<ParsedCaptureEvent, Pa
     }
     let capture: CaptureResource = serde_json::from_value(envelope.resource)
         .map_err(|e| PayPalWebhookError::MalformedResponse(format!("event resource: {e}")))?;
-    if !capture.status.is_empty() && capture.status != "COMPLETED" {
+    // `!is_empty() && != "COMPLETED"` let an ABSENT resource.status through as
+    // a completed capture: the guard only ever fired on a status that
+    // disagreed, never on one that was not there. Matched positively now, the
+    // way `stripe::models::evaluate_session` matches `"paid"` — the event type
+    // says what PayPal called this delivery, `resource.status` says what the
+    // money did, and only the second one may answer the second question.
+    if capture.status != "COMPLETED" {
         return Err(PayPalWebhookError::MalformedResponse(format!(
             "PAYMENT.CAPTURE.COMPLETED event carried resource.status={:?}",
             capture.status
@@ -158,6 +164,15 @@ pub fn parse_capture_completed(raw_body: &[u8]) -> Result<ParsedCaptureEvent, Pa
     } else {
         capture.id
     };
+    // Both candidates are `#[serde(default)]` strings, so a body carrying
+    // neither reached `WebhookEvent::event_id`, which is documented "Never
+    // empty: a caller cannot suppress a duplicate it cannot name." PayPal
+    // redelivers an unacknowledged webhook for three days.
+    if event_id.is_empty() {
+        return Err(PayPalWebhookError::MalformedResponse(
+            "neither the event nor the capture resource has an id to deduplicate on".to_string(),
+        ));
+    }
     Ok(ParsedCaptureEvent {
         event_id,
         custom_id: capture.custom_id,
@@ -238,5 +253,51 @@ mod tests {
             parse_capture_completed(&body),
             Err(PayPalWebhookError::MalformedResponse(_))
         ));
+    }
+
+    /// The guard was `!status.is_empty() && status != "COMPLETED"`, so it
+    /// fired on a status that DISAGREED and never on one that was not there —
+    /// an absent `resource.status` read as a completed capture. Restore the
+    /// `!capture.status.is_empty() &&` prefix and this reports: `a capture
+    /// resource with NO status parsed as a completed capture (event_id
+    /// "WH-EVT-1") -- settlement must be positively reported, never
+    /// defaulted`.
+    #[test]
+    fn a_capture_resource_with_no_status_is_not_a_completed_capture() {
+        let body = br#"{"id":"WH-EVT-1","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"CAP1","custom_id":"ord_1","amount":{"currency_code":"USD","value":"50.00"}}}"#;
+        match parse_capture_completed(body) {
+            Err(PayPalWebhookError::MalformedResponse(m)) => {
+                assert!(m.contains("resource.status"), "refused, but for: {m}")
+            }
+            Err(e) => panic!("refused, but not as malformed: {e}"),
+            Ok(p) => panic!(
+                "a capture resource with NO status parsed as a completed capture \
+                 (event_id {:?}) -- settlement must be positively reported, never defaulted",
+                p.event_id
+            ),
+        }
+    }
+
+    /// Both `id` candidates are `#[serde(default)]` strings, so a body with
+    /// neither reached `WebhookEvent::event_id`, documented "Never empty: a
+    /// caller cannot suppress a duplicate it cannot name" — and PayPal
+    /// redelivers an unacknowledged webhook for three days. Delete the
+    /// `event_id.is_empty()` guard and this reports: `reached Ok with an empty
+    /// event_id -- PayPal redelivers for three days and this event cannot be
+    /// named`.
+    #[test]
+    fn an_event_with_neither_an_event_id_nor_a_capture_id_is_refused() {
+        let body = event_body("", "", "ord_1", "USD", "50.00");
+        match parse_capture_completed(&body) {
+            Err(PayPalWebhookError::MalformedResponse(m)) => assert!(
+                m.contains("deduplicate"),
+                "refused, but not for the missing id: {m}"
+            ),
+            Err(e) => panic!("refused, but not as malformed: {e}"),
+            Ok(_) => panic!(
+                "reached Ok with an empty event_id -- PayPal redelivers for three \
+                 days and this event cannot be named"
+            ),
+        }
     }
 }

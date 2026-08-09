@@ -92,6 +92,20 @@ pub fn verify_and_parse(
     if envelope.event != "charge.completed" {
         return Err(FlutterwaveWebhookError::UnhandledEvent(envelope.event));
     }
+    // `data.id` is `i64` with `#[serde(default)]`, so a body without one
+    // produced `event_id: "0"` — not empty, and therefore invisible to
+    // `WebhookEvent::event_id`'s "never empty" contract, but WORSE than empty:
+    // every such delivery gets the SAME id, so a consumer deduplicating on it
+    // discards the second and subsequent distinct events as replays of the
+    // first. Checked here, at the webhook boundary, and not in
+    // `models::evaluate_transaction`, which `verify()` also calls and which
+    // answers a different question (`verify` reconciles on `tx_ref`, and its
+    // contract is `Ok(false)` on doubt rather than a dedup key).
+    if envelope.data.id == 0 {
+        return Err(FlutterwaveWebhookError::MalformedResponse(
+            "no data.id: this delivery carries no id to deduplicate on".to_string(),
+        ));
+    }
     let outcome = models::evaluate_transaction(&envelope.data)
         .map_err(|e| FlutterwaveWebhookError::MalformedResponse(e.to_string()))?;
 
@@ -132,6 +146,35 @@ mod tests {
         assert!(event.settled);
         assert_eq!(event.amount_minor, 10000);
         assert_eq!(event.reference, "ord_1");
+    }
+
+    /// `data.id` is `i64` with `#[serde(default)]`, so a delivery without one
+    /// produced `event_id: "0"` — never empty, so invisible to the "never
+    /// empty" contract, and worse than empty: EVERY such delivery gets the
+    /// same id, so a consumer deduplicating on it discards distinct events as
+    /// replays of the first. Delete the `data.id == 0` guard and this reports:
+    /// `two distinct deliveries both got event_id "0" -- deduplicating on that
+    /// discards the second`.
+    #[test]
+    fn a_delivery_with_no_data_id_is_refused_rather_than_named_zero() {
+        for status in ["successful", "failed"] {
+            let body = format!(
+                r#"{{"event":"charge.completed","data":{{"tx_ref":"ord_1","amount":100,"currency":"NGN","status":"{status}"}}}}"#
+            )
+            .into_bytes();
+            match verify_and_parse(HASH, &body, HASH) {
+                Err(FlutterwaveWebhookError::MalformedResponse(m)) => assert!(
+                    m.contains("data.id"),
+                    "{status}: refused, but not for the missing id: {m}"
+                ),
+                Err(e) => panic!("{status}: refused, but not as malformed: {e}"),
+                Ok(ev) => panic!(
+                    "{status}: two distinct deliveries both got event_id {:?} -- \
+                     deduplicating on that discards the second",
+                    ev.event_id
+                ),
+            }
+        }
     }
 
     #[test]

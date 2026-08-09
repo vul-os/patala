@@ -140,10 +140,15 @@ pub fn verify_and_parse(
     if envelope.event_type != "payment.succeeded" {
         return Err(YocoWebhookError::UnhandledEvent(envelope.event_type));
     }
-    let mut payload = envelope.payload;
-    if payload.status.is_empty() {
-        payload.status = "completed".to_string();
-    }
+    // An ABSENT `payload.status` used to be rewritten to `"completed"` here,
+    // on the reasoning that the `payment.succeeded` event name already says so.
+    // That made "the field Yoco uses to report the outcome is missing" read as
+    // "money moved" — the one direction a payments adapter must never default
+    // in. The event type still decides which deliveries get this far (anything
+    // but `payment.succeeded` is rejected above); it no longer stands in for
+    // the settlement claim. `models::evaluate_checkout` matches `"completed"`
+    // positively, so an empty status now falls through its fail-closed arm.
+    let payload = envelope.payload;
     let outcome = models::evaluate_checkout(&payload)
         .map_err(|e| YocoWebhookError::MalformedResponse(e.to_string()))?;
 
@@ -192,6 +197,35 @@ mod tests {
         assert!(event.settled);
         assert_eq!(event.amount_minor, 1000);
         assert_eq!(event.checkout_id, "chk_abc");
+    }
+
+    /// `verify_and_parse` used to rewrite an ABSENT `payload.status` to
+    /// `"completed"` before evaluating it, on the reasoning that the
+    /// `payment.succeeded` event name already says so. That made "the field
+    /// Yoco uses to report the outcome is missing" read as "money moved", on a
+    /// delivery whose signature is GENUINE. Restore the
+    /// `if payload.status.is_empty() { payload.status = "completed" }` rewrite
+    /// and this reports: `a payment.succeeded delivery whose payload has NO
+    /// status settled 1000 -- settlement must be positively reported, never
+    /// defaulted`.
+    #[test]
+    fn a_payload_with_no_status_does_not_settle() {
+        let body = br#"{"type":"payment.succeeded","payload":{"id":"chk_abc","amount":1000,"currency":"ZAR"}}"#.to_vec();
+        let ts = "1700000000";
+        let sig = sign("msg_1", ts, &body);
+        let event = verify_and_parse(SECRET, &body, "msg_1", ts, &sig, 1_700_000_000)
+            .expect("the signature is genuine, so the delivery is authentic");
+        assert!(
+            !event.settled,
+            "a payment.succeeded delivery whose payload has NO status settled {} -- \
+             settlement must be positively reported, never defaulted",
+            event.amount_minor
+        );
+        assert_eq!(event.amount_minor, 0);
+        assert_eq!(
+            event.event_id, "chk_abc",
+            "and it is still a nameable event"
+        );
     }
 
     #[test]

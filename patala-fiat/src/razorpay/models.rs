@@ -62,29 +62,38 @@ pub struct PaymentOutcome {
 }
 
 /// Mirrors cackle's `razorpayPaymentToResult`: turns a payment entity into
-/// a settlement outcome, failing closed on anything malformed or
-/// ambiguous. If `status` is empty, it is treated as `"captured"` first
-/// (mirrors cackle's webhook-path tolerance: `if pay.Status == "" { pay.Status
-/// = "captured" }`, since the `payment.captured` event name itself already
-/// asserts this — see `webhook.rs`, the only caller that can hit an empty
-/// status; `verify()`'s own API response always has a real status).
+/// a settlement outcome, failing closed on anything malformed or ambiguous.
+///
+/// **An absent `status` is not `"captured"`.** This used to open with cackle's
+/// webhook-path tolerance — `if pay.Status == "" { pay.Status = "captured" }`,
+/// on the reasoning that the `payment.captured` event name already asserts it
+/// — which made "the field Razorpay uses to say whether money moved is
+/// missing" read as "money moved". That is the one default a payments library
+/// cannot have: a processor payload change, or an entity shape this adapter
+/// has not seen, becomes a settlement nobody reported. `stripe::models`'
+/// `evaluate_session` matches `"paid"` positively with no default arm at all,
+/// and this now does the same. The event name still gates which deliveries
+/// reach here (`webhook.rs` rejects anything but `payment.captured`); it no
+/// longer supplies the settlement claim as well.
 pub fn evaluate_payment(pay: &RazorpayPayment) -> Result<PaymentOutcome, Error> {
     if pay.order_id.is_empty() {
         return Err(malformed("missing order_id"));
     }
+    // `id` becomes `WebhookEvent::event_id`, which is documented "Never empty:
+    // a caller cannot suppress a duplicate it cannot name." It was checked only
+    // inside the `"captured"` arm, so a signed `authorized`/`failed` entity
+    // arrived with no dedup key. Required before the status is looked at.
+    if pay.id.is_empty() {
+        return Err(malformed(
+            "no payment id: this entity carries no id to deduplicate on",
+        ));
+    }
     let currency = pay.currency.trim().to_ascii_uppercase();
-    let status: &str = if pay.status.is_empty() {
-        "captured"
-    } else {
-        pay.status.as_str()
-    };
 
-    match status {
+    match pay.status.as_str() {
         "captured" => {
-            if pay.amount == 0 || pay.id.is_empty() {
-                return Err(malformed(
-                    "captured with non-positive amount or no payment id",
-                ));
+            if pay.amount == 0 {
+                return Err(malformed("captured with non-positive amount"));
             }
             Ok(PaymentOutcome {
                 order_id: pay.order_id.clone(),
@@ -94,8 +103,8 @@ pub fn evaluate_payment(pay: &RazorpayPayment) -> Result<PaymentOutcome, Error> 
                 currency,
             })
         }
-        // "created" | "authorized" (not yet captured) | "failed" | anything
-        // else: fail closed -- never treated as captured.
+        // "" (absent) | "created" | "authorized" (not yet captured) |
+        // "failed" | anything else: fail closed -- never treated as captured.
         _ => Ok(PaymentOutcome {
             order_id: pay.order_id.clone(),
             event_id: pay.id.clone(),
@@ -175,8 +184,15 @@ mod tests {
         }
     }
 
+    /// This test asserted the OPPOSITE — `empty_status_defaults_to_captured`
+    /// — and passing was the defect. An absent `status` is the field that
+    /// reports whether money moved being missing; reading it as `"captured"`
+    /// turns a payload shape this adapter has not seen into a settlement
+    /// nobody reported. Restore the `if pay.status.is_empty() { "captured" }`
+    /// rewrite and this reports: `an absent status was read as captured --
+    /// settlement must be positively reported, never defaulted`.
     #[test]
-    fn empty_status_defaults_to_captured() {
+    fn empty_status_is_not_captured() {
         let pay = RazorpayPayment {
             id: "pay_1".into(),
             order_id: "order_1".into(),
@@ -186,7 +202,47 @@ mod tests {
             created_at: 0,
         };
         let outcome = evaluate_payment(&pay).unwrap();
-        assert!(outcome.settled);
+        assert!(
+            !outcome.settled,
+            "an absent status was read as captured -- settlement must be \
+             positively reported, never defaulted"
+        );
+        assert_eq!(outcome.amount_minor, 0);
+        assert_eq!(
+            outcome.event_id, "pay_1",
+            "and it is still a nameable event"
+        );
+    }
+
+    /// `WebhookEvent::event_id` is documented "Never empty: a caller cannot
+    /// suppress a duplicate it cannot name", and the payment `id` is where
+    /// this rail's comes from. The check used to live inside the `"captured"`
+    /// arm only. Delete the guard at the top of `evaluate_payment` and this
+    /// reports: `authorized: reached Ok with event_id "" -- an entity with no
+    /// payment id has no dedup key`.
+    #[test]
+    fn a_payment_entity_with_no_id_is_refused_whatever_its_status() {
+        for status in ["captured", "authorized", "created", "failed", ""] {
+            let pay = RazorpayPayment {
+                id: String::new(),
+                order_id: "order_1".into(),
+                amount: 5000,
+                currency: "INR".into(),
+                status: status.into(),
+                created_at: 0,
+            };
+            match evaluate_payment(&pay) {
+                Err(e) => assert!(
+                    e.to_string().contains("payment id"),
+                    "{status:?}: refused, but not for the missing id: {e}"
+                ),
+                Ok(o) => panic!(
+                    "{status:?}: reached Ok with event_id {:?} -- an entity with no \
+                     payment id has no dedup key",
+                    o.event_id
+                ),
+            }
+        }
     }
 
     #[test]

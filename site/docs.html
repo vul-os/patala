@@ -272,7 +272,15 @@
   }
   .docs-nav a:hover{background:var(--surface-raised);color:var(--ink)}
   .docs-nav a.active{background:var(--surface-raised);color:var(--ink);border-left-color:var(--vermilion)}
-  .docs-nav a.active .dn-n{color:var(--vermilion)}
+  /* --vermilion-BRIGHT, not --vermilion, and only here. The active row is the
+     one place on this page where text lands on --surface-raised (#273052)
+     rather than on --canvas or --surface, and patala.css's measured figures
+     (6.11 / 5.52) are against those two grounds. Measured on the ground it is
+     actually painted on, --vermilion is 4.22:1 at 12px — under AA's 4.5.
+     --vermilion-bright is 5.79:1 there. The pip and the left rail keep
+     --vermilion: they are non-text indicators, judged against 3:1, and 4.22
+     clears that comfortably. */
+  .docs-nav a.active .dn-n{color:var(--vermilion-bright)}
   .docs-nav a.active::before{border-color:var(--vermilion);background:var(--vermilion)}
   :root[data-theme="light"] .docs-nav a.active{border-left-color:var(--vermilion-deep)}
   :root[data-theme="light"] .docs-nav a.active .dn-n{color:var(--vermilion-deep)}

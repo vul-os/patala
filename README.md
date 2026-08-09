@@ -177,6 +177,7 @@ never does. There is no balance table, no payout queue, no ledger.
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |
 | `patala-uniffi` | the one UniFFI surface, namespace `patala` → Python and Go today, Swift/Kotlin/wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
 | `patala-py` | the Python wheel over `patala-uniffi` (cdylib + generated `patala.py`) | — | 3 (namespace + re-export) + the CI `smoke-python` job | executed, and now CI-enforced |
+| `patala-ffi` | a plain `extern "C"` cdylib (JSON in/out, `uint64` handles) for the languages UniFFI has no backend for — C, C++, Node/Deno/Bun, PHP, Elixir | — | 23 Rust (25 with `fiat-all`) + 55 checks driven through C by `ctest/smoke.c` | executed, and now CI-enforced |
 | `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still
@@ -236,7 +237,13 @@ Nothing is reimplemented per language:
    generating both the Python binding packaged by `patala-py/` and (via
    `uniffi-bindgen-go`) the Go binding in `patala-go/`. Real round-trips,
    real cgo, CI-enforced on both languages.
-3. **`patala-sidecar`** — a thin local HTTP server over the core, token-gated
+3. **`patala-ffi`** — a plain `extern "C"` shared library, JSON in and JSON
+   out, for the languages UniFFI cannot generate for. patala being Rust, it
+   puts **no runtime in the host process**: no GC, no scheduler, no signal
+   handlers, nothing started at load, and an 0.81 MiB offline artifact. A C
+   smoke test dlopens it and counts the process's threads, so that claim is
+   enforced rather than asserted.
+4. **`patala-sidecar`** — a thin local HTTP server over the core, token-gated
    and fail-closed. Any language with an HTTP client can drive the substrate
    with zero FFI; keys live in one hardened process instead of being smeared
    across every app.

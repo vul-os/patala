@@ -10,7 +10,7 @@
 # (patala-go has its own Makefile for the UniFFI binding generation — this one
 # is the Rust workspace.)
 
-.PHONY: check fmt fmt-check lint test test-features doc features smoke-python smoke-go clean
+.PHONY: check fmt fmt-check lint test test-features doc features smoke-python smoke-go smoke-ffi clean
 
 # The full gate. Run before pushing.
 check: fmt-check lint test test-features doc features
@@ -31,6 +31,7 @@ lint:
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo clippy -p patala-fiat --all-features --all-targets -- -D warnings
 	cargo clippy -p patala-uniffi --features fiat-all --all-targets -- -D warnings
+	cargo clippy -p patala-ffi --features fiat-all --all-targets -- -D warnings
 
 # The whole workspace suite. Doctests run here too; the live-network rail tests
 # stay #[ignore]d unless PATALA_SOLANA_LIVE_RPC / PATALA_STELLAR_LIVE are set.
@@ -47,6 +48,7 @@ test:
 test-features:
 	cargo test -p patala-fiat --all-features
 	cargo test -p patala-uniffi --features fiat-all
+	cargo test -p patala-ffi --features fiat-all
 
 # Docs must build clean — a broken intra-doc link fails the build.
 doc:
@@ -111,6 +113,28 @@ smoke-go:
 		echo "gofmt: not formatted:" >&2; echo "$$unformatted" >&2; exit 1; \
 	fi; \
 	echo "gofmt: clean (patala-go/bindingtest, patala-go/examples)"
+
+# The C ABI, actually exercised through C. `smoke-python`/`smoke-go`'s
+# counterpart and CI's fourth job.
+#
+# Every Rust test in patala-ffi calls the Rust functions directly, so all of
+# them would pass with a missing #[no_mangle], a renamed export, or a header
+# that has drifted from the library. Only a program that dlopens the built
+# artifact and resolves the symbols BY NAME can catch that — which is what
+# patala-ffi/ctest/smoke.c does, driving a real MockRail charge -> verify round
+# trip through include/patala.h, and asserting the NUMBER of checks it ran so
+# that a C test which exits 0 having executed three of them is a failure.
+#
+# It also counts the process's threads across dlopen and across a full round
+# trip, which is how "no runtime in the host process" — patala's actual
+# advantage over the Go-based C ABIs in this suite — stays a fact rather than a
+# sentence in a README.
+#
+# Needs a C compiler and nothing else. Not part of `check` for the same reason
+# `smoke-python`/`smoke-go` are not: `check` is the pure-cargo gate.
+smoke-ffi:
+	./scripts/ffi-ctest.sh
+	./scripts/ffi-ctest.sh --features fiat-all
 
 clean:
 	cargo clean

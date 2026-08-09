@@ -249,6 +249,7 @@ patala/
   patala-uniffi/             # THE UniFFI surface (namespace "patala") — every UniFFI language generates from this
   patala-py/                 # Python packaging of patala-uniffi (the cdylib a wheel ships)
   patala-go/                  # Go binding, generated via uniffi-bindgen-go from patala-uniffi's cdylib
+  patala-ffi/                # plain extern "C" cdylib (JSON in/out) for C, C++, Node, PHP, Elixir — the languages UniFFI cannot reach
   patala-sidecar/            # thin local HTTP server over the core
   README.md  LICENSE-MIT  LICENSE-APACHE  PATALA.md
 ```

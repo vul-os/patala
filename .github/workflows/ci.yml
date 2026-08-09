@@ -127,3 +127,27 @@ jobs:
       # `//go:build fiat` exclusion actually working), plus gofmt.
       - name: make smoke-go
         run: make smoke-go
+
+  c-abi:
+    name: c abi (dlopened from C, not just compiled)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      # ubuntu-latest already ships gcc. This fails loudly rather than letting
+      # scripts/ffi-ctest.sh be the place that discovers it is missing.
+      - name: Verify the C toolchain
+        run: cc --version
+
+      # Two passes: the default mock-only library (the small, offline artifact
+      # the README quotes a size for) and the everything-on fiat build, which is
+      # where the optional patala-uniffi dependency and twenty processor
+      # adapters are actually linked into the C surface.
+      - name: make smoke-ffi
+        run: make smoke-ffi

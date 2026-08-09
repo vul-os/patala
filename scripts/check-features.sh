@@ -10,14 +10,14 @@
 # cdylib with, so a processor missing from `fiat-all` is silently absent from
 # the Go binding.
 #
-# patala-py is a FORWARDER: it declares the same `fiat-<name>` names, enabling
-# exactly `patala-uniffi/fiat-<name>`. A forwarder that skips a processor
-# cannot build a wheel with that processor in it, however complete
-# patala-uniffi is — so it is checked too, in the same loop, rather than being
-# trusted to keep up.
+# patala-py and patala-ffi are FORWARDERS: each declares the same
+# `fiat-<name>` names, enabling exactly `patala-uniffi/fiat-<name>`. A
+# forwarder that skips a processor cannot build a wheel or a C library with
+# that processor in it, however complete patala-uniffi is — so both are
+# checked too, in the same loop, rather than being trusted to keep up.
 #
 # Nothing enforced this before: it held only because each new processor was
-# added to every list by hand. This script is that enforcement — four source
+# added to every list by hand. This script is that enforcement — five source
 # files must agree, or `make check` fails. Pure bash + coreutils, no toolchain.
 set -uo pipefail
 
@@ -30,7 +30,15 @@ uniffi_toml="$root/patala-uniffi/Cargo.toml"
 forwarders=(
   "patala-uniffi:$uniffi_toml:patala-fiat"
   "patala-py:$root/patala-py/Cargo.toml:patala-uniffi"
+  "patala-ffi:$root/patala-ffi/Cargo.toml:patala-uniffi"
 )
+
+# The crates whose `fiat-all` ENUMERATES every fiat-<name> (rather than
+# forwarding a single `patala-uniffi/fiat-all`). Both have per-adapter code or
+# tests of their own behind `#[cfg(feature = "fiat-<name>")]`, so an adapter
+# missing from their `fiat-all` is code that the everything-on build silently
+# does not compile. patala-py has no such cfg and forwards instead.
+fiat_all_tomls=("$uniffi_toml" "$root/patala-ffi/Cargo.toml")
 fiat_src="$root/patala-fiat/src"
 webhook_cov="$root/patala-fiat/tests/webhook_coverage.rs"
 
@@ -45,11 +53,29 @@ if [ -z "$processors" ]; then
   exit 2
 fi
 
-# fiat-all's members in patala-uniffi (the authority), one "fiat-<name>" per
-# line. The forwarders' own fiat-all is a single "patala-uniffi/fiat-all", so
-# there is only ever one enumerated list to keep in step with src/.
-fiat_all_members="$(awk '/^fiat-all *= *\[/{f=1} f{print} /\]/{if(f)exit}' "$uniffi_toml" \
-  | grep -oE '"fiat-[a-z0-9]+"' | tr -d '"' | sort -u)"
+# fiat-all's members, one "fiat-<name>" per line, for each crate that
+# enumerates them. Read ONCE per crate, not once per processor.
+fiat_all_members_of() {
+  awk '/^fiat-all *= *\[/{f=1} f{print} /\]/{if(f)exit}' "$1" \
+    | grep -oE '"fiat-[a-z0-9]+"' | tr -d '"' | sort -u
+}
+# `has_line <haystack> <line>` — exact-line membership without a pipeline.
+# The obvious `printf ... | grep -qx` is subtly WRONG under `set -o pipefail`:
+# grep exits as soon as it matches, printf takes SIGPIPE, and pipefail then
+# reports the pipeline as failed for a check that actually PASSED. That made
+# this script report random missing processors on a correct tree. Bash pattern
+# matching has no pipeline and no race.
+has_line() {
+  case $'\n'"$1"$'\n' in
+    *$'\n'"$2"$'\n'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+fiat_all_members="$(fiat_all_members_of "$uniffi_toml")"
+declare -a fiat_all_lists=()
+for toml in "${fiat_all_tomls[@]}"; do
+  fiat_all_lists+=("$(fiat_all_members_of "$toml")")
+done
 
 for p in $processors; do
   # 1. patala-fiat defines the per-processor feature.
@@ -76,9 +102,12 @@ for p in $processors; do
     fi
   done
 
-  # 3. fiat-all includes fiat-<p>.
-  printf '%s\n' "$fiat_all_members" | grep -qx "fiat-$p" \
-    || note "patala-uniffi fiat-all is missing fiat-$p (patala-go's cdylib would omit it)"
+  # 3. Every enumerating crate's fiat-all includes fiat-<p>.
+  for i in "${!fiat_all_tomls[@]}"; do
+    crate_dir="$(basename "$(dirname "${fiat_all_tomls[$i]}")")"
+    has_line "${fiat_all_lists[$i]}" "fiat-$p" \
+      || note "$crate_dir fiat-all is missing fiat-$p (the everything-on build would silently omit it)"
+  done
 
   # 4. tests/webhook_coverage.rs names the processor, so the trait-surface
   #    coverage tests actually exercise it -- both verify_webhook and
@@ -121,4 +150,4 @@ fi
 
 n="$(printf '%s\n' "$processors" | grep -c .)"
 echo "check-features: OK — $n fiat processors consistent across patala-fiat + patala-uniffi \
-+ its patala-py forwarder (fiat-all complete, all covered by tests/webhook_coverage.rs)."
++ its patala-py/patala-ffi forwarders (fiat-all complete, all covered by tests/webhook_coverage.rs)."

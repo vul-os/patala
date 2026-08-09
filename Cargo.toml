@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "patala-core",
     "patala-uniffi",
+    "patala-ffi",
     "patala-py",
     "patala-sidecar",
     "patala-solana",
@@ -22,6 +23,7 @@ members = [
 default-members = [
     "patala-core",
     "patala-uniffi",
+    "patala-ffi",
     "patala-py",
     "patala-sidecar",
     "patala-fiat",
@@ -31,6 +33,14 @@ default-members = [
 # Python packaging, §5) and `patala-sidecar` (local HTTP server, §5) all depend
 # only on `patala-core`'s public trait and its `MockRail`, never on a real
 # rail, so they build and test fully offline and stay in `default-members`.
+#
+# `patala-ffi` is the other binding surface: a plain `extern "C"` cdylib for
+# the languages UniFFI has no backend for (C, C++, Node/Deno/Bun, PHP,
+# Elixir). It is in `default-members` on the same terms as everything else
+# here: with no features it depends on `patala-core` alone — not even on
+# `patala-uniffi`, which is an OPTIONAL dependency pulled in only by a rail
+# feature — so a bare `cargo build` links no network client and produces a
+# small, offline, mock-only C library.
 #
 # `patala-uniffi` is where every binding's types live and where the UniFFI
 # namespace `"patala"` is declared. It used to be `patala-py`, which made the

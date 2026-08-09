@@ -1,0 +1,102 @@
+[package]
+name = "patala-ffi"
+version = "0.1.0"
+edition = "2021"
+description = "A plain C ABI over patala-core: JSON in, JSON out, uint64 handles, no UniFFI. The path for the languages UniFFI has no backend for — C, C++, Node/Deno/Bun, PHP, Elixir. See PATALA.md §5."
+license = "MIT OR Apache-2.0"
+publish = false
+
+# `cdylib` is the artifact a host dlopens. `lib` is kept so `cargo test` can
+# exercise the dispatch layer as ordinary Rust — the C ABI in `src/abi.rs` is
+# a thin pointer-marshalling shell over `src/lib.rs`, and everything worth
+# testing lives on the Rust side of that line. `ctest/smoke.c` is what proves
+# the shell itself, by dlopening the real artifact.
+[lib]
+name = "patala_ffi"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+patala-core = { path = "../patala-core" }
+serde = { version = "1", features = ["derive"] }
+# The wire format IS JSON — the same JSON `patala-sidecar` already serves,
+# built from the same `patala-core` types (`PayRequest`, `Quote`, `Receipt`,
+# `RailCapabilities`, `DestinationVerdict`, `WebhookEvent`), which all derive
+# Serialize/Deserialize in the core crate. This crate defines no DTO of its
+# own that could drift from the trait's actual shape.
+serde_json = "1"
+# `patala_core::PaymentRail`'s methods are `async fn`, and a C caller has no
+# event loop. Only the `rt` feature: each handle owns a CURRENT-THREAD
+# runtime, so loading this library starts no threads and no scheduler — see
+# `src/lib.rs`'s "No runtime in the host process". A build with a network rail
+# compiled in gets tokio's io/time drivers through feature unification with
+# reqwest, and `enable_all()` here picks them up.
+tokio = { version = "1", features = ["rt"] }
+
+# OPTIONAL, and only pulled in by a rail feature below. `patala-uniffi` owns
+# the by-name fiat registry (`PatalaRail::new_fiat`, ~1000 lines mapping 20
+# processors' config structs) and the three real-rail constructors. Reusing
+# them is why this crate is a few hundred lines rather than a second copy of
+# all that, drifting. It is NOT a dependency of the default build: with no
+# features, this crate builds a `MockRail` straight off `patala-core` and
+# links neither UniFFI nor a network client. That is what keeps the default
+# cdylib small enough to state its size as a selling point (README.md).
+patala-uniffi = { path = "../patala-uniffi", optional = true }
+
+[features]
+default = []
+solana = ["dep:patala-uniffi", "patala-uniffi/solana"]
+stellar = ["dep:patala-uniffi", "patala-uniffi/stellar"]
+hyperswitch = ["dep:patala-uniffi", "patala-uniffi/hyperswitch"]
+
+# One feature per fiat processor, forwarding to `patala-uniffi` one for one —
+# `scripts/check-features.sh` fails the build if any of them stops forwarding
+# or if `patala-fiat` grows a processor none of them names.
+fiat = ["dep:patala-uniffi", "patala-uniffi/fiat"]
+fiat-adyen = ["fiat", "patala-uniffi/fiat-adyen"]
+fiat-btcpay = ["fiat", "patala-uniffi/fiat-btcpay"]
+fiat-checkoutcom = ["fiat", "patala-uniffi/fiat-checkoutcom"]
+fiat-coinbasecommerce = ["fiat", "patala-uniffi/fiat-coinbasecommerce"]
+fiat-flutterwave = ["fiat", "patala-uniffi/fiat-flutterwave"]
+fiat-iyzico = ["fiat", "patala-uniffi/fiat-iyzico"]
+fiat-lnbits = ["fiat", "patala-uniffi/fiat-lnbits"]
+fiat-mercadopago = ["fiat", "patala-uniffi/fiat-mercadopago"]
+fiat-midtrans = ["fiat", "patala-uniffi/fiat-midtrans"]
+fiat-mollie = ["fiat", "patala-uniffi/fiat-mollie"]
+fiat-opennode = ["fiat", "patala-uniffi/fiat-opennode"]
+fiat-payfast = ["fiat", "patala-uniffi/fiat-payfast"]
+fiat-paypal = ["fiat", "patala-uniffi/fiat-paypal"]
+fiat-payu = ["fiat", "patala-uniffi/fiat-payu"]
+fiat-paystack = ["fiat", "patala-uniffi/fiat-paystack"]
+fiat-razorpay = ["fiat", "patala-uniffi/fiat-razorpay"]
+fiat-square = ["fiat", "patala-uniffi/fiat-square"]
+fiat-stripe = ["fiat", "patala-uniffi/fiat-stripe"]
+fiat-xendit = ["fiat", "patala-uniffi/fiat-xendit"]
+fiat-yoco = ["fiat", "patala-uniffi/fiat-yoco"]
+# Enumerated rather than forwarded to `patala-uniffi/fiat-all`, because this
+# crate has its own `#[cfg(feature = "fiat-stripe")]` test: a `fiat-all` that
+# only turned the adapters on *underneath* would leave this crate's own
+# per-adapter code and tests silently switched off in the very build meant to
+# cover everything. `scripts/check-features.sh` checks this list against
+# `patala-fiat/src/`.
+fiat-all = [
+    "fiat-adyen",
+    "fiat-btcpay",
+    "fiat-checkoutcom",
+    "fiat-coinbasecommerce",
+    "fiat-flutterwave",
+    "fiat-iyzico",
+    "fiat-lnbits",
+    "fiat-mercadopago",
+    "fiat-midtrans",
+    "fiat-mollie",
+    "fiat-opennode",
+    "fiat-payfast",
+    "fiat-paypal",
+    "fiat-payu",
+    "fiat-paystack",
+    "fiat-razorpay",
+    "fiat-square",
+    "fiat-stripe",
+    "fiat-xendit",
+    "fiat-yoco",
+]

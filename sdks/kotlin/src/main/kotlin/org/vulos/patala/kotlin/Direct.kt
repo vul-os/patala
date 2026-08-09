@@ -42,7 +42,7 @@ import uniffi.patala.exchangeDepositCaveat
  * - [payRequest] — a `Long` amount checked to be non-negative before it
  *   becomes the `ULong` the record actually holds.
  * - [railClass] and [describe] — two spelling conveniences over generated
- *   names Kotlin cannot say comfortably (`caps.\`class\``) or print usefully
+ *   names Kotlin cannot print usefully
  *   (a sealed `Settlement`).
  * - [Patala.useLibrary] / [Patala.findLibrary] — where the cdylib is loaded
  *   from, which is a build concern rather than an API one.
@@ -203,17 +203,6 @@ public fun payRequest(
         reference = reference,
     )
 }
-
-/**
- * `capabilities().class` under a name Kotlin can say without backticks.
- *
- * It is an enum with exactly two members and no default branch is possible in
- * an exhaustive `when`, which is the point: a `CUSTODIAL_REVERSIBLE` rail
- * means a card form and a refundable pending state, a `NON_CUSTODIAL_FINAL`
- * rail means a wallet address and a signed final receipt, and adding a third
- * class upstream should stop your build rather than fall through.
- */
-public val RailCapabilities.railClass: RailClass get() = this.`class`
 
 /**
  * A one-line rendering of the sealed [Settlement] enum.

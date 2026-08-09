@@ -9,7 +9,7 @@
 //
 // Every check below is one the C-ABI package can only make by parsing a JSON
 // document. Here they are properties of Swift structs and enums:
-// `verdict.isRefusal` is a `Bool` field, `caps.class` is a `RailClass` a
+// `verdict.isRefusal` is a `Bool` field, `caps.railClass` is a `RailClass` a
 // `switch` must cover, and `PatalaError` is an enum with associated values.
 //
 //   make -C sdks/swift/uniffi checks
@@ -62,12 +62,12 @@ check("an exhaustive switch over DestinationStatus compiles", isRefusalStatus(.m
 check("only WebhookStatus.settled means paid", paid(.settled) && !paid(.unconfirmed) && !paid(.notSettled))
 
 let rail = PatalaRail.newMock(
-    id: "mock", class: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 25, failing: false)
+    id: "mock", railClass: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 25, failing: false)
 
 check("id() is the configured rail id", rail.id() == "mock")
 
 let caps = rail.capabilities()
-check("capabilities().class is a RailClass", caps.class == .nonCustodialFinal)
+check("capabilities().railClass is a RailClass", caps.railClass == .nonCustodialFinal)
 check("a non-custodial rail is not reversible", caps.reversible == false)
 check("a non-custodial rail holds no funds", caps.holdsFunds == false)
 check("settlement is the Settlement enum", caps.settlement == .instant)
@@ -152,7 +152,7 @@ do {
 }
 
 let broken = PatalaRail.newMock(
-    id: "mock", class: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 0, failing: true)
+    id: "mock", railClass: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 0, failing: true)
 do {
     _ = try broken.charge(req: request)
     check("a failing rail raises PatalaError.Rail", false)
@@ -164,7 +164,7 @@ do {
 
 // ---- the rail that cannot check a destination -------------------------------
 let opaque = PatalaRail.newMockWithoutDestinationChecks(
-    id: "mock", class: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 0, failing: false)
+    id: "mock", railClass: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 0, failing: false)
 let unknown = opaque.validateDestination(destination: "mock:wallet:alice")
 check("a rail that cannot check answers unknown", unknown.status == .unknown)
 check("unknown is not a refusal — it needs a human", unknown.isRefusal == false)

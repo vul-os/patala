@@ -14,7 +14,7 @@ import Foundation
 let alice = "mock:wallet:alice"
 
 let rail = PatalaRail.newMock(
-    id: "mock", class: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 25, failing: false)
+    id: "mock", railClass: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 25, failing: false)
 
 print("patala direct (Swift, generated UniFFI) — namespace `patala`")
 print("id:        \(rail.id())")
@@ -22,7 +22,7 @@ print("id:        \(rail.id())")
 let caps = rail.capabilities()
 // No `default:`. A third rail class added upstream stops this build, which is
 // the entire argument for a generated binding over a string one.
-switch caps.class {
+switch caps.railClass {
 case .nonCustodialFinal:
     print("caps:      nonCustodialFinal — wallet address, signed final receipt")
 case .custodialReversible:
@@ -46,7 +46,7 @@ for candidate in [alice, "eth:wallet:alice", ""] {
 // patala does not detect exchange-owned addresses and will not guess.
 
 let opaque = PatalaRail.newMockWithoutDestinationChecks(
-    id: "mock", class: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 0, failing: false)
+    id: "mock", railClass: .nonCustodialFinal, currencies: ["USDC"], feeMinor: 0, failing: false)
 let cannotCheck = opaque.validateDestination(destination: alice)
 print("dest:      the same address on a rail that cannot check -> \(cannotCheck.status)")
 print("           unknown is NOT a refusal and NOT an approval. It needs a human.")

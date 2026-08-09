@@ -1,6 +1,5 @@
 import org.vulos.patala.kotlin.Patala
 import org.vulos.patala.kotlin.payRequest
-import org.vulos.patala.kotlin.railClass
 import uniffi.patala.DestinationStatus
 import uniffi.patala.PatalaException
 import uniffi.patala.RailClass
@@ -66,7 +65,7 @@ fun main() {
         check("id() is the configured rail id", rail.id() == "mock")
 
         val caps = rail.capabilities()
-        check("capabilities().class is a RailClass", caps.railClass == RailClass.NON_CUSTODIAL_FINAL)
+        check("capabilities().railClass is a RailClass", caps.railClass == RailClass.NON_CUSTODIAL_FINAL)
         check("a non-custodial rail is not reversible", !caps.reversible)
         check("a non-custodial rail holds no funds", !caps.holdsFunds)
         check("settlement is the sealed Settlement type", caps.settlement is Settlement.Instant)

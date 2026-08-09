@@ -2,7 +2,6 @@ import java.nio.file.Files
 import org.vulos.patala.kotlin.Patala
 import org.vulos.patala.kotlin.describe
 import org.vulos.patala.kotlin.payRequest
-import org.vulos.patala.kotlin.railClass
 import uniffi.patala.DestinationStatus
 import uniffi.patala.PatalaException
 import uniffi.patala.RailClass

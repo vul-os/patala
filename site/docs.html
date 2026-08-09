@@ -302,6 +302,9 @@
   }
   .docs-nav .dn-sub a::before{width:4px;height:4px;border-width:1.2px;background:transparent}
   .docs-nav .dn-sub a:hover{color:var(--ink-dim);background:transparent;text-decoration:underline;text-underline-offset:3px}
+  /* A search result that is an h3 is indented one more step, so the shape of
+     the document is still legible in a list of matches. */
+  .docs-nav .dn-sub.dn-found a.lv3{padding-left:22px}
   .docs-nav .dn-sub a.here{color:var(--ink)}
   .docs-nav .dn-sub a.here::before{background:var(--ink-faint);border-color:var(--ink-faint)}
 
@@ -895,40 +898,137 @@ dnList.addEventListener('scroll', function(){
   }catch(e){}
 })();
 
+/* ── the heading index ─────────────────────────────────────────────────────
+   A filter that searches only the OPEN document's headings answers the wrong
+   question. Seventeen documents mention webhooks; typing "webhook" while
+   sitting on the rail interface page found nothing, which reads as "this
+   product does not document webhooks" rather than "you are on the wrong page".
+
+   So the first time the filter is used, every document is fetched once and
+   its ## headings are indexed. Seventeen same-origin requests, lazily, on an
+   interaction the reader initiated — never on load, because most readers
+   never type in the box. Results then land as deep links into documents that
+   are not open.
+
+   The ids are derived with the SAME rule buildOutline() uses on the rendered
+   DOM, including the de-duplication counter, so an index entry and the
+   heading it names cannot disagree — which is the only way a search result
+   can be worse than no search result. */
+function slugifyHeadings(texts){
+  var seen = {};
+  return texts.map(function(text){
+    var base = text.trim().toLowerCase()
+      .replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/^-+|-+$/g,'') || 'section';
+    var id = base;
+    while(seen[id]) id = base + '-' + (seen[base] = (seen[base]||1) + 1);
+    seen[id] = 1;
+    return {id:id, text:text.trim()};
+  });
+}
+// Markdown, not the rendered DOM: the documents are not loaded. A "## " line
+// inside a fenced block is a shell comment, not a heading, so fences are
+// tracked rather than ignored.
+//
+// h2 AND h3. The visible outline stays h2-only — an eleven-entry list per
+// document is a navigator, a forty-entry one is the document again — but the
+// SEARCH indexes both, because most of what a reader is hunting for is an h3
+// ("The cgo cost", "Config keys, by provider"). Both levels get an id at
+// render time, so every result the search offers is a link that lands.
+function headingsFromMarkdown(md){
+  var texts = [], levels = [], fenced = false;
+  md.split('\n').forEach(function(line){
+    if(line.slice(0,3) === '```'){ fenced = !fenced; return; }
+    if(fenced) return;
+    var m = line.match(/^(##|###)\s+(.+?)\s*$/);
+    if(m){ texts.push(m[2].replace(/`/g,'')); levels.push(m[1].length); }
+  });
+  var slugged = slugifyHeadings(texts);
+  slugged.forEach(function(h, i){ h.level = levels[i]; });
+  return slugged;
+}
+var headIndex = {};
+var indexing = null;
+function buildHeadingIndex(){
+  if(indexing) return indexing;
+  indexing = Promise.all(DOCS.map(function(d){
+    return fetch(d.path, {cache:'force-cache'})
+      .then(function(r){ return r.ok ? r.text() : ''; })
+      .then(function(md){ if(md) headIndex[d.slug] = headingsFromMarkdown(md); })
+      .catch(function(){ /* a document that will not load simply has no headings */ });
+  }));
+  return indexing;
+}
+
 /* ── the filter ────────────────────────────────────────────────────────────
-   Matches a document by its title and by its section name, and — for the open
-   document — by the text of its own headings, which is the half that earns the
-   control: "webhook" should find the section, not only the page. A group with
-   no surviving row is hidden entirely, and a filtered view expands every group
-   so a match can never be hiding inside a collapsed one. */
+   Matches a document by its title, by its section name, and by the headings
+   of EVERY document — not only the open one. A group with no surviving row is
+   hidden entirely, and a filtered view expands every group, so a match can
+   never be hiding inside a collapsed one. */
 var filterInput = document.getElementById('dnFilter');
 var emptyMsg = document.getElementById('dnEmpty');
+var esc = function(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;'); };
+
 function applyFilter(){
   var q = (filterInput.value||'').trim().toLowerCase();
   var any = false;
+  // Result lists built by a previous query. The open document's own outline
+  // (.dn-sub without .dn-found) is not one of them and must survive.
+  document.querySelectorAll('.dn-sub.dn-found').forEach(function(el){ el.remove(); });
+
   docRows().forEach(function(a){
+    var slug = a.dataset.slug;
     // The outline, if this is the open document. It is inserted immediately
     // after its own row, so the next sibling is the only place it can be —
     // querying the group would find another document's outline.
     var sub = (a.nextElementSibling && a.nextElementSibling.classList.contains('dn-sub'))
       ? a.nextElementSibling : null;
     var title = (a.textContent||'').toLowerCase();
-    var section = (a.closest('.dn-group') ? a.closest('.dn-group').textContent : '').toLowerCase();
-    var headHit = false;
+    // The TOGGLE's label, not the group's textContent. The group's text
+    // contains every row inside it — including the result lists this very
+    // function inserts — so "cgo" matched the sidecar row because a sibling
+    // row's search result mentioned it. A match has to be explicable.
+    var grp = a.closest('.dn-group');
+    var toggleEl = grp && grp.querySelector('.dn-gtoggle span');
+    var section = (toggleEl ? toggleEl.textContent : '').toLowerCase();
+
+    var headHit = false, showOutline = !!sub;
+    var idxHits = (q && headIndex[slug])
+      ? headIndex[slug].filter(function(h){ return h.text.toLowerCase().indexOf(q) > -1; })
+      : [];
+
     if(sub){
+      // The open document already has a real outline in the DOM; filter it in
+      // place so the rows keep their scroll-spy state.
       sub.querySelectorAll('a').forEach(function(h){
         var hit = !q || (h.textContent||'').toLowerCase().indexOf(q) > -1;
         h.parentNode.hidden = !hit;
         if(hit && q) headHit = true;
       });
+      // The outline is h2-only, so a query that matches an h3 of the document
+      // you are ALREADY READING would otherwise come back empty — the one
+      // result a reader is most likely to expect. Fall through to the index.
+      if(q && !headHit && idxHits.length){ showOutline = false; headHit = true; }
+    } else if(idxHits.length){
+      headHit = true;
     }
+
+    if(!showOutline && idxHits.length && q){
+      var ul = document.createElement('ul');
+      ul.className = 'dn-sub dn-found';
+      ul.innerHTML = idxHits.map(function(h){
+        return '<li><a class="lv'+(h.level||2)+'" href="#'+slug+'/'+h.id+'">'+esc(h.text)+'</a></li>';
+      }).join('');
+      a.parentNode.insertBefore(ul, (sub || a).nextSibling);
+    }
+
     var hit = !q || title.indexOf(q) > -1 || section.indexOf(q) > -1 || headHit;
     a.hidden = !hit;
-    if(sub) sub.hidden = !hit;
+    if(sub) sub.hidden = !hit || !showOutline;
     // A document matched by its own title shows its whole outline again.
-    if(hit && sub && !headHit) sub.querySelectorAll('li').forEach(function(li){ li.hidden = false; });
+    if(hit && sub && showOutline && !headHit) sub.querySelectorAll('li').forEach(function(li){ li.hidden = false; });
     if(hit) any = true;
   });
+
   document.querySelectorAll('.dn-group').forEach(function(g){
     var visible = g.querySelector('a[data-slug]:not([hidden])');
     g.hidden = !visible;
@@ -938,7 +1038,18 @@ function applyFilter(){
   });
   emptyMsg.hidden = any;
 }
-filterInput.addEventListener('input', applyFilter);
+// Two passes on purpose: the first is instant, against what is already known,
+// so typing never waits on the network; the second runs when the index lands
+// and fills in the headings of documents that are not open. Guarded on the
+// query still being the one that asked, so a slow index cannot repaint stale
+// results over a newer search.
+filterInput.addEventListener('input', function(){
+  applyFilter();
+  var asked = filterInput.value;
+  if(!asked.trim()) return;
+  buildHeadingIndex().then(function(){ if(filterInput.value === asked) applyFilter(); });
+});
+filterInput.addEventListener('focus', buildHeadingIndex, {once:true});
 filterInput.addEventListener('keydown', function(ev){
   if(ev.key==='Escape'){
     // Esc inside the field clears it rather than closing the phone sheet: the
@@ -973,16 +1084,18 @@ function buildOutline(slug){
   document.querySelectorAll('.dn-sub').forEach(el=>el.remove());
   var host = document.querySelector('.dn-list a[data-slug="'+slug+'"]');
   if(!host) return;
-  var seen = {};
-  var heads = [...content.querySelectorAll('h2')].map(function(h){
-    var base = (h.textContent||'').trim().toLowerCase()
-      .replace(/[^\w\s-]/g,'').replace(/\s+/g,'-').replace(/^-+|-+$/g,'') || 'section';
-    var id = base;
-    while(seen[id]) id = base + '-' + (seen[base] = (seen[base]||1) + 1);
-    seen[id] = 1;
-    h.id = id;
-    return {id:id, text:(h.textContent||'').trim()};
-  });
+  // Same slug rule as the markdown-side index, from the same function, over
+  // the same set of headings in the same order — the deep link a search result
+  // offers has to be the id the heading actually gets, and two copies of a
+  // de-duplication counter is exactly how that stops being true.
+  //
+  // Every h2 and h3 is given an id so a search result can land on either; only
+  // the h2s become outline rows, because a forty-row outline is the document
+  // over again rather than a way through it.
+  var els = [...content.querySelectorAll('h2, h3')];
+  var all = slugifyHeadings(els.map(function(h){ return h.textContent || ''; }));
+  all.forEach(function(h, i){ els[i].id = h.id; h.level = els[i].tagName === 'H2' ? 2 : 3; });
+  var heads = all.filter(function(h){ return h.level === 2; });
   if(!heads.length) return;
   var ul = document.createElement('ul');
   ul.className = 'dn-sub';

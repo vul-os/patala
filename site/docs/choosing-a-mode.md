@@ -19,7 +19,8 @@ discovered at link time three weeks later.
 | You write Python | [`patala-py`](python.md) | Synchronous calls, native-ish types, no server to supervise. |
 | You write Go **and** can accept cgo | [`patala-go`](go.md) | Same generated surface, native Go types, in-process. |
 | You write Go **and** need a pure-static binary | [the sidecar](sidecar.md) | `CGO_ENABLED=0` survives. This is what `cackle` chose. |
-| You write something else — Ruby, Elixir, PHP, Java, C#, Node | [the sidecar](sidecar.md) | An HTTP client is the whole dependency. |
+| You write C, C++, Node/Deno/Bun, PHP or Elixir **and** want in-process | `patala-ffi` | A plain C ABI, JSON in and out. patala is Rust, so it puts no runtime in your process. |
+| You write something else — Ruby, Java, C# | [the sidecar](sidecar.md) | An HTTP client is the whole dependency. |
 | Several services in a polyglot stack need the same signing key | [the sidecar](sidecar.md) | The key lives in one process instead of every process. |
 | You are prototyping and do not yet know | [the sidecar](sidecar.md) | Lowest commitment; you can always move in-process later. |
 

@@ -36,10 +36,10 @@ members, but they are deliberately left **out of `default-members`**:
 ```toml
 [workspace]
 members = [
-    "patala-core", "patala-py", "patala-sidecar",
+    "patala-core", "patala-uniffi", "patala-ffi", "patala-py", "patala-sidecar",
     "patala-solana", "patala-stellar", "patala-hyperswitch", "patala-fiat",
 ]
-default-members = ["patala-core", "patala-py", "patala-sidecar", "patala-fiat"]
+default-members = ["patala-core", "patala-uniffi", "patala-ffi", "patala-py", "patala-sidecar", "patala-fiat"]
 ```
 
 So a bare `cargo build` / `cargo test` at the root never builds them. Reaching
@@ -147,7 +147,7 @@ one-line diff that reviews cleanly. What actually holds the property:
   	cargo test --workspace
   test-features:
   	cargo test -p patala-fiat --all-features
-  	cargo test -p patala-py --features fiat-all
+  	cargo test -p patala-uniffi --features fiat-all
   ```
 
 - **Clippy is run twice for the same reason.** `cargo clippy --workspace`
@@ -157,7 +157,7 @@ one-line diff that reviews cleanly. What actually holds the property:
 
 - **`scripts/check-features.sh`** keeps the adapter set in lock-step with the
   Cargo features that expose it. A new `patala-fiat` adapter left out of
-  `patala-py`'s `fiat-all` would compile fine and silently vanish from the Go
+  `patala-uniffi`'s `fiat-all` would compile fine and silently vanish from the Go
   binding's cdylib — present in Rust, absent in every other language, with
   nothing failing. That script fails the build instead.
 
@@ -172,7 +172,7 @@ Stated plainly, so the trade is visible:
   `cargo test`, or you are running roughly a third of it.
 - **Bindings inherit the same rule.** `PatalaRail.new_fiat` and
   `PatalaRailNewFiat` only exist in bindings generated from a cdylib built
-  with the fiat features. A plain `cargo build -p patala-py` does not include
+  with the fiat features. A plain `cargo build -p patala-uniffi` does not include
   them, and that is not a bug.
 
 ## Related documents

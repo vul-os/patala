@@ -57,7 +57,7 @@ If you only want the feature-gated half:
 
 ```bash
 make test-features   # cargo test -p patala-fiat --all-features
-                     # cargo test -p patala-py --features fiat-all
+                     # cargo test -p patala-uniffi --features fiat-all
 ```
 
 The same applies to clippy: `cargo clippy --workspace` lints each crate at its
@@ -66,7 +66,7 @@ default features, which for `patala-fiat` means twenty adapters never linted.
 
 ## Python
 
-### `ModuleNotFoundError: No module named 'patala_py'`
+### `ModuleNotFoundError: No module named 'patala'`
 
 The generated wrapper is build output, not a checked-in file, and it is not on
 your path yet. Either build a wheel and install it —
@@ -83,7 +83,7 @@ PYTHONPATH=patala-py/bindings/python python3 your_script.py
 
 ### The import works but fails loading the native library
 
-The generated `patala_py.py` loads its cdylib **by name, from its own
+The generated `patala.py` loads its cdylib **by name, from its own
 directory**. Generating the wrapper does not copy the library next to it —
 step 3 of the manual flow does:
 
@@ -115,7 +115,7 @@ that provider's Cargo feature was not compiled into this build. Ask the build
 what it has rather than guessing:
 
 ```python
-from patala_py import patala_fiat_providers
+from patala import patala_fiat_providers
 print(patala_fiat_providers())
 ```
 
@@ -137,7 +137,7 @@ If your project needs `CGO_ENABLED=0` — a pure-static binary, easy
 cross-compilation — that is a signal to use [the sidecar](sidecar.md) instead.
 `cackle` made that call for these reasons.
 
-### `ld: library not found for -lpatala_py` / link errors
+### `ld: library not found for -lpatala_uniffi` / link errors
 
 The cdylib is not built, or not on the linker's search path. Use the Makefile
 rather than retyping the flags — it is the one place the filename and the

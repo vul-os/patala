@@ -2,15 +2,23 @@
      edit docs/python.md and regenerate. `--check` fails the build if these drift. -->
 # Python binding
 
-`patala-py` is a UniFFI binding over the same Rust core everything else uses.
-It reimplements no rail: it wraps whatever `PaymentRail` already exists and
-exposes it to Python — and, from the same surface, to Go today and Swift or
-Kotlin whenever someone runs the bindgen with a different `--language`. See
-[One core, every language](polyglot.md) for why that is the rule.
+`patala-py` is the Python packaging of the same UniFFI surface everything else
+is generated from. It reimplements no rail — it does not even *define* the
+binding: every exported type lives in `patala-uniffi`, which is also where Go,
+Swift and Kotlin come from. See [One core, every language](polyglot.md) for
+why that is the rule.
 
 Mechanically it is a compiled cdylib plus a generated `ctypes` wrapper. There
 are no native headers to find and no build backend to install; `python3` and
 `cargo` are the whole toolchain.
+
+> **The module is `patala`, the library is `libpatala_py`.**
+> `from patala import PatalaRail`. UniFFI names the generated module after the
+> *namespace*, which `patala-uniffi` declares as `patala`; the native library
+> it loads is still this crate's own `libpatala_py.{dylib,so}`. It was
+> `patala_py` on both counts until the surface moved out of `patala-py` — a
+> Python-flavoured name that every other generated language was inheriting
+> too.
 
 ## Synchronous on purpose
 
@@ -20,7 +28,8 @@ including a one-shot script, to run an event loop just to call `charge()`.
 
 This binding exposes **synchronous** methods instead. Each blocks the calling
 Python thread on a single, lazily-created multi-thread `tokio::runtime::Runtime`
-owned process-wide by the crate. The Python caller never sees `async`/`await`:
+owned process-wide by `patala-uniffi`. The Python caller never sees
+`async`/`await`:
 `rail.charge(req)` returns a `Receipt` or raises `PatalaError`.
 
 That is the opposite trade `patala-sidecar` makes — that crate stays async
@@ -38,7 +47,8 @@ CI job, so they cannot rot:
 cargo build -p patala-py --features fiat-stripe
 
 # 2. Generate the wrapper from that cdylib's own UniFFI metadata. The bindgen
-#    is this workspace's own binary target — no separately installed CLI.
+#    is this workspace's own binary target — no separately installed CLI. It
+#    writes `patala.py`, named after the UniFFI namespace.
 cargo run -p patala-py --bin uniffi-bindgen -- generate \
     --library target/debug/libpatala_py.dylib \
     --language python \
@@ -59,7 +69,7 @@ four commands, not checked in.
 ## A round trip
 
 ```python
-from patala_py import PatalaRail, PayRequest, RailClass
+from patala import PatalaRail, PayRequest, RailClass
 
 rail = PatalaRail.new_mock(
     id="mock",
@@ -147,7 +157,7 @@ Rather than twenty typed constructors, `patala-fiat`'s adapters are reachable
 through one by-name registry constructor:
 
 ```python
-from patala_py import PatalaRail
+from patala import PatalaRail
 
 rail = PatalaRail.new_fiat("manual", {})
 print(rail.id(), rail.capabilities())
@@ -186,7 +196,7 @@ the trait is invisible to UniFFI.
 
 ```python
 import time
-from patala_py import PatalaRail, WebhookDelivery, WebhookStatus, PatalaError
+from patala import PatalaRail, WebhookDelivery, WebhookStatus, PatalaError
 
 rail = PatalaRail.new_fiat("stripe", {"secret_key": ..., "webhook_secret": ...})
 
@@ -267,7 +277,7 @@ actually publishing is a founder action.
 
 ## What has actually been executed
 
-- `cargo test -p patala-py` — Rust unit tests that drive `PatalaRail` directly,
+- `cargo test -p patala-uniffi` — Rust unit tests that drive `PatalaRail` directly,
   no Python involved: 11 by default, 20 with `fiat-all`.
 - The full build-and-run sequence above, end to end, under a real
   `python3` (3.13) loading the real generated wrapper and the compiled

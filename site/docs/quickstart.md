@@ -74,7 +74,9 @@ More: [Rust, embedded](rust.md).
 
 `patala-py` is a UniFFI binding: a compiled cdylib plus a generated `ctypes`
 wrapper. There is no build backend to install and no native headers to find —
-`python3` and `cargo` are the whole toolchain.
+`python3` and `cargo` are the whole toolchain. The generated module is
+`patala.py` (named after the UniFFI namespace), and it loads
+`libpatala_py.{dylib,so}` from its own directory.
 
 ```bash
 # From the workspace root. `make smoke-python` runs exactly these four steps.
@@ -92,7 +94,7 @@ PYTHONPATH=patala-py/bindings/python python3 patala-py/examples/smoke_test.py
 ```
 
 ```python
-from patala_py import PatalaRail, PayRequest, RailClass
+from patala import PatalaRail, PayRequest, RailClass
 
 rail = PatalaRail.new_mock(
     id="mock",

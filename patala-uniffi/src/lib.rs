@@ -209,7 +209,14 @@ impl From<CoreSettlement> for Settlement {
 /// without knowing which provider is behind a given [`PatalaRail`].
 #[derive(uniffi::Record, Clone, Debug)]
 pub struct RailCapabilities {
-    pub class: RailClass,
+    /// `rail_class`, not `class`: uniffi 0.29.5's Ruby backend renames an
+    /// argument colliding with a language keyword in the `def` line but not in
+    /// the body, emitting `class = class` — the whole generated file then fails
+    /// `ruby -c`. Same family as the `detail` rename above: a name colliding
+    /// with a language construct, handled inconsistently by one backend.
+    /// Renamed while patala is unreleased, since after a tag this is breaking
+    /// for every binding.
+    pub rail_class: RailClass,
     pub reversible: bool,
     pub requires_kyc: bool,
     pub holds_funds: bool,
@@ -226,7 +233,7 @@ pub struct RailCapabilities {
 impl From<&CoreRailCapabilities> for RailCapabilities {
     fn from(c: &CoreRailCapabilities) -> Self {
         Self {
-            class: c.class.into(),
+            rail_class: c.class.into(),
             reversible: c.reversible,
             requires_kyc: c.requires_kyc,
             holds_funds: c.holds_funds,
@@ -613,12 +620,12 @@ impl PatalaRail {
     #[uniffi::constructor]
     pub fn new_mock(
         id: String,
-        class: RailClass,
+        rail_class: RailClass,
         currencies: Vec<String>,
         fee_minor: u64,
         failing: bool,
     ) -> Arc<Self> {
-        let mut rail = MockRail::new(id, class.into(), currencies).with_fee_minor(fee_minor);
+        let mut rail = MockRail::new(id, rail_class.into(), currencies).with_fee_minor(fee_minor);
         if failing {
             rail = rail.failing();
         }
@@ -652,12 +659,12 @@ impl PatalaRail {
     #[uniffi::constructor]
     pub fn new_mock_without_destination_checks(
         id: String,
-        class: RailClass,
+        rail_class: RailClass,
         currencies: Vec<String>,
         fee_minor: u64,
         failing: bool,
     ) -> Arc<Self> {
-        let mut rail = MockRail::new(id, class.into(), currencies)
+        let mut rail = MockRail::new(id, rail_class.into(), currencies)
             .with_fee_minor(fee_minor)
             .without_destination_checks();
         if failing {
@@ -945,7 +952,7 @@ mod tests {
 
         assert_eq!(rail.id(), "mock");
         let caps = rail.capabilities();
-        assert_eq!(caps.class, RailClass::NonCustodialFinal);
+        assert_eq!(caps.rail_class, RailClass::NonCustodialFinal);
         assert!(!caps.holds_funds);
         assert_eq!(caps.currencies, vec!["USDC".to_string()]);
 

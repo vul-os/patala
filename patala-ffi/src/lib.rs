@@ -271,7 +271,14 @@ fn default_mock_id() -> String {
 /// caller who writes `"fee_minor_"` or `"currency"` gets a refusal naming the
 /// field, rather than a rail quietly built with a default they did not mean —
 /// on a substrate where the defaulted field might be the destination currency.
-#[derive(Deserialize, Debug)]
+///
+/// `Debug` is written by hand below rather than derived. This one type is
+/// where **every** credential the C ABI accepts lands: the whole fiat config
+/// map (any of twenty processors' secret keys), a raw Ed25519 seed as hex, a
+/// Hyperswitch API key and its webhook secret. A derived `Debug` puts all of
+/// them in one line reachable from `{:?}` in any consumer and from a single
+/// future `tracing::debug!(?config)` in [`open`].
+#[derive(Deserialize)]
 #[serde(tag = "rail", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum RailConfig {
     /// `{"rail":"mock", "class":"non-custodial-final", "currencies":["USDC"]}`
@@ -360,6 +367,92 @@ pub enum RailConfig {
         #[serde(default = "thirty")]
         timeout_secs: u64,
     },
+}
+
+/// Names the rail and the non-secret shape of its configuration, and nothing
+/// else. Every credential-bearing field renders as `<redacted>`/`<unset>`, and
+/// the fiat `config` map shows its **keys** only — which is what a reader
+/// debugging a rejected configuration actually needs, and is exactly the
+/// information `patala-uniffi`'s own errors already give (they interpolate
+/// the key name, never the value).
+impl std::fmt::Debug for RailConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn redacted(present: bool) -> &'static str {
+            if present {
+                "<redacted>"
+            } else {
+                "<unset>"
+            }
+        }
+        match self {
+            RailConfig::Mock {
+                id,
+                class,
+                currencies,
+                fee_minor,
+                failing,
+                destination_checks,
+            } => f
+                .debug_struct("Mock")
+                .field("id", id)
+                .field("class", class)
+                .field("currencies", currencies)
+                .field("fee_minor", fee_minor)
+                .field("failing", failing)
+                .field("destination_checks", destination_checks)
+                .finish(),
+            RailConfig::Fiat { provider, config } => {
+                let mut keys: Vec<&str> = config.keys().map(String::as_str).collect();
+                keys.sort_unstable();
+                f.debug_struct("Fiat")
+                    .field("provider", provider)
+                    .field("config_keys", &keys)
+                    .finish()
+            }
+            RailConfig::Solana {
+                rpc_url,
+                cluster,
+                keypair_seed_hex,
+            } => f
+                .debug_struct("Solana")
+                .field("rpc_url", rpc_url)
+                .field("cluster", cluster)
+                .field("keypair_seed_hex", &redacted(keypair_seed_hex.is_some()))
+                .finish(),
+            RailConfig::Stellar {
+                horizon_url,
+                network,
+                usdc_issuer,
+                keypair_seed_hex,
+            } => f
+                .debug_struct("Stellar")
+                .field("horizon_url", horizon_url)
+                .field("network", network)
+                .field("usdc_issuer", usdc_issuer)
+                .field("keypair_seed_hex", &redacted(keypair_seed_hex.is_some()))
+                .finish(),
+            RailConfig::Hyperswitch {
+                base_url,
+                api_key,
+                connector,
+                webhook_secret,
+                requires_kyc,
+                currencies,
+                settlement_days,
+                timeout_secs,
+            } => f
+                .debug_struct("Hyperswitch")
+                .field("base_url", base_url)
+                .field("api_key", &redacted(!api_key.is_empty()))
+                .field("connector", connector)
+                .field("webhook_secret", &redacted(webhook_secret.is_some()))
+                .field("requires_kyc", requires_kyc)
+                .field("currencies", currencies)
+                .field("settlement_days", settlement_days)
+                .field("timeout_secs", timeout_secs)
+                .finish(),
+        }
+    }
 }
 
 fn non_custodial_final() -> ConfigRailClass {

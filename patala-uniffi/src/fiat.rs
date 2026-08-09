@@ -916,7 +916,7 @@ mod tests {
             .expect("constructing a StripeRail must not require network access");
         assert_eq!(rail.id(), "stripe");
         let caps = rail.capabilities();
-        assert_eq!(caps.class, crate::RailClass::CustodialReversible);
+        assert_eq!(caps.rail_class, crate::RailClass::CustodialReversible);
         assert!(caps.holds_funds);
     }
 
@@ -974,7 +974,7 @@ mod tests {
         config.insert("env".into(), "sandbox".into());
         let rail = PatalaRail::new_fiat("paypal".into(), config).expect("sandbox is valid");
         assert_eq!(
-            rail.capabilities().class,
+            rail.capabilities().rail_class,
             crate::RailClass::CustodialReversible
         );
     }

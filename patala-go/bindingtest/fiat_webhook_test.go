@@ -495,8 +495,8 @@ func TestStripeConstructionOnlyCapabilities(t *testing.T) {
 		t.Errorf("Id() = %q, want %q", rail.Id(), "stripe")
 	}
 	caps := rail.Capabilities()
-	if caps.Class != patala.RailClassCustodialReversible {
-		t.Errorf("Capabilities().Class = %d, want RailClassCustodialReversible (%d)", caps.Class, patala.RailClassCustodialReversible)
+	if caps.RailClass != patala.RailClassCustodialReversible {
+		t.Errorf("Capabilities().RailClass = %d, want RailClassCustodialReversible (%d)", caps.RailClass, patala.RailClassCustodialReversible)
 	}
 	if !caps.HoldsFunds {
 		t.Error("Capabilities().HoldsFunds = false; Stripe (the processor) custodies funds in flight")

@@ -41,9 +41,9 @@ func TestMockRailIdentityAndCapabilities(t *testing.T) {
 	}
 
 	caps := rail.Capabilities()
-	if caps.Class != patala.RailClassNonCustodialFinal {
-		t.Errorf("Capabilities().Class = %v, want RailClassNonCustodialFinal (%v)",
-			caps.Class, patala.RailClassNonCustodialFinal)
+	if caps.RailClass != patala.RailClassNonCustodialFinal {
+		t.Errorf("Capabilities().RailClass = %v, want RailClassNonCustodialFinal (%v)",
+			caps.RailClass, patala.RailClassNonCustodialFinal)
 	}
 	// A NonCustodialFinal rail that reported either of these as true would be
 	// describing a completely different settlement class to a caller choosing

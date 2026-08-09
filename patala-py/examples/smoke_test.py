@@ -54,7 +54,7 @@ def check_destination_surface() -> None:
     """
     rail = PatalaRail.new_mock(
         id="mock",
-        _class=RailClass.NON_CUSTODIAL_FINAL,
+        rail_class=RailClass.NON_CUSTODIAL_FINAL,
         currencies=["USDC"],
         fee_minor=0,
         failing=False,
@@ -63,7 +63,7 @@ def check_destination_surface() -> None:
     # every fiat rail, whose destination is an opaque processor-side token.
     opaque = PatalaRail.new_mock_without_destination_checks(
         id="opaque",
-        _class=RailClass.CUSTODIAL_REVERSIBLE,
+        rail_class=RailClass.CUSTODIAL_REVERSIBLE,
         currencies=["USD"],
         fee_minor=0,
         failing=False,
@@ -223,7 +223,7 @@ def check_webhook_surface() -> bool:
 def main() -> None:
     rail = PatalaRail.new_mock(
         id="mock",
-        _class=RailClass.NON_CUSTODIAL_FINAL,
+        rail_class=RailClass.NON_CUSTODIAL_FINAL,
         currencies=["USDC", "USD"],
         fee_minor=0,
         failing=False,
@@ -233,15 +233,15 @@ def main() -> None:
 
     caps = rail.capabilities()
     # `class` is a Python keyword, so the UniFFI-generated record names this
-    # field `_class` (same pattern as the `_class` constructor kwarg above).
-    assert caps._class == RailClass.NON_CUSTODIAL_FINAL, (
+    # field `rail_class` (same pattern as the `rail_class` constructor kwarg above).
+    assert caps.rail_class == RailClass.NON_CUSTODIAL_FINAL, (
         "capabilities._class must be readable from Python and match the "
-        f"constructor's class, got {caps._class!r}"
+        f"constructor's class, got {caps.rail_class!r}"
     )
     assert caps.holds_funds is False, "a NonCustodialFinal rail must not hold funds"
     assert caps.reversible is False, "a NonCustodialFinal rail must not be reversible"
     assert caps.currencies == ["USDC", "USD"], f"unexpected currencies: {caps.currencies!r}"
-    print(f"capabilities OK: class={caps._class}, currencies={caps.currencies}")
+    print(f"capabilities OK: class={caps.rail_class}, currencies={caps.currencies}")
 
     req = PayRequest(
         amount_minor=1_250,
@@ -313,11 +313,11 @@ def main() -> None:
         )
         assert solana_rail.id() == "solana"
         solana_caps = solana_rail.capabilities()
-        assert solana_caps._class == RailClass.NON_CUSTODIAL_FINAL
+        assert solana_caps.rail_class == RailClass.NON_CUSTODIAL_FINAL
         assert solana_caps.holds_funds is False
         assert solana_caps.currencies == ["USDC"]
         print(
-            f"real rail OK: solana constructed from Python, class={solana_caps._class}, "
+            f"real rail OK: solana constructed from Python, class={solana_caps.rail_class}, "
             f"currencies={solana_caps.currencies}, holds_funds={solana_caps.holds_funds}"
         )
         real_rails_checked.append("solana")
@@ -331,11 +331,11 @@ def main() -> None:
         )
         assert stellar_rail.id() == "stellar"
         stellar_caps = stellar_rail.capabilities()
-        assert stellar_caps._class == RailClass.NON_CUSTODIAL_FINAL
+        assert stellar_caps.rail_class == RailClass.NON_CUSTODIAL_FINAL
         assert stellar_caps.holds_funds is False
         assert stellar_caps.currencies == ["USDC"]
         print(
-            f"real rail OK: stellar constructed from Python, class={stellar_caps._class}, "
+            f"real rail OK: stellar constructed from Python, class={stellar_caps.rail_class}, "
             f"currencies={stellar_caps.currencies}, holds_funds={stellar_caps.holds_funds}"
         )
         real_rails_checked.append("stellar")
@@ -353,11 +353,11 @@ def main() -> None:
         )
         assert hyperswitch_rail.id() == "hyperswitch"
         hs_caps = hyperswitch_rail.capabilities()
-        assert hs_caps._class == RailClass.CUSTODIAL_REVERSIBLE
+        assert hs_caps.rail_class == RailClass.CUSTODIAL_REVERSIBLE
         assert hs_caps.holds_funds is True, "the fronted processor custodies funds"
         assert hs_caps.currencies == ["USD", "NGN"]
         print(
-            f"real rail OK: hyperswitch constructed from Python, class={hs_caps._class}, "
+            f"real rail OK: hyperswitch constructed from Python, class={hs_caps.rail_class}, "
             f"currencies={hs_caps.currencies}, holds_funds={hs_caps.holds_funds}"
         )
         real_rails_checked.append("hyperswitch")

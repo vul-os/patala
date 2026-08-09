@@ -53,10 +53,10 @@ func main() {
 	assert(rail.Id() == "mock", fmt.Sprintf("unexpected rail id: %q", rail.Id()))
 
 	caps := rail.Capabilities()
-	assert(caps.Class == patala.RailClassNonCustodialFinal, "capabilities.Class must round-trip through the FFI boundary")
+	assert(caps.RailClass == patala.RailClassNonCustodialFinal, "capabilities.Class must round-trip through the FFI boundary")
 	assert(!caps.HoldsFunds, "a NonCustodialFinal rail must not hold funds")
 	assert(!caps.Reversible, "a NonCustodialFinal rail must not be reversible")
-	fmt.Printf("capabilities OK: class=%v currencies=%v holds_funds=%v\n", caps.Class, caps.Currencies, caps.HoldsFunds)
+	fmt.Printf("capabilities OK: class=%v currencies=%v holds_funds=%v\n", caps.RailClass, caps.Currencies, caps.HoldsFunds)
 
 	req := patala.PayRequest{
 		AmountMinor: 1_250,

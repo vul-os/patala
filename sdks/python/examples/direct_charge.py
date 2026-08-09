@@ -98,8 +98,8 @@ def main() -> int:
     caps = rail.capabilities()
     check(rail.id() == "mock", f"id() == {rail.id()!r}")
     check(
-        caps._class == RailClass.NON_CUSTODIAL_FINAL,
-        f"class is {caps._class} — a wallet address and a final receipt, not a card form",
+        caps.rail_class == RailClass.NON_CUSTODIAL_FINAL,
+        f"rail_class is {caps.rail_class} — a wallet address and a final receipt, not a card form",
     )
     check(not caps.holds_funds, "holds_funds is False — patala never holds funds")
     check(not caps.reversible, "reversible is False — there is no refund on this rail")

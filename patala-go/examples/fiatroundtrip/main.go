@@ -81,7 +81,7 @@ func main() {
 
 	manualCaps := manualRail.Capabilities()
 	assert(!manualCaps.HoldsFunds, "manual has no processor -- nothing custodies anything")
-	fmt.Printf("manual capabilities OK: class=%v holds_funds=%v\n", manualCaps.Class, manualCaps.HoldsFunds)
+	fmt.Printf("manual capabilities OK: class=%v holds_funds=%v\n", manualCaps.RailClass, manualCaps.HoldsFunds)
 
 	req := patala.PayRequest{
 		AmountMinor: 1_500,
@@ -132,9 +132,9 @@ func main() {
 		}
 		stripeCaps := stripeRail.Capabilities()
 		assert(stripeRail.Id() == "stripe", fmt.Sprintf("unexpected rail id: %q", stripeRail.Id()))
-		assert(stripeCaps.Class == patala.RailClassCustodialReversible, "stripe must be CustodialReversible")
+		assert(stripeCaps.RailClass == patala.RailClassCustodialReversible, "stripe must be CustodialReversible")
 		assert(stripeCaps.HoldsFunds, "stripe (the PROCESSOR) custodies funds in flight -- never patala's")
-		fmt.Printf("stripe construction-only OK: class=%v holds_funds=%v (never charged/verified -- no live network)\n", stripeCaps.Class, stripeCaps.HoldsFunds)
+		fmt.Printf("stripe construction-only OK: class=%v holds_funds=%v (never charged/verified -- no live network)\n", stripeCaps.RailClass, stripeCaps.HoldsFunds)
 
 		// ---- webhook verification, from Go, offline -------------------
 		// This is the surface a Go consumer previously could not reach at

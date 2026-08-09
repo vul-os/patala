@@ -76,6 +76,13 @@ patala-hyperswitch = { path = "../patala-hyperswitch", optional = true }
 # feature is also enabled (see the `fiat-*` features below) — see
 # `patala-fiat/src/lib.rs`'s own "offline-by-default" docs.
 patala-fiat = { path = "../patala-fiat", optional = true }
+# Optional on the same terms, and pulled in only by `solana`/`stellar`: those
+# are the two constructors that take raw Ed25519 seed bytes across the FFI
+# boundary, and this is what wipes the copies `new_solana`/`new_stellar` make
+# of them. Both rail crates already depend on `zeroize` directly, so turning
+# either feature on adds no crate to the graph, and the default (mock-only)
+# build's dependency set is untouched.
+zeroize = { version = "1", optional = true }
 
 [features]
 default = []

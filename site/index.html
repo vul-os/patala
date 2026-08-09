@@ -194,6 +194,11 @@
   .hero h1{
     font-family:var(--disp);font-weight:800;font-size:clamp(42px,7.4vw,86px);line-height:.96;
     letter-spacing:-.035em;margin:0 0 22px;color:var(--ink);position:relative;
+    /* At 320 the second line broke as "Hold none of" / "it." — a three-character
+       last line under an 42px display face. `pretty` moves the break back a word
+       ("Hold none" / "of it."); at 360 and up the line already fits and this
+       changes nothing. Browsers without it keep today's behaviour. */
+    text-wrap:pretty;
   }
   .hero h1 .accent{color:var(--vermilion-deep)}
   .hero p.lead{max-width:52ch;color:var(--ink-dim);font-size:clamp(15.5px,1.5vw,17.5px);margin-bottom:20px}

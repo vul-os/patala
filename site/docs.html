@@ -209,7 +209,10 @@
   .dn-find input::-webkit-search-cancel-button{display:none}
   .dn-find kbd{
     position:absolute;right:20px;font-family:var(--mono);font-size:11px;line-height:1;
-    padding:3px 6px;border:1px solid var(--hair);border-radius:3px;color:var(--ink-faint);
+    /* --ink-faint is picked against the page ground; this sits on the raised
+       surface instead, where it fell to 3.45:1. --ink-dim measures 6.06:1
+       there. */
+    padding:3px 6px;border:1px solid var(--hair);border-radius:3px;color:var(--ink-dim);
     background:var(--surface-raised);pointer-events:none;
   }
   .dn-find input:focus{outline:none;border-color:var(--vermilion);box-shadow:0 0 0 3px color-mix(in srgb, var(--vermilion) 26%, transparent)}
@@ -363,7 +366,11 @@
   }
   .docs-main{min-width:0}
   .docs-title{font-family:var(--mono);font-size:var(--fs-micro);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:var(--sp-3)}
-  .docs-title .sep{margin:0 8px;color:var(--hair-strong)}
+  /* --hair-strong is a rule colour, and painting a glyph with it put the "/"
+     at 1.65:1 dark / 1.58:1 light. The separator is text, so it takes a text
+     token: --ink-faint measures 5.00:1 and 5.08:1 on the same grounds, and
+     still reads as quieter than the crumb either side of it. */
+  .docs-title .sep{margin:0 8px;color:var(--ink-faint)}
   /* The crumb now names the section as well as the document — seventeen
      documents in five groups, so "which part of the docs am I in" is a real
      question. Below 600px the section is dropped rather than wrapped. */
@@ -1360,6 +1367,25 @@ function renderPager(slug){
     pager.appendChild(b);
   }
 }
+
+/* The pager's path, on the arrow keys, so walking seventeen documents does not
+   mean scrolling to the foot of each one. Guarded the way the "/" shortcut is:
+   never while the reader is typing, never with a modifier held (⌘←/⌥← are
+   browser history and word-jump), and never while the sheet is open, where the
+   arrows belong to the list inside it. */
+document.addEventListener('keydown', function(ev){
+  if(ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+  if(ev.metaKey || ev.ctrlKey || ev.altKey || ev.shiftKey) return;
+  var t = ev.target;
+  if(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if(nav.classList.contains('open')) return;
+  var i = DOCS.findIndex(function(d){ return d.slug === current().slug; });
+  if(i < 0) return;
+  var to = DOCS[ev.key === 'ArrowLeft' ? i-1 : i+1];
+  if(!to) return;
+  ev.preventDefault();
+  location.hash = '#'+to.slug;
+});
 
 async function load(slug, head){
   const doc = bySlug[slug] || DOCS[0];

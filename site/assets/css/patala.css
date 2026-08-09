@@ -250,6 +250,36 @@ img{max-width:100%;display:block}
 html.js .rv{opacity:0;transform:translateY(14px);transition:opacity .6s cubic-bezier(.16,1,.3,1),transform .6s cubic-bezier(.16,1,.3,1)}
 html.js .rv.in{opacity:1;transform:none}
 
+/* ---- the hero's load sequence ----
+   The hero is above the fold, so the observer marks it `in` on the first frame
+   and it has never had an entrance of its own. This gives it one, in reading
+   order: the status badge, the headline, the lede and its actions, then the
+   honesty card — so the claim arrives just before the caveat that qualifies it.
+
+   An animation, not a second .rv state. A reveal resting at `opacity:0` loses
+   its content whenever the class that clears it does not arrive; this rests on
+   the finished frame and `backwards` borrows the opening one only while it
+   runs, so nothing here depends on script. The reduced-motion query above
+   already collapses every animation to .001ms and takes this with it. */
+@keyframes patalaHeroIn{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:none}}
+html.js .hero > .wrap > .badge,
+html.js .hero > .wrap > h1,
+html.js .hero .hero-top > div:first-child,
+html.js .hero .hero-top > .honest{animation:patalaHeroIn .64s cubic-bezier(.16,1,.3,1) backwards}
+html.js .hero > .wrap > h1{animation-delay:.07s}
+html.js .hero .hero-top > div:first-child{animation-delay:.15s}
+html.js .hero .hero-top > .honest{animation-delay:.23s}
+/* The reduced-motion query above collapses animation DURATION but not DELAY,
+   and `backwards` holds the opening frame for the whole delay — which left the
+   honesty card blank for 230ms for precisely the reader who asked for less
+   motion. The shorthand resets the delay along with everything else. */
+@media(prefers-reduced-motion:reduce){
+  html.js .hero > .wrap > .badge,
+  html.js .hero > .wrap > h1,
+  html.js .hero .hero-top > div:first-child,
+  html.js .hero .hero-top > .honest{animation:none!important}
+}
+
 /* ---- type scale + rhythm ----
    A single ratio (~1.25, "major third") drives every display size on both
    pages, expressed with clamp() so it is fluid rather than breakpoint-

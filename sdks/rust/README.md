@@ -174,6 +174,19 @@ read the SDK READMEs for llmux or openrate, those carry a real list of
 Go-runtime caveats. They are true there and false here, and they have
 deliberately not been copied.
 
+That is measured, not argued. The languages that reach patala through
+`libpatala_ffi` had llmux's own signal probe run against both libraries on this
+machine, in the same JVM — the harshest host for this, since HotSpot installs
+handlers for `SIGSEGV`, `SIGBUS` and `SIGFPE` and depends on them:
+
+| | HotSpot signal handlers replaced | handler flags altered | shared library |
+|---|---|---|---|
+| **patala** | **0** | **0** | 844,656 bytes |
+| llmux | 5 | 3 | 12,787,504 bytes |
+
+Rust does not even pay the 844,656 bytes: in direct mode there is no shared
+library in the picture at all.
+
 ## Sidecar
 
 [`examples/sidecar.rs`](examples/sidecar.rs) spawns `patala-sidecar`, waits for

@@ -209,6 +209,20 @@ That is a test, not a paragraph: `patala-ffi/ctest/smoke.c` counts the
 process's threads before `dlopen`, after `dlopen`, and after a full
 charge → verify round trip, and fails if the number ever goes up.
 
+And the signal claim has now been measured against the sibling product rather
+than reasoned about. Running llmux's own signal probe against both libraries,
+same machine, same JVM (done as part of patala's Java/Kotlin SDK work):
+
+| | HotSpot signal handlers replaced | handler flags altered | library |
+|---|---|---|---|
+| **patala** | **0** | **0** | 844,656 bytes |
+| llmux | 5 | 3 | 12,787,504 bytes |
+
+The JVM is the harshest case — it installs handlers for `SIGSEGV`, `SIGBUS`,
+`SIGFPE` and more and depends on them — so zero there is the strongest form of
+the claim. On Apple platforms the same property is what keeps a crash reporter
+and a sampling profiler working.
+
 ## Checks, not tests
 
 There is **no `swift test` here**, and that is deliberate rather than an
@@ -282,14 +296,59 @@ UniFFI *does* have a Swift backend, and patala's `#[uniffi::export]` surface
 lives in [`patala-uniffi`](../../patala-uniffi/). Generated Swift bindings
 would give you real structs and enums instead of JSON — `RailCapabilities` with
 a `RailClass` you can `switch` over exhaustively, which is a genuine
-improvement over `String` comparison.
+improvement over comparing `String`s.
 
 They are **not generated in this tree**. `patala-go` and `patala-py` are the
 two that are, each with a build step (`uniffi-bindgen generate`) and a `make`
 target that executes it. Adding a third is ordinary work nobody has done, not a
 blocker. Until then this package uses the plain C ABI, which needs no codegen
-step and no toolchain beyond Swift — and which you would still be shipping a
-cdylib for either way.
+step and no toolchain beyond Swift — and which you would be shipping a cdylib
+for either way.
+
+### It was checked, not assumed: the Swift backend works
+
+UniFFI's **Kotlin** backend does not currently compile for patala. Its error
+enum becomes a subclass of `kotlin.Exception` that declares `message` twice —
+the constructor `val` plus the synthesised `override val` — and kotlinc gives
+12 errors. Swift's `Error` is a protocol with no inherited `message`, so the
+same declaration was expected to be fine, but "plausibly fine" is not a fact.
+So it was generated and run, on this machine, Swift 6.1.2:
+
+```
+$ cargo run -p patala-uniffi --bin uniffi-bindgen -- generate \
+    --library target/debug/libpatala_uniffi.dylib --language swift --out-dir <dir>
+$ swiftc -typecheck patala.swift -Xcc -fmodule-map-file=patalaFFI.modulemap -I .
+$ ./probe            # patala.swift + 20 lines of main.swift, linked to libpatala_uniffi
+id:        mock
+caps:      nonCustodialFinal holds_funds=false
+charge:    1250 USDC ref=uniffi-1
+verify:    true
+tampered:  false
+refused:   InvalidRequest(detail: "rail mock does not support currency EUR")
+PASS
+```
+
+**UniFFI's Swift backend compiles cleanly and runs a real charge → verify round
+trip.** 2,411 lines / 81,057 bytes of generated `patala.swift` on the default
+features, 2,484 lines / 84,939 bytes with `--features fiat-all` — both
+typecheck with zero diagnostics — and the generated file is already Swift 6
+aware, guarding its `Sendable` conformances with `#if compiler(>=6)`.
+
+That was verified on **both sides of the Kotlin fix**: once with the error
+variant field named `message`, and again after it was renamed to `detail`
+(commit `79e5002`) to unblock Kotlin. Both generate, both typecheck, both run.
+Swift never had the Kotlin problem — `Swift.Error` is a protocol with no
+inherited `message` to collide with — and the rename costs Swift nothing. The
+only visible difference is the argument label in `case Rail(detail: String)`;
+the probe above was not edited between the two runs, because it prints the
+whole error rather than reaching for the field, and it compiled unchanged.
+
+So the reason this package uses the C ABI is **not** that UniFFI Swift is
+broken. It is that the C ABI needs no codegen step in your build, no
+`uniffi-bindgen` at a pinned version, and no module map — and that a package
+without `unsafeFlags` can be a dependency of another package. If you want typed
+structs and are willing to own a generation step, UniFFI is a working road and
+this section is the evidence.
 
 ## See also
 

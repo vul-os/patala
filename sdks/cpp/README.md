@@ -185,6 +185,15 @@ That claim is a test, not prose: `ctest/smoke.c` counts the process's threads
 before `dlopen`, after `dlopen`, and after a full round trip, and fails if the
 number ever goes up.
 
+The signal half has been measured against the sibling product as well. Running
+llmux's own signal probe against both libraries, same machine, same JVM (done
+as part of patala's Java/Kotlin SDK work):
+
+| | HotSpot signal handlers replaced | handler flags altered |
+|---|---|---|
+| **patala** | **0** | **0** |
+| llmux | 5 | 3 |
+
 Measured here, `cargo build -p patala-ffi --release`:
 
 | build | `libpatala_ffi.dylib` |
@@ -192,7 +201,8 @@ Measured here, `cargo build -p patala-ffi --release`:
 | default — mock rail only, fully offline | **844,656 bytes** |
 | `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,330,544 bytes |
 
-llmux's `libllmux.dylib` is 12,769,346 bytes on the same platform.
+llmux's `libllmux.dylib` on this same machine is 12,787,504 bytes — **15.1×**,
+measured rather than quoted.
 
 ## Building
 

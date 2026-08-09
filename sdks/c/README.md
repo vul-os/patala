@@ -134,6 +134,20 @@ process's threads before `dlopen`, after `dlopen`, and after a full
 charge → verify round trip, and fails if the number ever goes up. On a platform
 it does not know how to count threads on it **fails** rather than skipping.
 
+The signal claim has been measured against the sibling product too, rather than
+merely reasoned about. Running llmux's own signal probe against both libraries,
+same machine, same JVM (done as part of patala's Java/Kotlin SDK work):
+
+| | HotSpot signal handlers replaced | handler flags altered |
+|---|---|---|
+| **patala** | **0** | **0** |
+| llmux | 5 | 3 |
+
+The JVM is the harshest host there is for this — it installs handlers for
+`SIGSEGV`, `SIGBUS` and `SIGFPE` and relies on them — so zero there is the
+strongest form of the claim. Your crash reporter, profiler and sanitizer build
+are in the same position.
+
 ### Size
 
 | build | `libpatala_ffi.dylib` |
@@ -141,10 +155,11 @@ it does not know how to count threads on it **fails** rather than skipping.
 | default — mock rail only, fully offline | **844,656 bytes** |
 | `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,330,544 bytes |
 
-llmux's `libllmux.dylib` is 12,769,346 bytes and its linux/arm64 build is
-17,348,392. The 15× difference is a consequence of the language, not of doing
-less: the mock rail here is the same `MockRail` every other patala surface
-exercises.
+llmux's `libllmux.dylib` on this same machine is **12,787,504 bytes** (measured,
+not quoted — llmux's own README carries a slightly older figure), and its
+linux/arm64 build is larger still. That is **15.1×** patala's, and it is a
+consequence of the language rather than of doing less: the mock rail here is
+the same `MockRail` every other patala surface exercises.
 
 ## Building against libpatala_ffi
 

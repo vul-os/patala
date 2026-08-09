@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <PackageId>Patala</PackageId>
+    <Version>0.1.0</Version>
+    <Description>A sovereign, centerless payment-rail substrate — embedded, or as a local sidecar.</Description>
+    <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://vulos.org/projects/patala/</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/vul-os/patala</RepositoryUrl>
+    <PackageTags>payments;stablecoin;usdc;stripe;non-custodial</PackageTags>
+    <!--
+      LibraryImport requires this UNCONDITIONALLY: the source generator emits
+      pointer-using marshalling stubs even for a signature that declares none,
+      and refuses to compile without it (SYSLIB1062).
+
+      What IS true, and is the honest form of the claim: patala's C ABI has no
+      callback — there is deliberately no patala_stream — so nothing in
+      PatalaDirect.cs uses a pointer, a function pointer or a fixed buffer.
+      `char**` is expressed as `out IntPtr`. Only the generated stubs are
+      unsafe. llmux's .NET SDK writes unsafe code of its own, because
+      llmux_stream takes a function pointer.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!--
+    No package references. The sidecar uses System.Net.Http and
+    System.Diagnostics.Process; the direct path uses LibraryImport and
+    SafeHandle. Neither deserialises JSON, because neither should: a Receipt's
+    amount_minor is an integer number of minor units, and a serializer
+    configured to hand you a double for every number is a rounding bug in a
+    payments library. Documents come back as strings, for the serializer you
+    already configured.
+  -->
+
+  <!-- Keep the examples out of the library compilation. -->
+  <ItemGroup>
+    <Compile Remove="examples/**/*.cs" />
+    <None Remove="examples/**" />
+  </ItemGroup>
+
+</Project>

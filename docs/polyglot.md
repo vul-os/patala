@@ -94,9 +94,9 @@ call; that is not the situation today.
 
 ## Two in-process surfaces, and why there are two
 
-UniFFI has backends for Python, Go, Swift, Kotlin and Ruby. It has none for C,
-C++, Node, Deno, Bun, PHP, Elixir, Java or C#, and its Ruby backend does not
-work on patala (below). Rather than leave ten languages with only HTTP,
+UniFFI has backends for Python, Go, Swift, Kotlin and Ruby — all five of which
+generate working code for patala today. It has none for C, C++, Node, Deno,
+Bun, PHP, Elixir, Java or C#. Rather than leave nine languages with only HTTP,
 [`patala-ffi`](c-abi.md) exposes the same core as a plain `extern "C"` cdylib —
 JSON in, JSON out, six symbols — and eleven of the fifteen packages load that.
 
@@ -122,12 +122,24 @@ field name. `sdks/kotlin` is now the generated Kotlin itself, and
 code — `0` while the upstream bug is still there, `1` when it is fixed and
 `detail` can be reconsidered — so the justification cannot outlive the bug.
 
-**Ruby** has a UniFFI backend and does not use it, for a defect of the same
-family: the generated Ruby does not parse, because an interface argument named
-`class` — `RailCapabilities` has one — is renamed in the `def` line and left
-alone in the body. `make probe-ruby` (`scripts/uniffi-ruby-probe.sh`)
-reproduces it from a minimal UDL and is inverted the same way, so `sdks/ruby`
-stays on the C ABI for a reason that is checked rather than remembered.
+**Ruby** hit a defect of exactly the same family, and it too has been cleared.
+uniffi 0.29.5's Ruby backend renames an argument that collides with a language
+keyword in the `def` line but not in the body, so `RailCapabilities`' `class`
+field emitted `class = class` and the whole generated `patala.rb` failed
+`ruby -c`. Renaming that field to `rail_class` (commit `1e4374e`) fixed it, and
+**all five UniFFI backends now generate working code for patala**. The upstream
+bug is unchanged — `make probe-ruby` (`scripts/uniffi-ruby-probe.sh`) still
+reproduces it from a minimal UDL, and being inverted, it now reports the fixed
+case. `sdks/ruby` nonetheless stays on the C ABI, by choice rather than by
+force: `fiddle` is in Ruby's stdlib, so that path adds no gem and no generation
+step.
+
+Two renames, one lesson, and it is why both are guarded by inverted probes: a
+field name that is ordinary in Rust can collide with a construct in exactly one
+target language, and UniFFI's backends handle that collision inconsistently.
+`message` broke Kotlin; `class` broke Ruby. Both were renamed before patala was
+ever tagged, which is the only cheap moment to do it — after a tag the rename
+breaks every binding at once, because UniFFI mangles it per language.
 
 ## What this forces onto the trait
 

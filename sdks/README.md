@@ -158,12 +158,19 @@ unblocked the Kotlin package, which is now the generated bindings themselves**
 `detail` rename from being re-litigated: its exit code is **inverted**, so it
 fails the moment the upstream bug is fixed and the name can be reconsidered.
 
-**Ruby is the one UniFFI backend patala does not use.** UniFFI has one, but it
-emits Ruby that does not parse — an interface argument named `class`, which
-`RailCapabilities` has, is renamed in the `def` line and left alone in the
-body. `make probe-ruby` ([`scripts/uniffi-ruby-probe.sh`](../scripts/uniffi-ruby-probe.sh))
-reproduces it and is inverted the same way, so [ruby/](ruby/) stays on the C
-ABI with a reason that is checked rather than remembered.
+**Ruby is a UniFFI backend patala can now generate for and does not.** It was
+blocked for the same family of reason as Kotlin: uniffi 0.29.5's Ruby backend
+renames an argument colliding with a language keyword in the `def` line but not
+in the body, so `RailCapabilities`' `class` field emitted `class = class` and
+the whole generated file failed `ruby -c`. Renaming that field to `rail_class`
+(commit `1e4374e`) cleared it, and **all five UniFFI backends — Python, Go,
+Kotlin, Swift, Ruby — now generate working code for patala.** The upstream bug
+itself is untouched: `make probe-ruby`
+([`scripts/uniffi-ruby-probe.sh`](../scripts/uniffi-ruby-probe.sh)) still
+reproduces it from an isolated UDL, and its exit code is **inverted**, so it
+now reports the fixed case rather than the broken one. [ruby/](ruby/) stays on
+the C ABI by choice, not by force: `fiddle` is in the stdlib, so direct mode
+adds nothing to a Ruby dependency graph and needs no generation step.
 
 ## Costs that are real, and are not the siblings' costs
 

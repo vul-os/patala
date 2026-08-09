@@ -3,10 +3,11 @@
 ## Foundational — built and unit-tested; one rail has one live testnet result
 
 The core, the rails and the polyglot layer are all in the repo. `make check`
-runs two passes and both are gates: **293 offline tests** across the seven
-landed crates in the default workspace build, and **572 more** once every
-processor feature is compiled in (`cargo test -p patala-fiat --all-features` +
-`cargo test -p patala-uniffi --features fiat-all`). Clippy-clean, fmt-clean; the
+runs two passes and both are gates: **319 offline tests** across the nine
+landed crates in the default workspace build (309 unit and integration tests
+plus 10 doctests), and **573 more** once every processor feature is compiled in
+(`cargo test -p patala-fiat --all-features`, 553, + `cargo test -p
+patala-uniffi --features fiat-all`, 20). Clippy-clean, fmt-clean; the
 default build pulls no chain and no processor.
 
 What that does *not* mean: no rail has been run against a live merchant
@@ -69,11 +70,11 @@ microseconds wide, so a test that forks once is a false green.
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
 | `patala-core` | trait + capability model (incl. `atomic_multi_party`) + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 38 + 3 doctests | offline by design |
-| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 552 (all features) | no — no live merchant account |
+| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 553 (all features) | no — no live merchant account |
 | `patala-solana` | SPL-USDC on Solana, ported from an earlier in-house implementation | non-custodial, final | 56 (+1 gated) + 2 doctests | no — testnet step in its README |
 | `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`), incl. atomic `charge_split`/`verify_split` (B1) and `recurring::RecurringPlan` | non-custodial, final | 84 (+3 gated) + 5 doctests | **testnet: yes, twice (2026-07-30)** — a single-leg payment and a 3-instalment recurring schedule; mainnet no, splits untested live, see its README |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | no — needs a live instance |
-| `patala-uniffi` | the one UniFFI surface, namespace `patala` → Python, Go, Kotlin and Swift today, wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed; Python/Go CI-enforced, Kotlin and Swift run by hand (`make smoke-kotlin`, `make smoke-swift` — no CI job) |
+| `patala-uniffi` | the one UniFFI surface, namespace `patala` → all five UniFFI backends generate working code for it (Python, Go, Kotlin, Swift, Ruby); wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | Python/Go executed and CI-enforced; Kotlin and Swift executed by hand (`make smoke-kotlin`, `make smoke-swift` — no CI job); **generated Ruby parses but has never been run** |
 | `patala-py` | the Python wheel over `patala-uniffi` (cdylib + generated `patala.py`) | — | 3 (namespace + re-export) + the CI `smoke-python` job | executed, and now CI-enforced |
 | `patala-ffi` | a plain `extern "C"` cdylib (JSON in/out) for the eleven languages UniFFI cannot serve — C, C++, Swift, Java, Node/Deno/Bun, Ruby, PHP, .NET, Elixir | — | 23 Rust (25 with `fiat-all`) + 55 checks driven through C by `ctest/smoke.c` | executed, and now CI-enforced |
 | `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |

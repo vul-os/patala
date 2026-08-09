@@ -3,11 +3,12 @@
 A plain `extern "C"` shared library over `patala-core`. JSON in, JSON out,
 `uint64` handles, six exported symbols.
 
-`patala-uniffi` covers the languages UniFFI generates usable bindings for —
-Python, Go, Kotlin and Swift. It has **no backend at all for C, C++,
-Node/Deno/Bun, PHP, Elixir, Java or C#**, and its **Ruby** backend emits Ruby
-that does not parse (`make probe-ruby` reproduces it). Eleven of the fifteen
-`sdks/` packages therefore load this instead:
+`patala-uniffi` covers the five languages UniFFI has a backend for — Python,
+Go, Kotlin, Swift and Ruby. It has **no backend at all for C, C++,
+Node/Deno/Bun, PHP, Elixir, Java or C#**. Those, plus Ruby and Swift — which
+could be generated but are served here by a `fiddle` binding and a `dlopen`ing
+SwiftPM package respectively — make eleven of the fifteen `sdks/` packages that
+load this instead:
 
 | Host | How it loads this |
 |---|---|

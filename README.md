@@ -31,11 +31,11 @@ spawns and manages for you.
 ## Status: foundational — built and unit-tested; one rail has one live testnet result
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
-runs two passes and both are gates: **293 offline tests** across the seven
-landed crates in the default workspace build, and **572 more** once every
-processor feature is compiled in
-(`cargo test -p patala-fiat --all-features` + `cargo test -p patala-uniffi
---features fiat-all`). Clippy-clean, fmt-clean; the default build pulls no
+runs two passes and both are gates: **319 offline tests** across the nine
+landed crates in the default workspace build (309 unit and integration tests
+plus 10 doctests), and **573 more** once every processor feature is compiled in
+(`cargo test -p patala-fiat --all-features`, 553, + `cargo test -p patala-uniffi
+--features fiat-all`, 20). Clippy-clean, fmt-clean; the default build pulls no
 chain and no processor.
 
 What that does *not* mean: **no rail here has been run against a live
@@ -62,11 +62,14 @@ test). Treat the rails as a tested foundation to validate against
 testnet/sandbox, not as production-proven.
 
 The things that genuinely executed end-to-end are the **Python binding, the
-Go binding and the sidecar** — real round-trips over a real interpreter,
-real cgo, and a real socket. All three are CI jobs now: the two Rust passes,
-the Python smoke run, and the Go binding's test suite (CI installs
-`uniffi-bindgen-go` at the pinned tag and uses the C toolchain the runner
-already has).
+Go binding, the C ABI and the sidecar** — real round-trips over a real
+interpreter, real cgo, a real `dlopen` from C, and a real socket. CI runs
+**five jobs**: the two Rust passes (`make check`), the Python smoke run, the Go
+binding's test suite (CI installs `uniffi-bindgen-go` at the pinned tag and
+uses the C toolchain the runner already has), the C ABI dlopened from C on
+`ubuntu-latest` (`make smoke-ffi`, twice), and the docs/site gate. The Kotlin
+and Swift UniFFI bindings are run by hand — `make smoke-kotlin` and
+`make smoke-swift` — and have no CI job.
 
 ## Documentation
 
@@ -177,7 +180,7 @@ never does. There is no balance table, no payout queue, no ledger.
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
 | `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 38 + 3 doctests | offline by design |
-| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 552 (all features) | **no — no live merchant account** |
+| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 553 (all features) | **no — no live merchant account** |
 | `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 56 (+1 gated) + 2 doctests | **no — testnet step in its README** |
 | `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 84 (+3 gated) + 5 doctests | **no — testnet step in its README** |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |

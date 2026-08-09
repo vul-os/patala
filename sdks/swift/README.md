@@ -334,7 +334,7 @@ patala Swift checks (generated UniFFI bindings)
 PASS
 ```
 
-What that buys, in one line: `caps.class` is a `RailClass` a `switch` must
+What that buys, in one line: `caps.railClass` is a `RailClass` a `switch` must
 cover with no `default:`, `verdict.isRefusal` is a `Bool` field rather than a
 JSON lookup, amounts are `UInt64`, and `PatalaError` is an enum you match
 (`catch PatalaError.Unsupported(let operation)`) instead of a string you read.

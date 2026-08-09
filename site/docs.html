@@ -883,20 +883,39 @@ function setGroup(toggle, open){
 var SCROLL_KEY = 'patala-docs-railscroll';
 var dnList = document.getElementById('dnList');
 var railPending = false;
+var railWanted = null;
+var railRestored = false;
+try{
+  var stored = parseFloat(sessionStorage.getItem(SCROLL_KEY) || '');
+  if(!isNaN(stored) && stored > 0) railWanted = stored; else railRestored = true;
+}catch(e){ railRestored = true; }
+
 dnList.addEventListener('scroll', function(){
-  if(railPending) return;
+  // Nothing is saved until the wanted position has been restored. Without this
+  // the very first (clamped) write below fires a scroll event that overwrites
+  // the stored value with the clamped one, and the position degrades a little
+  // on every single load until it is 0.
+  if(!railRestored || railPending) return;
   railPending = true;
   requestAnimationFrame(function(){
     railPending = false;
     try{ sessionStorage.setItem(SCROLL_KEY, String(dnList.scrollTop)); }catch(e){}
   });
 }, {passive:true});
-(function restoreRailScroll(){
-  try{
-    var v = parseFloat(sessionStorage.getItem(SCROLL_KEY)||'0');
-    if(v > 0) dnList.scrollTop = v;
-  }catch(e){}
-})();
+
+/* Restoring once, at parse time, does not work and quietly half-works, which
+   is worse: at that moment the rail is seventeen rows tall and the open
+   document's outline does not exist yet, so a scrollTop past the short list's
+   maximum is CLAMPED. 380 came back as 198. The outline then arrives, the list
+   grows, and nothing re-applies the position.
+   So it is applied twice — now, for the common case where it fits, and again
+   once the outline has been built and the list has its real height. */
+function restoreRailScroll(final){
+  if(railWanted == null) return;
+  dnList.scrollTop = railWanted;
+  if(final){ railRestored = true; railWanted = null; }
+}
+restoreRailScroll(false);
 
 /* ── the heading index ─────────────────────────────────────────────────────
    A filter that searches only the OPEN document's headings answers the wrong
@@ -1368,6 +1387,10 @@ async function load(slug, head){
     content.innerHTML = '<div class="docs-error">Could not load <code>'+doc.path.split('/').pop()+'</code> — '+err.message+'</div>';
     pager.innerHTML = '';
   }
+  // Here rather than inside buildOutline(): that function returns early for a
+  // document with no h2 at all, and a rail that never finishes restoring never
+  // starts saving either.
+  restoreRailScroll(true);
 }
 
 /* The hash is `#slug` or `#slug/heading-id`. Splitting on the first slash is

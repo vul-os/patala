@@ -31,30 +31,50 @@ default = []
 #     adapter it did NOT verify.
 # `scripts/check-features.sh` fails the build if an adapter feature forgets it.
 _adapter = []
-stripe = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
-paystack = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+# Two more private markers, for the same reason and with one extra property:
+# each names a set of optional dependencies AND is the `cfg` its helper in
+# `src/httpshared.rs` is gated on, so the dependency and the gate are the same
+# single word and cannot drift apart.
+#
+# They exist because they already had drifted. `verify_hmac_sha256_hex` was
+# gated `any(stripe, checkoutcom, mercadopago)` while razorpay, btcpay,
+# opennode and coinbasecommerce called it, and `verify_hmac_sha256_base64` was
+# gated `adyen` while square called it — so five single-processor builds failed
+# with `cannot find function ... in module crate::httpshared` even after the
+# module itself compiled. A per-caller feature list has to be edited by
+# whoever adds the sixth caller; a marker does not.
+#
+# Enable one of these ONLY from a processor feature whose scheme genuinely
+# needs it: they are what keeps `--features mollie` from linking hmac and sha2
+# for a callback that carries no signature at all.
+_hmac_hex = ["dep:hmac", "dep:sha2", "dep:hex"]
+_hmac_base64 = ["dep:hmac", "dep:sha2", "dep:base64"]
+stripe = ["dep:reqwest", "_hmac_hex", "_adapter"]
+paystack = ["dep:reqwest", "_hmac_hex", "_adapter"]
 # Adyen's webhook HMAC signature is base64-encoded (not hex, unlike every
-# other adapter in this crate) -- see adyen/webhook.rs -- hence the extra
-# dep:base64, gated to this feature only.
-adyen = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "dep:base64", "_adapter"]
-checkoutcom = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+# other adapter in this crate) -- see adyen/webhook.rs -- hence _hmac_base64
+# on top of the hex it uses elsewhere.
+adyen = ["dep:reqwest", "_hmac_hex", "_hmac_base64", "_adapter"]
+checkoutcom = ["dep:reqwest", "_hmac_hex", "_adapter"]
 # Mollie's classic webhook carries NO signature at all -- see mollie/webhook.rs
 # -- so this feature needs no HMAC/hex deps, only reqwest.
 mollie = ["dep:reqwest", "_adapter"]
-mercadopago = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+mercadopago = ["dep:reqwest", "_hmac_hex", "_adapter"]
 flutterwave = ["dep:reqwest", "_adapter"]
 iyzico = ["dep:reqwest", "dep:sha1", "dep:base64", "_adapter"]
+# Midtrans and PayU hash (SHA-512 / SHA-256 over a constructed string), they do
+# not HMAC -- so sha2 and hex without the marker, and without hmac.
 midtrans = ["dep:reqwest", "dep:sha2", "dep:hex", "_adapter"]
-yoco = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64", "_adapter"]
+yoco = ["dep:reqwest", "_hmac_base64", "_adapter"]
 payfast = ["dep:reqwest", "dep:md5", "_adapter"]
 payu = ["dep:reqwest", "dep:sha2", "dep:hex", "dep:url", "_adapter"]
-razorpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
-square = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:base64", "_adapter"]
+razorpay = ["dep:reqwest", "_hmac_hex", "_adapter"]
+square = ["dep:reqwest", "_hmac_base64", "_adapter"]
 xendit = ["dep:reqwest", "_adapter"]
-btcpay = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+btcpay = ["dep:reqwest", "_hmac_hex", "_adapter"]
 lnbits = ["dep:reqwest", "_adapter"]
-opennode = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
-coinbasecommerce = ["dep:reqwest", "dep:hmac", "dep:sha2", "dep:hex", "_adapter"]
+opennode = ["dep:reqwest", "_hmac_hex", "_adapter"]
+coinbasecommerce = ["dep:reqwest", "_hmac_hex", "_adapter"]
 paypal = ["dep:reqwest", "_adapter"]
 
 # `tests/webhook_coverage.rs` asserts every COMPILED-IN adapter implements

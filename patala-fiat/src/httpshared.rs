@@ -1,6 +1,6 @@
 //! Shared HTTP-safety and webhook-HMAC infrastructure used by every network
-//! adapter in this crate (currently: `stripe`, `paystack`, `adyen`,
-//! `checkoutcom`, `mollie`, `mercadopago`).
+//! adapter in this crate — all twenty of them, which is what the private
+//! `_adapter` marker feature means.
 //!
 //! Ported from cackle's `internal/payments/httpshared.go` (the bounded-read
 //! discipline) plus the common hex-encoded-HMAC-over-a-signed-payload
@@ -12,14 +12,21 @@
 //! the raw body directly; Stripe signs `"{timestamp}.{raw body}"`) differ
 //! and stay in each adapter's own `webhook` module.
 
-#![cfg(any(
-    feature = "stripe",
-    feature = "paystack",
-    feature = "adyen",
-    feature = "checkoutcom",
-    feature = "mollie",
-    feature = "mercadopago"
-))]
+// The SAME gate `lib.rs` puts on `pub mod httpshared;`, and it has to be: this
+// module is `bounded_len_check`'s only home, and fifteen of the twenty
+// adapters call it from a `rail.rs` that is compiled whenever their own
+// feature is on. When this said `any(stripe, paystack, adyen, checkoutcom,
+// mollie, mercadopago)` and `lib.rs` said `_adapter`, the module was DECLARED
+// for all twenty and EMPTIED for fourteen of them, so `cargo check -p
+// patala-fiat --features yoco` — and thirteen more single-processor builds —
+// failed with `cannot find httpshared in crate`. An operator who wants one
+// processor was pushed to `--all-features`, which links twenty processors'
+// worth of adapter code into a payments binary. `scripts/check-features.sh`
+// now builds each processor feature on its own so that cannot come back.
+//
+// The dependency-bearing helpers below keep their own narrower `cfg`s: this
+// gate says "at least one adapter", not "hmac, sha2 and hex are linked".
+#![cfg(feature = "_adapter")]
 
 /// Cackle's `maxResponseBodyBytes` (`internal/payments/paystack.go`) and
 /// `stripeMaxBodyBytes` (`stripe.go`) are both `1 << 20` (1 MiB) — cackle
@@ -66,7 +73,14 @@ pub fn bounded_len_check(body: &[u8], limit: usize) -> Result<(), &'static str> 
 ///   constructed manifest string, not the raw body -- see that module's own
 ///   doc comment -- header `x-signature`, per
 ///   <https://www.mercadopago.com/developers/en/docs/checkout-api/additional-content/security/signature>).
-#[cfg(any(feature = "stripe", feature = "checkoutcom", feature = "mercadopago"))]
+/// - the `razorpay`, `btcpay`, `opennode` and `coinbasecommerce` features'
+///   webhook modules, each signing the raw body.
+///
+/// Gated on `_hmac_hex` — the marker feature that pulls in the very
+/// `hmac`/`sha2`/`hex` this body needs — and not on a hand-kept list of
+/// callers, which is what it was, and which is what left four of the seven
+/// callers above unable to compile on their own.
+#[cfg(feature = "_hmac_hex")]
 pub fn verify_hmac_sha256_hex(secret: &[u8], signed_payload: &[u8], hex_signature: &str) -> bool {
     verify_hmac_hex::<hmac::Hmac<sha2::Sha256>>(secret, signed_payload, hex_signature)
 }
@@ -76,7 +90,7 @@ pub fn verify_hmac_sha256_hex(secret: &[u8], signed_payload: &[u8], hex_signatur
 /// closed on anything malformed. Used by the `paystack` feature's webhook
 /// module (Paystack signs the raw request body directly, per
 /// <https://paystack.com/docs/payments/webhooks/>).
-#[cfg(feature = "paystack")]
+#[cfg(feature = "_hmac_hex")]
 pub fn verify_hmac_sha512_hex(secret: &[u8], signed_payload: &[u8], hex_signature: &str) -> bool {
     verify_hmac_hex::<hmac::Hmac<sha2::Sha512>>(secret, signed_payload, hex_signature)
 }
@@ -89,7 +103,7 @@ pub fn verify_hmac_sha512_hex(secret: &[u8], signed_payload: &[u8], hex_signatur
 /// `adyen` feature's webhook module -- Adyen is the only adapter in this
 /// crate whose signature is base64, not hex, per
 /// <https://docs.adyen.com/development-resources/webhooks/secure-webhooks/verify-hmac-signatures>.
-#[cfg(feature = "adyen")]
+#[cfg(feature = "_hmac_base64")]
 pub fn verify_hmac_sha256_base64(
     secret: &[u8],
     signed_payload: &[u8],
@@ -113,12 +127,7 @@ pub fn verify_hmac_sha256_base64(
     mac.verify_slice(&expected_bytes).is_ok()
 }
 
-#[cfg(any(
-    feature = "stripe",
-    feature = "paystack",
-    feature = "checkoutcom",
-    feature = "mercadopago"
-))]
+#[cfg(feature = "_hmac_hex")]
 fn verify_hmac_hex<M>(secret: &[u8], signed_payload: &[u8], hex_signature: &str) -> bool
 where
     M: hmac::Mac + hmac::digest::KeyInit,
@@ -152,14 +161,6 @@ pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 #[cfg(test)]
-#[cfg(any(
-    feature = "stripe",
-    feature = "paystack",
-    feature = "adyen",
-    feature = "checkoutcom",
-    feature = "mollie",
-    feature = "mercadopago"
-))]
 mod tests {
     use super::*;
 
@@ -169,7 +170,7 @@ mod tests {
         assert!(bounded_len_check(&[0u8; 11], 10).is_err());
     }
 
-    #[cfg(feature = "stripe")]
+    #[cfg(feature = "_hmac_hex")]
     #[test]
     fn hmac_sha256_genuine_verifies_tampered_fails_closed() {
         use hmac::Mac;
@@ -187,7 +188,7 @@ mod tests {
         assert!(!verify_hmac_sha256_hex(secret, payload, ""));
     }
 
-    #[cfg(feature = "paystack")]
+    #[cfg(feature = "_hmac_hex")]
     #[test]
     fn hmac_sha512_genuine_verifies_tampered_fails_closed() {
         use hmac::Mac;
@@ -203,7 +204,7 @@ mod tests {
         assert!(!verify_hmac_sha512_hex(secret, payload, "not-hex!!"));
     }
 
-    #[cfg(feature = "adyen")]
+    #[cfg(feature = "_hmac_base64")]
     #[test]
     fn hmac_sha256_base64_genuine_verifies_tampered_fails_closed() {
         use base64::Engine;

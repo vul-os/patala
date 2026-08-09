@@ -18,7 +18,17 @@
 #
 # Nothing enforced this before: it held only because each new processor was
 # added to every list by hand. This script is that enforcement — five source
-# files must agree, or `make check` fails. Pure bash + coreutils, no toolchain.
+# files must agree, or `make check` fails.
+#
+# It ALSO builds each processor feature ON ITS OWN (see "single-processor
+# builds" below), which the list checks cannot substitute for: every list above
+# was correct while `cargo check -p patala-fiat --features yoco` — and thirteen
+# more — failed outright, because `src/httpshared.rs` gated itself on six
+# feature names while fifteen adapters called into it. `--all-features` and the
+# empty default set both compiled, so nothing in `make check` ever built the
+# configuration an operator who wants ONE processor actually uses; the workaround
+# is `--all-features`, i.e. linking twenty processors into a payments binary.
+# Set PATALA_SKIP_FEATURE_BUILDS=1 to run only the (instant) list checks.
 set -uo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -151,3 +161,41 @@ fi
 n="$(printf '%s\n' "$processors" | grep -c .)"
 echo "check-features: OK — $n fiat processors consistent across patala-fiat + patala-uniffi \
 + its patala-py/patala-ffi forwarders (fiat-all complete, all covered by tests/webhook_coverage.rs)."
+
+# --- single-processor builds -------------------------------------------------
+#
+# One processor, alone, is the configuration this crate's whole feature layout
+# exists to serve — and it was the one configuration nothing built. `--all-targets`
+# so the feature-gated half of tests/webhook_coverage.rs is compiled too, and
+# `-D warnings` because a helper left dead by a narrower feature set is how two
+# of these broke even after they linked.
+#
+# Cheap after the first: the twenty runs share one target directory and differ
+# only in patala-fiat's own codegen.
+if [ "${PATALA_SKIP_FEATURE_BUILDS:-0}" = "1" ]; then
+  echo "check-features: single-processor builds SKIPPED (PATALA_SKIP_FEATURE_BUILDS=1)."
+  exit 0
+fi
+command -v cargo >/dev/null 2>&1 || {
+  echo "check-features: FAILED — cargo is not on PATH, so the single-processor \
+builds cannot run. Set PATALA_SKIP_FEATURE_BUILDS=1 to run only the list checks." >&2
+  exit 1
+}
+
+built=0
+for p in $processors; do
+  if ! out="$(cd "$root" && cargo clippy -q -p patala-fiat --features "$p" --all-targets \
+                 -- -D warnings 2>&1)"; then
+    note "cargo clippy -p patala-fiat --features $p --all-targets FAILED:"
+    printf '%s\n' "$out" | sed 's/^/    /' >&2
+  else
+    built=$((built + 1))
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo "check-features: FAILED — $((n - built)) of $n processors do not build on their own. \
+An operator who wants one processor must not be pushed to --all-features." >&2
+  exit 1
+fi
+echo "check-features: OK — all $built processor features build and lint ALONE."

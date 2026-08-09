@@ -606,12 +606,11 @@ async fn documented_signature_headers_are_the_ones_actually_read() {
 // call is wired up.
 // --------------------------------------------------------------------------
 
-#[cfg(any(
-    feature = "stripe",
-    feature = "paystack",
-    feature = "coinbasecommerce",
-    feature = "square"
-))]
+/// Gated on exactly its two callers below. It used to name four features,
+/// including `paystack` (which signs with SHA-512) and `square` (base64) —
+/// neither of which calls this — so `cargo clippy --features paystack` and
+/// `--features square` failed on `-D dead-code` alone.
+#[cfg(any(feature = "stripe", feature = "coinbasecommerce"))]
 fn hmac_sha256_hex(key: &[u8], msg: &[u8]) -> String {
     use hmac::Mac;
     let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(key).unwrap();

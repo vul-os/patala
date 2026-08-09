@@ -244,12 +244,23 @@ impl IyzicoRail {
         serde_json::from_slice(&resp_body).map_err(|e| models::malformed(&e.to_string()))
     }
 
-    /// Shared by [`PaymentRail::verify`] and [`Self::handle_webhook`]:
-    /// re-confirm `token` against iyzico and evaluate the outcome,
-    /// squashing a content-level API failure (see
-    /// `models::evaluate_checkout_form`'s docs) into `None` rather than
-    /// propagating it as `Err` -- only a genuine transport/parse failure
-    /// (the `?` above) is a real `Err`.
+    /// Re-confirm `token` against iyzico for [`PaymentRail::verify`], which
+    /// answers a `bool`: a content-level API failure (see
+    /// `models::evaluate_checkout_form`'s docs) becomes `None`, which that
+    /// caller turns into `Ok(false)` — its documented "any doubt is not
+    /// verified" contract. Only a genuine transport/parse failure (the `?`
+    /// below) is an `Err`.
+    ///
+    /// **Not shared with [`Self::handle_webhook`] any more**, and the split is
+    /// the point. `verify` is asked "did this settle?", where `None` is a
+    /// truthful no. `verify_webhook` is asked "did this delivery come from
+    /// iyzico?", where `None` means *nothing was established at all* — and
+    /// flattening that onto a `WebhookEvent` with a negative status is exactly
+    /// what [`patala_core::WebhookEvent`]'s own contract forbids: "an
+    /// unauthenticated delivery is an `Err`, never a `WebhookEvent` with a
+    /// negative status". iyzico's callback carries no signature, so an
+    /// anonymous `POST token=anything` reached `Ok(NotSettled)` and could
+    /// drive a consumer's cancel-order / release-inventory path.
     async fn retrieve_and_evaluate(&self, token: &str) -> Result<Option<models::CheckoutOutcome>> {
         let result = self.retrieve_checkout_form(token).await?;
         Ok(models::evaluate_checkout_form(&result).ok())
@@ -262,6 +273,14 @@ impl IyzicoRail {
     /// `retrieveCheckoutForm` round trip [`PaymentRail::verify`] uses.
     /// Mirrors cackle's `IyzicoProvider.Webhook`, which is literally
     /// `return p.Verify(ctx, token)`.
+    ///
+    /// **That round trip IS this rail's signature check**, so its verdict is
+    /// propagated rather than squashed: a token iyzico does not recognise —
+    /// which is every token an anonymous caller can invent — is an `Err`, and
+    /// so is a `paidPrice` that will not convert. The caller learns nothing
+    /// about a payment from a request that authenticated nothing. This is the
+    /// shape `mollie::rail`'s `verify_webhook` already had; iyzico was the one
+    /// re-fetch rail that dropped the error on the floor with `.ok()`.
     pub async fn handle_webhook(
         &self,
         content_type: &str,
@@ -271,16 +290,13 @@ impl IyzicoRail {
             .map_err(|e| Error::Rail(format!("iyzico: {e}")))?;
         let token = crate::iyzico::webhook::extract_token(content_type, raw_body)
             .ok_or(Error::Rail(IyzicoWebhookError::MissingToken.to_string()))?;
-        let outcome = self.retrieve_and_evaluate(&token).await?;
-        let (settled, amount_minor, currency) = match outcome {
-            Some(o) => (o.settled, o.amount_minor, o.currency),
-            None => (false, 0, String::new()),
-        };
+        let result = self.retrieve_checkout_form(&token).await?;
+        let outcome = models::evaluate_checkout_form(&result)?;
         Ok(IyzicoWebhookOutcome {
             token,
-            settled,
-            amount_minor,
-            currency,
+            settled: outcome.settled,
+            amount_minor: outcome.amount_minor,
+            currency: outcome.currency,
         })
     }
 }
@@ -756,6 +772,81 @@ mod tests {
             .unwrap();
         assert!(outcome.settled);
         assert_eq!(outcome.amount_minor, 10000);
+    }
+
+    /// iyzico's callback carries **no signature**, so the authenticated
+    /// `retrieveCheckoutForm` round trip is the whole of this rail's
+    /// verification — and a token iyzico does not recognise means that round
+    /// trip established *nothing*. `retrieve_and_evaluate`'s `.ok()` dropped
+    /// iyzico's `status: "failure"` on the floor and `handle_webhook` mapped
+    /// the resulting `None` onto `(false, 0, "")`, so an anonymous
+    /// `POST token=anything` produced a `WebhookEvent` with a NEGATIVE status
+    /// — which `patala_core::WebhookEvent`'s own contract forbids outright:
+    /// "an unauthenticated delivery is an `Err`, never a `WebhookEvent` with a
+    /// negative status". No money can be fabricated that way, but a consumer's
+    /// cancel-order / release-inventory path can be driven by a stranger.
+    ///
+    /// Put the `.ok()` back (`let outcome = models::evaluate_checkout_form(&result).ok()`
+    /// with the `None => (false, 0, String::new())` arm) and this reports:
+    /// `an invented token produced Ok(settled=false) -- an unauthenticated
+    /// delivery must be an Err, never an event with a negative status`.
+    #[tokio::test]
+    async fn handle_webhook_an_invented_token_is_an_error_not_a_negative_event() {
+        let server = MockServer::start().await;
+        // What iyzico answers for a token that was never issued: an API-level
+        // failure, NOT a payment that did not settle.
+        Mock::given(method("POST"))
+            .and(path("/payment/iyzipos/checkoutform/auth/ecom/detail"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "failure",
+                "errorMessage": "token not found"
+            })))
+            .mount(&server)
+            .await;
+        let rail = rail_for(server.uri());
+        match rail
+            .handle_webhook(
+                "application/x-www-form-urlencoded",
+                b"token=whatever-a-stranger-typed",
+            )
+            .await
+        {
+            Err(e) => assert!(
+                e.to_string().contains("token not found"),
+                "refused, but the reason iyzico gave was lost: {e}"
+            ),
+            Ok(o) => panic!(
+                "an invented token produced Ok(settled={}) -- an unauthenticated \
+                 delivery must be an Err, never an event with a negative status",
+                o.settled
+            ),
+        }
+    }
+
+    /// The same thing through the trait, which is the surface a consumer
+    /// actually reaches: no `WebhookEvent` may exist for a delivery that
+    /// authenticated nothing.
+    #[tokio::test]
+    async fn verify_webhook_never_produces_an_event_for_an_unauthenticated_delivery() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/payment/iyzipos/checkoutform/auth/ecom/detail"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "status": "failure",
+                "errorMessage": "token not found"
+            })))
+            .mount(&server)
+            .await;
+        let rail = rail_for(server.uri());
+        let delivery = WebhookDelivery::new(b"token=whatever-a-stranger-typed".to_vec(), 0)
+            .with_header("Content-Type", "application/x-www-form-urlencoded");
+        if let Ok(ev) = rail.verify_webhook(&delivery).await {
+            panic!(
+                "an anonymous POST produced {:?} for event_id {:?} -- reaching \
+                 WebhookEvent at all means the delivery was authenticated",
+                ev.status, ev.event_id
+            );
+        }
     }
 
     #[tokio::test]

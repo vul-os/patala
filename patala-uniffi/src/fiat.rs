@@ -93,7 +93,7 @@ use crate::{PatalaError, PatalaRail};
 #[allow(dead_code)]
 fn not_compiled_in(provider: &str, feature: &str) -> PatalaError {
     PatalaError::InvalidRequest {
-        message: format!(
+        detail: format!(
             "patala-uniffi was built without --features {feature}; the {provider:?} fiat rail is not available in this build"
         ),
     }
@@ -176,7 +176,7 @@ fn get_u8(
             .trim()
             .parse::<u8>()
             .map_err(|_| PatalaError::InvalidRequest {
-                message: format!("{provider}: {key:?} must be an integer between 0 and 255"),
+                detail: format!("{provider}: {key:?} must be an integer between 0 and 255"),
             }),
     }
 }
@@ -194,7 +194,7 @@ fn get_optional_u32(
             .parse::<u32>()
             .map(Some)
             .map_err(|_| PatalaError::InvalidRequest {
-                message: format!("{provider}: {key:?} must be a non-negative integer"),
+                detail: format!("{provider}: {key:?} must be a non-negative integer"),
             }),
     }
 }
@@ -212,7 +212,7 @@ fn get_u64(
             .trim()
             .parse::<u64>()
             .map_err(|_| PatalaError::InvalidRequest {
-                message: format!("{provider}: {key:?} must be a non-negative integer"),
+                detail: format!("{provider}: {key:?} must be a non-negative integer"),
             }),
     }
 }
@@ -428,7 +428,7 @@ fn build_lnbits(config: &HashMap<String, String>) -> Result<Arc<dyn PaymentRail>
                 .trim()
                 .parse::<u64>()
                 .map_err(|_| PatalaError::InvalidRequest {
-                    message:
+                    detail:
                         "lnbits: \"quote_ttl_secs\" must be a positive integer number of seconds"
                             .to_string(),
                 })?,
@@ -564,7 +564,7 @@ fn build_paypal(config: &HashMap<String, String>) -> Result<Arc<dyn PaymentRail>
         "sandbox" => patala_fiat::paypal::config::SANDBOX_BASE_URL.to_string(),
         other => {
             return Err(PatalaError::InvalidRequest {
-                message: format!(
+                detail: format!(
                 "paypal: config key \"env\" must be exactly \"live\" or \"sandbox\", got {other:?}"
             ),
             })
@@ -756,7 +756,7 @@ impl PatalaRail {
             "yoco" => build_yoco(&config)?,
             other => {
                 return Err(PatalaError::InvalidRequest {
-                    message: format!(
+                    detail: format!(
                         "unknown fiat provider {other:?}; see patala-fiat's registry (PORTING.md) for the supported list"
                     ),
                 })

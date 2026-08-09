@@ -138,7 +138,7 @@ uniffi::setup_scaffolding!("patala");
 #[cfg(any(feature = "solana", feature = "stellar"))]
 fn seed32(bytes: &[u8], rail: &str) -> Result<[u8; 32], PatalaError> {
     bytes.try_into().map_err(|_| PatalaError::InvalidRequest {
-        message: format!(
+        detail: format!(
             "{rail} keypair seed must be exactly 32 bytes, got {}",
             bytes.len()
         ),
@@ -533,10 +533,19 @@ pub fn exchange_deposit_caveat() -> String {
 pub enum PatalaError {
     #[error("{operation} is not supported by this rail")]
     Unsupported { operation: String },
-    #[error("rail error: {message}")]
-    Rail { message: String },
-    #[error("invalid request: {message}")]
-    InvalidRequest { message: String },
+    // `detail`, not `message`: uniffi's Kotlin backend renders a flat error
+    // enum as a subclass of kotlin.Exception, which already has an open
+    // `message` property. A variant field of that name is emitted twice — once
+    // as a constructor `val`, once as the synthesised `override val` — and the
+    // generated file does not compile (kotlinc 2.4.10: 12 errors, identical
+    // under -language-version 2.0 and 2.1, so it is codegen and not
+    // strictness). Renaming here is the honest fix; the alternative was
+    // sed-patching generated code to silently rename part of a payments SDK's
+    // public API. Changed while patala is unreleased and has no consumers.
+    #[error("rail error: {detail}")]
+    Rail { detail: String },
+    #[error("invalid request: {detail}")]
+    InvalidRequest { detail: String },
     #[error(
         "failover from a {from:?} rail to a {to:?} rail would cross the settlement-class boundary"
     )]
@@ -551,8 +560,8 @@ impl From<CoreError> for PatalaError {
             CoreError::Unsupported(op) => PatalaError::Unsupported {
                 operation: op.to_string(),
             },
-            CoreError::Rail(message) => PatalaError::Rail { message },
-            CoreError::InvalidRequest(message) => PatalaError::InvalidRequest { message },
+            CoreError::Rail(detail) => PatalaError::Rail { detail },
+            CoreError::InvalidRequest(detail) => PatalaError::InvalidRequest { detail },
             CoreError::CrossClassFailover { from, to } => PatalaError::CrossClassFailover {
                 from: from.into(),
                 to: to.into(),
@@ -802,7 +811,7 @@ impl PatalaRail {
             "mainnet" | "mainnet-beta" => SolanaConfig::mainnet(rpc_url.clone()),
             other => {
                 return Err(PatalaError::InvalidRequest {
-                    message: format!(
+                    detail: format!(
                         "unknown solana cluster {other:?}; use \"devnet\" or \"mainnet\""
                     ),
                 })
@@ -843,7 +852,7 @@ impl PatalaRail {
         let cfg = match network.as_str() {
             "testnet" => {
                 let issuer = usdc_issuer.ok_or_else(|| PatalaError::InvalidRequest {
-                    message:
+                    detail:
                         "stellar network \"testnet\" requires usdc_issuer (the testnet issuer rotates and has no fixed default)"
                             .to_string(),
                 })?;
@@ -852,7 +861,7 @@ impl PatalaRail {
             "public" | "mainnet" => StellarConfig::public(),
             other => {
                 return Err(PatalaError::InvalidRequest {
-                    message: format!(
+                    detail: format!(
                         "unknown stellar network {other:?}; use \"testnet\" or \"public\""
                     ),
                 })

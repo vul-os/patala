@@ -8,8 +8,10 @@ Two ways to run patala from C#, both supported:
 | **Direct** | `Patala.Direct` → `PatalaRail` | loads `libpatala_ffi` into this process | when you are not shipping to Windows |
 
 **For .NET the sidecar is the recommended default, and the deciding reason is
-platform coverage.** patala's shared library has been built and executed on
-**exactly one target** — darwin/arm64 — and there is no Windows DLL. .NET has a
+platform coverage.** patala's shared library has been built and run *from .NET*
+on **exactly one target** — darwin/arm64 (CI also builds the linux/amd64 `.so`
+and smoke-tests it from C, but no .NET has run there) — and there is no Windows
+DLL at all. .NET has a
 very large Windows install base; a direct-mode dependency would simply not load
 for a large fraction of the people who took it.
 
@@ -323,12 +325,13 @@ The **shared library**, direct path only:
 | target | status |
 |---|---|
 | darwin/arm64 | **built and executed.** 844,656 bytes, `--release`. Everything on this page ran on it. |
-| darwin/amd64 | **not built here.** |
-| linux/amd64 | **not built here.** |
-| linux/arm64 | **not built here.** |
+| linux/amd64 | the `.so` **is** built and the C smoke test **does** run against it, in CI's `c abi` job (`make smoke-ffi` on `ubuntu-latest`, twice — default and `--features fiat-all`). **No .NET has ever been run there.** |
+| darwin/amd64 | **not built.** |
+| linux/arm64 | **not built.** |
 | **windows/amd64** | **built nowhere. No DLL exists.** |
 
-Only darwin/arm64 was produced in this work, so only that row claims anything.
+darwin/arm64 is the only row this SDK itself claims anything about; linux/amd64
+is a library CI proves loads from C, with no CoreCLR behind it.
 `cargo build -p patala-ffi --release` is the whole build. `Direct.FindLibrary()`
 says all of this in its error message rather than throwing a bare
 `DllNotFoundException`.

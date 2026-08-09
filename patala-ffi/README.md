@@ -34,9 +34,13 @@ same ABI shape across all three so a reader who learns one has learned the
 others. But those two are **Go**, so their libraries are built with
 `go build -buildmode=c-shared`, which puts the Go runtime inside the host
 process. Their headers correctly warn about a garbage collector, a preemptive
-scheduler, Go's own `SIGSEGV`/`SIGPROF` handlers, and the fact that the result
-is not fork-safe — which breaks Python `multiprocessing`'s default `fork` start
-method and pre-fork servers like uWSGI and Unicorn.
+scheduler, Go's own signal handlers, and the fact that the result is not
+fork-safe — which breaks Python `multiprocessing`'s default `fork` start method
+and pre-fork servers like uWSGI and Unicorn. (The signals are `SIGSEGV`,
+`SIGBUS`, `SIGFPE`, `SIGPIPE` and `SIGURG`, plus `SA_ONSTACK` added to `SIGILL`,
+`SIGXFSZ` and `SIGUSR2`. `SIGPROF` is *not* among them: under
+`-buildmode=c-shared` Go's `sigInstallGoHandler` refuses everything but the
+synchronous signals plus `SIGPIPE` and `SIGURG`.)
 
 patala is Rust. **None of that applies here, and none of it has been copied
 into this README.** Concretely:
@@ -47,9 +51,17 @@ into this README.** Concretely:
 - **No threads started** — at load time or at any other time. Each handle owns
   a *current-thread* async runtime (patala-core's trait is `async`), which
   drives work on whichever thread called in and is dropped with the handle.
-- **Fork-safe in the way that matters.** Nothing of ours is running at `fork()`
-  time, so `multiprocessing` with `fork`, uWSGI and Unicorn need no special
-  handling. (Open handles in the child; a handle is not usefully inherited.)
+- **The library is fork-safe; a handle that is *in use* at the moment of the
+  fork is not.** Nothing of ours is running at `fork()` time, so
+  `multiprocessing` with `fork`, uWSGI and Unicorn need no special handling for
+  the *library*. The handle is the narrow rule that is real: its runtime sits
+  behind a mutex and `fork()` copies a locked mutex as locked, so with four
+  parent threads charging on one handle an inherited handle hung **4–8 times in
+  200** forks against **0 in 200** for one opened in the child (reproduced in
+  Python and Ruby). The window is microseconds wide, so a test that forks once
+  is a false green. **Open the handle in the child** — Unicorn's `after_fork`,
+  clustered Puma's `on_worker_boot`, or simply per request. Full measurement:
+  [`docs/c-abi.md`](../docs/c-abi.md#what-it-costs).
 - **Nothing happens at load.** No socket, no file, no background task. The
   library is inert until called.
 
@@ -71,8 +83,10 @@ The default build is under a megabyte because it links `patala-core`, `serde`,
 `serde_json` and tokio's `rt` feature and nothing else — not even
 `patala-uniffi`, which is an *optional* dependency pulled in only by a rail
 feature (see `Cargo.toml`). For comparison, the shared-ABI spec these three
-products follow notes a Go `c-shared` library at 7–17 MB, and llmux's is
-~13 MB. That difference is a consequence of the language, not of doing less:
+products follow notes a Go `c-shared` library at 7–17 MB, and llmux's
+`libllmux.dylib` on this same machine is **12,787,504 bytes** (~12.8 MB),
+measured rather than quoted. That difference is a consequence of the language,
+not of doing less:
 the offline mock rail here is the same `MockRail` every other patala surface
 exercises.
 
@@ -223,10 +237,13 @@ returning 0.
   failed check and a check count of 54 against the expected 55.
 - `cargo tree -p patala-ffi -e normal` on the default features pulls in no
   `reqwest`, no `patala-uniffi`, no `patala-fiat`.
-- **UNVERIFIED**: Linux and Windows builds. Everything above ran on macOS
-  arm64. The `.so` path is exercised by CI's `c-abi` job on `ubuntu-latest`;
-  Windows is untried, and `patala_free`'s "not your `free()`" rule matters most
-  there.
+- **linux/amd64**: the `.so` is built and `make smoke-ffi` dlopens it from C on
+  `ubuntu-latest` in CI's `c abi` job, in both passes — so that row is
+  exercised, not assumed. What has never run there is any of the fifteen
+  `sdks/` language packages. **UNVERIFIED**: linux/arm64 and darwin/amd64 are
+  not built at all, and **Windows has no DLL and nobody has tried** —
+  `patala_free`'s "not your `free()`" rule matters most there. Every number on
+  this page was measured on macOS arm64.
 - **UNVERIFIED AGAINST LIVE** for every real rail, same as the rest of the
   workspace: the C tests only ever drive `MockRail`, and the fiat build is
   exercised by construction only.

@@ -12,7 +12,7 @@ Two modes. The JSON is identical in both; only the transport differs.
 | dependencies | none | `koffi` (optional peer) |
 | where a signing key lives | in the sidecar's process, and nowhere else | in this process, alongside your app |
 | blocks the event loop | no | only if you want it to — see below |
-| survives a `fork()` | yes | yes |
+| survives a `fork()` | yes | the library yes; **open the handle in the child** — see below |
 | extra bytes on disk | the binary you already have | **844,656 bytes** |
 | rails reachable today | **`mock` only** — the registry is unwritten | every rail the library was built with |
 | platforms | wherever the binary builds | **darwin/arm64 built and executed here** — see below |
@@ -335,11 +335,22 @@ Stated because the other two products in this suite have to warn about all of
 it, and a reader who learns one is entitled to know which warnings travel:
 
 - **No language runtime.** No GC, no preemptive scheduler, no green threads.
-- **No signal handlers installed.** Your `SIGSEGV`/`SIGPROF` handling is
-  untouched.
+- **No signal handlers installed** — not one. Measured with llmux's own probe
+  on a JVM, the harshest host there is: all thirteen probed signals come back
+  `unchanged`, where a Go `c-shared` library replaces five (`SIGSEGV`,
+  `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG`) and alters the flags on three more.
+  Your crash reporter and sampling profiler have nothing to collide with.
 - **No threads started**, at load or ever. Measured above: 7 → 7.
-- **Fork-safe in the way that matters.** Nothing of patala's is running at
-  `fork()` time. (Handles are not usefully inherited; open them in the child.)
+- **The library is fork-safe; a handle that is *in use* at the moment of the
+  fork is not.** Nothing of patala's is running at `fork()` time, so loading
+  the library before a fork is fine — but a handle's runtime sits behind a
+  mutex and `fork()` copies a locked mutex as locked. Measured: with four
+  parent threads charging on the same handle, over 200 forks, an inherited
+  handle hung **4–8 times in 200** against **0 in 200** for one opened in the
+  child. The window is microseconds wide, so a test that forks once is a false
+  green. **Open the handle in the child.** Full measurement:
+  [`docs/choosing-a-mode.md`](../../docs/choosing-a-mode.md#the-advantage-that-is-easy-to-miss-no-runtime-in-your-process)
+  and [`sdks/README.md`](../README.md#costs-that-are-real-and-are-not-the-siblings-costs).
 - **Nothing happens at load.** No socket, no file, no background task.
 
 `patala-ffi/ctest/smoke.c` is where that stops being prose: it counts the

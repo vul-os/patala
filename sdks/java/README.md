@@ -363,12 +363,13 @@ The **shared library**, direct path only:
 | target | status |
 |---|---|
 | darwin/arm64 | **built and executed.** 844,656 bytes, `--release`. Everything on this page ran on it. |
-| darwin/amd64 | **not built here.** |
-| linux/amd64 | **not built here.** |
-| linux/arm64 | **not built here.** |
+| linux/amd64 | the `.so` **is** built and the C smoke test **does** run against it, in CI's `c abi` job (`make smoke-ffi` on `ubuntu-latest`, twice — default and `--features fiat-all`). **No Java has ever been run there.** |
+| darwin/amd64 | **not built.** |
+| linux/arm64 | **not built.** |
 | **windows/amd64** | **built nowhere. No DLL exists.** |
 
-Only darwin/arm64 was produced in this work, so only that row claims anything.
+darwin/arm64 is the only row this SDK itself claims anything about; linux/amd64
+is a library CI proves loads from C, with no JVM behind it.
 `cargo build -p patala-ffi --release` is the whole build — there is no
 cross-compile script in this repo to point you at, and pretending otherwise
 would be worse than a short table. `PatalaDirect.findLibrary()` says so in its

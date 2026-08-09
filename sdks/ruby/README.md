@@ -227,11 +227,12 @@ Here it is a one-line placement note.
 ## Platforms
 
 Built and exercised here: **darwin/arm64**, `libpatala_ffi.dylib`, from
-`cargo build -p patala-ffi` on this machine. Nothing else was produced — no
-Linux `.so` was built here (CI's `c-abi` job covers `ubuntu-latest`), no
-Windows DLL exists, and `patala_free`'s "not your `free()`" rule matters most
-on Windows. Most Ruby is deployed on linux/amd64, which is a row nobody has
-built and smoke-tested locally.
+`cargo build -p patala-ffi` on this machine. On **linux/amd64** the `.so` is
+built and the C smoke test runs against it in CI's `c abi` job on
+`ubuntu-latest` — so the library is known to load and answer there — but **no
+Ruby has ever been run against it**, and most Ruby is deployed on exactly that
+row. No Windows DLL exists, and `patala_free`'s "not your `free()`" rule
+matters most on Windows.
 
 The sidecar path needs only the `patala-sidecar` binary for your platform and
 has no such matrix.

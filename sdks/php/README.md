@@ -291,10 +291,12 @@ the `\Patala\Ffi` per request, or per worker after the fork.
 ## Platforms
 
 Built and exercised here: **darwin/arm64**, `libpatala_ffi.dylib`, from
-`cargo build -p patala-ffi` on this machine. No Linux `.so` was built here
-(CI's `c-abi` job covers `ubuntu-latest`) and no Windows DLL exists — where
-`patala_free`'s "not your `free()`" rule matters most. Most PHP is deployed on
-linux/amd64, a row nobody has built and smoke-tested locally.
+`cargo build -p patala-ffi` on this machine. On **linux/amd64** the `.so` is
+built and the C smoke test runs against it in CI's `c abi` job on
+`ubuntu-latest` — so the library is known to load and answer there — but **no
+PHP has ever been run against it**, and most PHP is deployed on exactly that
+row. No Windows DLL exists, which is where `patala_free`'s "not your `free()`"
+rule matters most.
 
 The sidecar path needs only the `patala-sidecar` binary for your platform.
 

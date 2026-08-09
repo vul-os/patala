@@ -108,7 +108,9 @@ plainly rather than buried.
 llmux and openrate ship C ABIs with the same six-function shape, but those two
 are **Go**, built with `go build -buildmode=c-shared`, which puts the Go
 runtime in your process. Their C READMEs correctly warn you about a garbage
-collector, a preemptive scheduler, Go's own `SIGSEGV`/`SIGPROF` handlers, and a
+collector, a preemptive scheduler, Go's own signal handlers (`SIGSEGV`,
+`SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG` — not `SIGPROF`, which Go's
+`c-shared` runtime leaves alone), and a
 library that is **not fork-safe** — which is why llmux's `sidecar_chat.c` says
 in a comment that it is safe to `fork()` only because it never loads
 `libllmux`.
@@ -121,10 +123,15 @@ patala is Rust. **None of that is true here, and none of it has been copied.**
 - **No threads started**, at load time or ever. Each handle owns a
   *current-thread* async runtime that drives work on whichever thread called
   in and is dropped with the handle.
-- **Fork-safe in the way that matters.** Nothing of ours is running at `fork()`
-  time. [`sidecar.c`](sidecar.c) forks — and unlike llmux's, it would be safe
-  doing so even if it had loaded the library. (Open handles in the child; a
-  handle is not usefully inherited.)
+- **The library is fork-safe; a handle that is *in use* at the moment of the
+  fork is not.** Nothing of ours is running at `fork()` time, so
+  [`sidecar.c`](sidecar.c) forks — and unlike llmux's, it would be safe doing
+  so even if it had loaded the library. The handle rule is the narrow one that
+  is real: a handle's runtime sits behind a mutex and `fork()` copies a locked
+  mutex as locked, so with four parent threads charging on one handle an
+  inherited handle hung **4–8 times in 200** forks against **0 in 200** for one
+  opened in the child. **Open the handle in the child.** Full measurement:
+  [`docs/c-abi.md`](../../docs/c-abi.md#what-it-costs).
 - **Nothing happens at load.** No socket, no file, no background task.
 - **`dlclose` does not hang.** There is no runtime with threads still executing
   the mapping.

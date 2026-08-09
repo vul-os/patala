@@ -241,16 +241,19 @@ list, and none of it was copied:
   handle owns a *current-thread* tokio runtime that runs on whichever thread
   called in — which, for a dirty NIF, is a dirty scheduler thread.
 - **Nothing happens at load**: no socket, no file, no background task.
-- The mock-only library is **844,656 bytes** (release), against llmux's ~13 MB.
+- The mock-only library is **844,656 bytes** (release), against llmux's
+  12,787,504 (~12.8 MB), measured on this machine on the same day.
 
 ## Platforms
 
 Built and exercised here: **darwin/arm64** — `libpatala_ffi.dylib` from
 `cargo build -p patala-ffi`, and `priv/patala_nif.so` from this directory's
-Makefile. Nothing else was produced: no Linux `.so` was built here, and Windows
-is untried (the Makefile has no MSVC path — a NIF there needs a different link
-line entirely). The sidecar path needs only the `patala-sidecar` binary for
-your platform and has no such matrix.
+Makefile. CI's `c abi` job does build the linux/amd64 `libpatala_ffi.so` and
+smoke-test it from C on `ubuntu-latest`, but **no NIF and no BEAM has ever been
+run there** — `priv/patala_nif.so` has only ever been built on darwin/arm64.
+Windows is untried (the Makefile has no MSVC path — a NIF there needs a
+different link line entirely). The sidecar path needs only the `patala-sidecar`
+binary for your platform and has no such matrix.
 
 ## Files
 

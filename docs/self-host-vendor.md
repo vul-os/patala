@@ -40,7 +40,7 @@ just to call `charge()`. Each call blocks the calling thread on a
 lazily-created multi-thread `tokio::runtime::Runtime` under the hood.
 
 ```python
-from patala_py import PatalaRail, PayRequest, RailClass
+from patala import PatalaRail, PayRequest, RailClass
 
 rail = PatalaRail.new_mock(
     id="mock",

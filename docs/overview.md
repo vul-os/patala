@@ -68,7 +68,7 @@ before `main`. A Go-cored library reached over FFI carries the Go runtime into
 whatever host loads it; patala does not have one to carry.
 
 What embedding patala *does* cost is a lazily-created Tokio runtime **only in
-the bindings** that need one — `patala-py` creates it on first call so a
+the bindings** that need one — `patala-uniffi` creates it on first call so a
 Python caller never has to run an event loop
 ([Python binding](python.md)) — and, if you choose the Go binding, cgo. The
 cgo cost is real and is documented rather than buried:

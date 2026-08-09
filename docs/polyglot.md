@@ -144,7 +144,7 @@ The pinning is three-layered, because no single layer catches everything:
 
 There is a fourth guard one level up: `scripts/check-features.sh` keeps
 `patala-fiat`'s processor set in lock-step with the Cargo features that expose
-it, because a new adapter left out of `patala-py`'s `fiat-all` feature would
+it, because a new adapter left out of `patala-uniffi`'s `fiat-all` feature would
 silently vanish from the Go binding's cdylib — present in Rust, absent
 everywhere else, and nothing would have failed.
 

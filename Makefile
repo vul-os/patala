@@ -10,7 +10,7 @@
 # (patala-go has its own Makefile for the UniFFI binding generation — this one
 # is the Rust workspace.)
 
-.PHONY: check fmt fmt-check lint test test-features doc features site-check smoke-python smoke-go smoke-ffi clean
+.PHONY: check fmt fmt-check lint test test-features doc features site-check smoke-python smoke-go smoke-ffi smoke-kotlin smoke-swift probe-ruby clean
 
 # The full gate. Run before pushing.
 check: fmt-check lint test test-features doc features site-check
@@ -147,6 +147,30 @@ smoke-go:
 smoke-ffi:
 	./scripts/ffi-ctest.sh
 	./scripts/ffi-ctest.sh --features fiat-all
+
+# The two OTHER generated UniFFI bindings, actually executed. Same shape as
+# `smoke-python`/`smoke-go` — generate from patala-uniffi's cdylib, compile,
+# run — and out of `check` for the same reason: they need a toolchain beyond
+# cargo (a JDK + kotlinc, and swiftc).
+#
+# Each sub-Makefile owns its own pins and assertions, following
+# patala-go/Makefile: the uniffi version is checked against what Cargo.lock
+# resolves, and the generated output's package/module clause and typed surface
+# are asserted rather than assumed. Both end by running a counted check suite
+# that fails when the NUMBER of assertions changes.
+smoke-kotlin:
+	$(MAKE) -C sdks/kotlin check
+
+smoke-swift:
+	$(MAKE) -C sdks/swift/uniffi check
+
+# UniFFI's Ruby backend emits Ruby that does not parse — an interface argument
+# named `class` (patala has one: RailCapabilities.class) is renamed in the
+# `def` line and left alone in the body. This reproduces it, and its exit code
+# is INVERTED: 0 while the bug is there, 1 when it is fixed and generated Ruby
+# becomes worth reconsidering for sdks/ruby. Needs ruby and python3.
+probe-ruby:
+	./scripts/uniffi-ruby-probe.sh
 
 clean:
 	cargo clean

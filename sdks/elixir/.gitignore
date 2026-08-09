@@ -1,0 +1,9 @@
+# Build output: the compiled NIF and mix's own tree. `make` reproduces the
+# first; `mix compile` the second.
+/priv/
+/_build/
+/deps/
+/doc/
+/cover/
+erl_crash.dump
+*.ez

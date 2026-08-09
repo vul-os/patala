@@ -10,10 +10,22 @@
 # (patala-go has its own Makefile for the UniFFI binding generation — this one
 # is the Rust workspace.)
 
-.PHONY: check fmt fmt-check lint test test-features doc features smoke-python smoke-go smoke-ffi clean
+.PHONY: check fmt fmt-check lint test test-features doc features site-check smoke-python smoke-go smoke-ffi clean
 
 # The full gate. Run before pushing.
-check: fmt-check lint test test-features doc features
+check: fmt-check lint test test-features doc features site-check
+
+# The docs/site gate. Two checks that previously existed but ran nowhere, which
+# is how slipscan's docs page carried a forbidden footer for weeks: a rule
+# enforced only from another repo is checked only when somebody remembers.
+#   gen-site-docs --check  — site/docs is current with docs/, no orphans, no
+#                            stale nav, no typo'd sibling links
+#   check-docs-chrome      — the docs-page invariants the suite gate cannot
+#                            reach from here
+# The canonical suite gate remains vulos-cloud/scripts/check-suite-chrome.mjs.
+site-check:
+	node scripts/gen-site-docs.mjs --check
+	node scripts/check-docs-chrome.mjs
 
 # Rewrite formatting in place.
 fmt:

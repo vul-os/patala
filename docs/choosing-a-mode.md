@@ -1,13 +1,16 @@
 # Choosing a mode
 
-patala is reachable four ways: as a Rust crate, as a generated Python
-binding, as a generated Go binding, or as a local HTTP sidecar. They are not
-four tiers of the same thing with one obviously best answer — they are four
-different trades, and the right one depends on facts about *your* build, not
-about patala.
+patala is reachable five ways: as a Rust crate, as a generated Python binding,
+as a generated Go binding, as a plain C ABI shared library, or as a local HTTP
+sidecar. They are not five tiers of the same thing with one obviously best
+answer — they are five different trades, and the right one depends on facts
+about *your* build, not about patala.
 
-This page exists so that decision is made deliberately, once, rather than
-discovered at link time three weeks later.
+There is a package for each of **fifteen languages** in
+[`sdks/`](../sdks/README.md), and each offers both an in-process and a sidecar
+path; [Fifteen language packages](language-packages.md) is the index. This page
+is the decision those packages implement, so it is made deliberately, once,
+rather than discovered at link time three weeks later.
 
 ## The short answer
 
@@ -17,10 +20,12 @@ discovered at link time three weeks later.
 | You write Python | [`patala-py`](python.md) | Synchronous calls, native-ish types, no server to supervise. |
 | You write Go **and** can accept cgo | [`patala-go`](go.md) | Same generated surface, native Go types, in-process. |
 | You write Go **and** need a pure-static binary | [the sidecar](sidecar.md) | `CGO_ENABLED=0` survives. This is what `cackle` chose. |
-| You write C, C++, Node/Deno/Bun, PHP or Elixir **and** want in-process | `patala-ffi` | A plain C ABI, JSON in and out. patala is Rust, so it puts no runtime in your process. |
-| You write something else — Ruby, Java, C# | [the sidecar](sidecar.md) | An HTTP client is the whole dependency. |
+| You write Java or Kotlin | **in-process**, over [the C ABI](c-abi.md) | Loading it replaces **zero** of HotSpot's signal handlers, so `libjsig` is not needed. This is the reverse of the advice in llmux and openrate, and it was measured. |
+| You write C, C++, Swift, Node/Deno/Bun, Ruby, PHP or Elixir **and** want in-process | [the C ABI](c-abi.md) | JSON in and out, six functions. patala is Rust, so it puts no runtime in your process. |
+| You write C# / .NET | [the sidecar](sidecar.md) | **No Windows DLL exists.** Not a runtime problem — a platform-coverage one. |
 | Several services in a polyglot stack need the same signing key | [the sidecar](sidecar.md) | The key lives in one process instead of every process. |
 | You are prototyping and do not yet know | [the sidecar](sidecar.md) | Lowest commitment; you can always move in-process later. |
+| You need a **real rail** today | anything **but** the sidecar | Its registry is mock-only. See the last section. |
 
 Everything below is the reasoning behind that table.
 
@@ -29,8 +34,10 @@ Everything below is the reasoning behind that table.
 Embedding patala in a host process adds **no language runtime to it**. The
 core is Rust: there is no garbage collector that can pause your threads, no
 second scheduler competing with yours, no runtime-installed signal handlers
-to collide with a JVM's, no `fork()`-safety hazard, and no initialisation that
-has to happen before your `main` runs.
+to collide with a JVM's, no Go-style fork-unsafety, and no initialisation that
+has to happen before your `main` runs. (The precise fork statement — the
+library is fork-safe, a handle in use at the moment of the fork is not — is
+below, because the flat version is too strong.)
 
 This is worth stating explicitly because it is *not* a given for a library
 distributed over FFI. A library whose core is written in a runtime language
@@ -39,6 +46,23 @@ scheduling, its signal handling and its memory behaviour. Caveats of that kind
 exist in this suite and they are real — they simply are not patala's, and
 repeating them here would be wrong.
 
+It is also not a claim inherited from the language. Each of these was measured,
+in each case against a Go library in the *same* environment as a control:
+
+| Probe | patala | a Go `c-shared` control |
+|---|---|---|
+| HotSpot signal handlers replaced ([`sdks/java/signal-probe.sh`](../sdks/java/signal-probe.sh)) | **0**, and 0 with altered flags | 5 replaced, 3 with altered flags |
+| `-Xcheck:jni` says | nothing | `Warning: SIGSEGV handler modified!` … `Consider using jsig library.` |
+| JVM threads, before `dlopen` → after → after a round trip | **23 → 23 → 23** | — |
+| A Node `worker_threads` worker that entered the library | **exits 0 in ~33 ms** | never exits — killed at 15 s |
+| Node process threads across a round trip | **7 → 7** | 7 → 13 |
+| Release library, mock-only build | **844,656 bytes** | `libllmux.dylib` 12,787,504 |
+
+The consequences are concrete rather than rhetorical: Java and Kotlin default to
+in-process here where the siblings default to the sidecar, and patala's Node
+package can ship a working `callAsync` where theirs cannot.
+[Fifteen language packages](language-packages.md) has the rest.
+
 What embedding patala genuinely costs:
 
 - **A Tokio runtime, but only where a binding needs one.** The trait's methods
@@ -46,12 +70,26 @@ What embedding patala genuinely costs:
   single, lazily-created multi-thread Tokio runtime it owns process-wide, so a
   Python caller never has to run an event loop. That runtime does not exist
   until the first call. A Rust consumer brings its own executor and patala
-  creates nothing.
+  creates nothing. Over the C ABI it is different in shape but not in kind:
+  each handle owns a **current-thread** runtime, which starts no threads but
+  does mean **calls on one handle serialise**.
 - **cgo, if and only if you choose the Go binding.** This one is large enough
   to have its own section below.
 - **A dynamic library that has to travel with the binary**, for both generated
-  bindings. The compiled cdylib is a real file on disk that the loader must
-  find at runtime.
+  bindings and for the C ABI. The compiled cdylib is a real file on disk that
+  the loader must find at runtime — and `rustc` stamps its `LC_ID_DYLIB` with
+  an absolute build-tree path, so a binary that *links* it needs an
+  `install_name_tool` fix-up before it will run anywhere else.
+- **The library is fork-safe; a handle *in use* at the moment of the fork is
+  not.** Its runtime sits behind a mutex and `fork()` copies a locked mutex as
+  locked. With four parent threads charging on the same handle, over 200 forks:
+  an inherited handle hung **4–8 times in 200** (reproduced in Python and
+  Ruby), a fresh handle opened in the child **0 in 200**. The window is a few
+  microseconds wide, so **a test that forks once is a false green**. Load the
+  library where you like; open the handle in the child. This is a narrow rule,
+  not the siblings' fork-unsafety — real php-fpm answered 24 of 24 requests
+  through a forked worker, including on the handle the master opened, where
+  `libllmux` in that same shape hangs on the first real call.
 
 ## The cgo cost, stated up front
 
@@ -109,19 +147,20 @@ co-resident process, and says so rather than implying otherwise.
 
 ## Side by side
 
-| | Rust crate | `patala-py` | `patala-go` | Sidecar |
-|---|---|---|---|---|
-| Boundary | none | UniFFI / ctypes | UniFFI / cgo | loopback HTTP + JSON |
-| Latency | best | in-process call | in-process call | a socket round trip |
-| Types | native Rust | generated Python | generated Go | JSON |
-| Extra process | no | no | no | **yes** — one to supervise |
-| Extra runtime in your process | none | Tokio, lazily | Tokio, lazily | none |
-| Needs a C toolchain | no | no | **yes** | no |
-| Survives `CGO_ENABLED=0` | n/a | n/a | **no** | **yes** |
-| Cross-compiles easily | yes (Rust targets) | per-platform wheel | **hard** | yes — the client is pure |
-| Key isolation | no — key is in your process | no | no | **yes** — one process holds it |
-| Reaches every rail | yes | yes, per Cargo feature | yes, per Cargo feature | **not yet** — mock only |
-| Async model | your executor | sync calls, internal runtime | sync calls, internal runtime | whatever your HTTP client is |
+| | Rust crate | `patala-py` | `patala-go` | C ABI | Sidecar |
+|---|---|---|---|---|---|
+| Boundary | none | UniFFI / ctypes | UniFFI / cgo | `extern "C"` + JSON | loopback HTTP + JSON |
+| Latency | best | in-process call | in-process call | in-process call | a socket round trip |
+| Types | native Rust | generated Python | generated Go | JSON | JSON |
+| Extra process | no | no | no | no | **yes** — one to supervise |
+| Extra runtime in your process | none | Tokio, lazily | Tokio, lazily | Tokio per handle, current-thread | none |
+| Needs a C toolchain | no | no | **yes** | only to *build* the library | no |
+| Survives `CGO_ENABLED=0` | n/a | n/a | **no** | n/a | **yes** |
+| Cross-compiles easily | yes (Rust targets) | per-platform wheel | **hard** | one cdylib per OS × arch | yes — the client is pure |
+| Key isolation | no — key is in your process | no | no | no | **yes** — one process holds it |
+| Reaches every rail | yes | yes, per Cargo feature | yes, per Cargo feature | yes, per Cargo feature | **not yet** — mock only |
+| Async model | your executor | sync calls, internal runtime | sync calls, internal runtime | sync calls; one handle serialises | whatever your HTTP client is |
+| Languages | Rust | Python | Go | twelve — see [the index](../sdks/README.md) | all fifteen |
 
 ## The one thing that can override all of the above
 
@@ -140,7 +179,7 @@ whatever the rest of this page says. [Status](status.md) tracks it.
 
 Mostly yes, and cheaply, because every mode drives the *same* trait through
 `dyn PaymentRail` — the method names, the argument shapes and the verdict
-enums are the same in all four. Moving from the Go binding to the sidecar is
+enums are the same in all five. Moving from the Go binding to the sidecar is
 rewriting call sites, not redesigning a payment flow.
 
 Two things do not port for free:
@@ -156,7 +195,10 @@ Two things do not port for free:
 ## Related documents
 
 - [Rust, embedded](rust.md) · [Python binding](python.md) ·
-  [Go binding](go.md) · [The sidecar HTTP API](sidecar.md)
-- [One core, every language](polyglot.md) — why there are four consumers and
+  [Go binding](go.md) · [The C ABI](c-abi.md) ·
+  [The sidecar HTTP API](sidecar.md)
+- [Fifteen language packages](language-packages.md) — a working package per
+  language, both modes, with a run command for each.
+- [One core, every language](polyglot.md) — why there are five consumers and
   only one implementation.
 - [Status](status.md) — what has actually been executed, per mode.

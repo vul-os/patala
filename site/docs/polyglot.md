@@ -47,15 +47,27 @@ crate. Every other language is a *generated consumer* of that one definition:
    patala-solana  patala-stellar  patala-hyperswitch  patala-fiat   MockRail
         │              │               │               │              │
         └──────────────┴───────────────┴───────────────┴──────────────┘
-                                       │  one #[uniffi::export] surface
-                    ┌──────────────────┼──────────────────┐
-                    │                  │                  │
-              generated            generated          patala-sidecar
-              Python               Go                 (HTTP + JSON)
-                    │                  │                  │
-                    └──────────────────┴──────────────────┴──► Swift, Kotlin,
-                                                               Ruby, Elixir, …
+                                       │
+        ┌──────────────────┬───────────┴──────┬────────────────────┐
+        │                  │                  │                    │
+  #[uniffi::export]  #[uniffi::export]   patala-ffi           patala-sidecar
+  generated Python   generated Go        extern "C" cdylib    (HTTP + JSON)
+  (patala-py)        (patala-go)         JSON in / JSON out
+        │                  │                  │                    │
+        │                  │                  │                    │
+        │                  │        C, C++, Swift, Java,           │
+        │                  │        Kotlin, Node, Deno, Bun,       │
+        │                  │        Ruby, PHP, .NET, Elixir        │
+        │                  │                  │                    │
+        └──────────────────┴──────────────────┴────────────────────┘
+                                       │
+                       fifteen packages in sdks/, two modes each
 ```
+
+The bottom row is not aspirational. There is a working package per language in
+[`sdks/`](https://github.com/vul-os/patala/blob/main/sdks/README.md) — [Fifteen language packages](language-packages.md)
+lists them with a run command each — and not one of them contains a rail
+adapter.
 
 The Go binding is the clearest proof that this is real rather than a slogan.
 `patala-go` contains **no Rust crate of its own** and reimplements nothing —
@@ -78,6 +90,31 @@ wasm/napi for JS is called out explicitly, and Swift/Kotlin come nearly free
 once a UniFFI surface exists — UniFFI is the pick. If patala ever turns out to
 need only Python, revisiting PyO3 for the ergonomics is a legitimate future
 call; that is not the situation today.
+
+## Two in-process surfaces, and why there are two
+
+UniFFI has backends for Python, Go, Swift, Kotlin and Ruby. It has none for C,
+C++, Node, Deno, Bun, PHP, Elixir, Java or C#. Rather than leave nine languages
+with only HTTP, [`patala-ffi`](c-abi.md) exposes the same core as a plain
+`extern "C"` cdylib — JSON in, JSON out, six symbols — and twelve of the fifteen
+packages load that.
+
+It is still M×1. `patala_new`'s configurations are built by `patala-uniffi`'s
+own constructors and the mock straight off `patala-core`; everything ends up as
+the same `Arc<dyn PaymentRail>`, and the JSON it speaks is the *same* JSON the
+sidecar serves, from the same Rust types. Two surfaces, one implementation, one
+wire contract.
+
+Python and Go stay on UniFFI because it gives them real records and real enums
+where the C ABI gives JSON. Java and Kotlin are on the C ABI despite UniFFI
+having a Kotlin backend: that backend did not compile until commit `79e5002`,
+because `patala_core::Error` had two variants with a field named `message` and
+UniFFI renders a flat error enum as a subclass of `kotlin.Exception`, which
+already has an open `message` property — the field was emitted twice, and
+`kotlinc` gave 12 errors. Renaming it to `detail` was the honest fix; patala has
+never been tagged, so it was the cheapest moment in its life to change a public
+field name. `sdks/kotlin/uniffi-kotlin-probe.sh` guards that story with an
+**inverted** exit code, so the justification cannot outlive the bug.
 
 ## What this forces onto the trait
 
@@ -155,13 +192,23 @@ everywhere else, and nothing would have failed.
 Honesty requires the other column too. M×1 is not free:
 
 - **The generated surface is the lowest common denominator.** Rust-only
-  ergonomics — inherent methods, generics, borrowed returns — do not cross.
+  ergonomics — inherent methods, generics, borrowed returns — do not cross. Over
+  the C ABI it is lower still: JSON, not types.
 - **Every binding needs a compiled artifact for its platform.** One cdylib per
-  (OS × arch), which for Python means a wheel matrix.
+  (OS × arch), which for Python means a wheel matrix. Today that means
+  darwin/arm64 built and executed, linux/amd64 built and smoke-tested in CI, and
+  **no Windows DLL at all** — which is the whole reason the .NET package
+  defaults to the sidecar.
 - **cgo, for Go specifically.** See [Choosing a mode](choosing-a-mode.md).
 - **Regeneration is a step somebody has to run.** A new constructor in Rust is
   not reachable from Go until the bindings are regenerated from a cdylib built
   with the right features.
+
+What it does **not** cost, and this is the part worth not copying from the
+sibling products: a language runtime in the host process. patala's core is
+Rust, so loading it replaces **zero** of HotSpot's signal handlers, starts
+**zero** threads, and lets a Node `worker_threads` worker exit — each measured
+against a Go library as a control. [The C ABI](c-abi.md) has the numbers.
 
 The alternative — hand-writing each adapter per language — costs all of that
 *plus* the divergence. The trade is not close.
@@ -169,6 +216,9 @@ The alternative — hand-writing each adapter per language — costs all of that
 ## Related documents
 
 - [Choosing a mode](choosing-a-mode.md) — which consumer to use.
+- [Fifteen language packages](language-packages.md) — the generated consumers,
+  as shipped.
+- [The C ABI](c-abi.md) — the second in-process surface, in full.
 - [The rail interface](rails-interface.md) — the one definition everything
   above is generated from.
 - [The offline default build](offline-by-default.md) — the other structural

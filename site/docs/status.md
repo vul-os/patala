@@ -34,8 +34,37 @@ as a tested foundation to validate against testnet/sandbox, not as
 production-proven.
 
 The things that genuinely executed end-to-end are the Python binding, the Go
-binding and the sidecar — real round-trips over a real interpreter, real cgo,
-and a real socket.
+binding, the C ABI and the sidecar — real round-trips over a real interpreter,
+real cgo, a real `dlopen` from C, and a real socket.
+
+## The language packages
+
+`sdks/` holds a package for **fifteen** languages — bun, c, cpp, deno, dotnet,
+elixir, go, java, kotlin, node, php, python, ruby, rust, swift — each with an
+in-process path and a managed-sidecar path, and each with two runnable examples.
+[Fifteen language packages](language-packages.md) is the reader's index;
+[`sdks/README.md`](https://github.com/vul-os/patala/blob/main/sdks/README.md) is the one that ships with the code.
+
+What has actually been executed, and where the honesty line falls:
+
+| Claim | Status |
+|---|---|
+| Every package's two examples run against `MockRail` | **executed on darwin/arm64**, and every number in those READMEs was measured there |
+| The C ABI, `dlopen`ed from C | **CI-enforced** — `make smoke-ffi`, 55/55 checks, mutation-tested, on macOS and on `ubuntu-latest` |
+| The JVM signal probe (0 handlers replaced, 0 flags altered, 23→23→23 threads) | **executed**, OpenJDK 26.0.2, with llmux as a same-machine control reporting 5 and 3 |
+| Node `worker_threads` exits (~33 ms) and `callAsync` works | **executed**, with a Go `c-shared` control that never exits |
+| linux/amd64 | the cdylib is built and the C smoke test runs there in CI; **no language package has been run there** |
+| linux/arm64 · darwin/amd64 | **not built** |
+| **windows/amd64** | **no DLL exists, and nobody has tried** — this is why the .NET package defaults to the sidecar |
+| Any package against a **real rail** | **no.** Every example drives `MockRail`. The rails' own live status is the table below. |
+
+Two costs that are real and are stated in every package rather than buried: a
+handle owns a current-thread Tokio runtime, so **calls on one handle
+serialise**; and while the library is fork-safe, a handle *in use* at the
+moment of the fork is not — under a parent with four threads charging on it,
+**4–8 of 200** forks hung on an inherited handle (reproduced in Python and
+Ruby) against **0 of 200** on one opened in the child. The window is
+microseconds wide, so a test that forks once is a false green.
 
 ## What's built
 
@@ -133,8 +162,10 @@ or fiat rail *through the sidecar* needs the per-rail registration its
 - The default build stays offline: no new mandatory dependencies, no
   network, and CI needs no chain or processor. `cargo tree -e normal` on the
   default workspace build resolves no HTTP client at all.
-- What CI enforces: the two Rust passes, the Python binding's real end-to-end
-  smoke run, and — new — the Go binding's own test suite
+- What CI enforces: five jobs — the two Rust passes (`make check`), the Python
+  binding's real end-to-end smoke run, the C ABI `dlopen`ed from C on
+  `ubuntu-latest` (`make smoke-ffi`), the docs/site gate (`make site-check`),
+  and — new — the Go binding's own test suite
   (`patala-go/bindingtest`, run by `make smoke-go`). CI installs
   `uniffi-bindgen-go` at the pinned tag and uses the runner's C toolchain for
   cgo. The Go binding used to be executed by hand and enforced by nothing;
@@ -164,6 +195,8 @@ MIT OR Apache-2.0 — © VulOS. No token. No protocol tax.
 ## Related documents
 
 - [Overview](overview.md) — what patala is and deliberately isn't.
+- [Fifteen language packages](language-packages.md) · [The C ABI](c-abi.md) —
+  the surfaces summarised above, in full.
 - [The rail interface](rails-interface.md) — the trait, the capability model,
   what each rail actually does.
 - [The offline default build](offline-by-default.md) — the "no HTTP client in

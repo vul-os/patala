@@ -23,6 +23,11 @@ this README describes what is actually built, honestly, as it lands.
 patala is a **library and a sidecar — there is no GUI**. Everything below is
 either a crate, a trait, or a process you run next to your own app.
 
+Not writing Rust? **[Fifteen language packages](#fifteen-languages-two-ways)**
+in [`sdks/`](sdks/README.md) reach the same core two ways — in-process through a
+six-function [C ABI](docs/c-abi.md), or over a `patala-sidecar` the package
+spawns and manages for you.
+
 ## Status: foundational — built and unit-tested; one rail has one live testnet result
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
@@ -65,7 +70,7 @@ already has).
 
 ## Documentation
 
-Seventeen documents in [`docs/`](docs/), readable here on GitHub or in the
+Nineteen documents in [`docs/`](docs/), readable here on GitHub or in the
 docs viewer at `site/docs.html`. `docs/` is the single source; `site/docs/` is
 generated from it by `node scripts/gen-site-docs.mjs`, and
 `--check` fails the build if the two ever drift, so the site cannot ship a
@@ -81,7 +86,8 @@ stale page.
 
 **Consuming it:** [Rust, embedded](docs/rust.md) ·
 [Python binding](docs/python.md) · [Go binding](docs/go.md) ·
-[The sidecar HTTP API](docs/sidecar.md)
+[Fifteen language packages](docs/language-packages.md) ·
+[The C ABI](docs/c-abi.md) · [The sidecar HTTP API](docs/sidecar.md)
 
 **The rails:** [Solana &amp; Stellar](docs/rails-crypto.md) ·
 [Hyperswitch &amp; fiat](docs/rails-fiat.md) ·
@@ -223,7 +229,7 @@ does not detect exchange-owned addresses and will not guess. The whole flow,
 including the wording to show a customer, is in
 [`docs/compensating-payments.md`](docs/compensating-payments.md).
 
-## The polyglot layer — one adapter, three ways in
+## The polyglot layer — one adapter, four ways in
 
 Every adapter is written once, in Rust, in `patala-core` or a rail crate.
 Nothing is reimplemented per language:
@@ -247,6 +253,56 @@ Nothing is reimplemented per language:
    and fail-closed. Any language with an HTTP client can drive the substrate
    with zero FFI; keys live in one hardened process instead of being smeared
    across every app.
+
+## Fifteen languages, two ways
+
+You do not have to wire any of that up by hand. [`sdks/`](sdks/README.md) holds
+a working package for fifteen languages — **bun, c, cpp, deno, dotnet, elixir,
+go, java, kotlin, node, php, python, ruby, rust, swift** — each with an
+in-process path and a managed-sidecar path, and each with two runnable examples
+doing the same `charge` → `verify` round trip against `MockRail`: offline,
+deterministic, no credentials. A payments library whose example moves real
+value is not an example.
+
+**[`sdks/README.md`](sdks/README.md) is the index**, and its "Default" column is
+a real recommendation with a per-language reason. Two of those recommendations
+are worth calling out here, because they are **the reverse of what the same page
+says in llmux and openrate** — and the reversal was measured, in each case
+against a Go library in the same environment as a control:
+
+| | patala (Rust core) | a Go `c-shared` control |
+|---|---|---|
+| HotSpot signal handlers replaced ([`sdks/java/signal-probe.sh`](sdks/java/signal-probe.sh)) | **0**, and 0 with altered flags | 5 replaced, 3 with altered flags |
+| `-Xcheck:jni` says | nothing | `Warning: SIGSEGV handler modified!` … `Consider using jsig library.` |
+| JVM threads, before `dlopen` → after → after a round trip | **23 → 23 → 23** | — |
+| A Node `worker_threads` worker that entered the library | **exits 0 in ~33 ms** | never exits — killed at 15 s |
+| Node process threads across a round trip | **7 → 7** | 7 → 13 |
+| Release library, offline mock-only build | **844,656 bytes** | `libllmux.dylib` 12,787,504 |
+
+So **Java and Kotlin default to in-process here**: `libjsig` is the siblings'
+whole argument for the sidecar, it is a flag on the *java launch command* that a
+library cannot add to a running process, and patala does not need it. And
+patala's **Node** package ships a working `callAsync`, which neither sibling
+could. `--features fiat-all` — twenty processor adapters, UniFFI, reqwest and
+TLS — brings the library to 6,330,544 bytes.
+
+The costs that *are* real are stated in every package rather than buried: a
+current-thread Tokio runtime per handle, so **calls on one handle serialise**;
+**cgo** if you choose the Go binding (`cackle` chose the sidecar for exactly
+that reason); `rustc` stamping the cdylib's `LC_ID_DYLIB` with an absolute
+build-tree path, worked around with `install_name_tool`; a handle that is not
+usefully inherited across `fork()` if it was in use when the fork happened
+(**4–8 of 200** against **0 of 200** for one opened in the child); **darwin/arm64 as the only target built and
+executed**, with the `.so` smoke-tested in CI and **no Windows DLL at all**; and
+**no streaming anywhere**, in any language, deliberately.
+
+One thing overrides every default in that index: **the sidecar's rail registry
+is mock-only**, so in-process is the only path to a real rail today.
+
+→ **[Fifteen language packages](docs/language-packages.md)** has a run command
+for every row · **[The C ABI](docs/c-abi.md)** is the six-function contract
+twelve of them are built on · **[Choosing a mode](docs/choosing-a-mode.md)** puts
+all five surfaces side by side.
 
 ## Security
 

@@ -65,9 +65,20 @@ Worth stating plainly, because it is unusual and because the two sibling
 products in this suite cannot say it: **patala's core is Rust, so embedding
 it adds no language runtime to your process.** There is no garbage collector
 to pause you, no scheduler competing with yours, no signal handlers installed
-behind your back, no `fork()` hazard, and nothing that has to be initialised
-before `main`. A Go-cored library reached over FFI carries the Go runtime into
-whatever host loads it; patala does not have one to carry.
+behind your back, no Go-style fork-unsafety, and nothing that has to be
+initialised before `main`. A Go-cored library reached over FFI carries the Go
+runtime into whatever host loads it; patala does not have one to carry.
+
+That is measured, not inferred from the language. Loading patala's shared
+library into a JVM replaces **0** of HotSpot's signal handlers and alters **0**
+flags, where the same probe against a Go library reports 5 and 3; a Node
+`worker_threads` worker that has entered patala exits in ~33 ms where the Go
+control never exits at all; and the offline library is **844,656 bytes** against
+llmux's 12,787,504. Each was taken against a Go library in the same environment
+as a control. The consequences are practical: Java and Kotlin default to
+in-process here where the siblings default to the sidecar. See
+[The C ABI](c-abi.md) and
+[Fifteen language packages](language-packages.md).
 
 What embedding patala *does* cost is a lazily-created Tokio runtime **only in
 the bindings** that need one — `patala-uniffi` creates it on first call so a
@@ -90,6 +101,10 @@ New here? Read these three, in order:
 
 Then, as you need them:
 
+- [Fifteen language packages](language-packages.md) — a working package per
+  language in `sdks/`, two modes each, with a run command for every one.
+- [The C ABI](c-abi.md) — the six-function `extern "C"` surface twelve of those
+  packages are built on.
 - [One core, every language](polyglot.md) — the "M×1, never M×N" principle
   this repo is built on.
 - [The offline default build](offline-by-default.md) — why `cargo build` here

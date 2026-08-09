@@ -52,6 +52,8 @@ export const PAGES = [
   { file: 'rust.md',                  slug: 'rust',          section: 'Consuming it', title: 'Rust, embedded' },
   { file: 'python.md',                slug: 'python',        section: 'Consuming it', title: 'Python binding' },
   { file: 'go.md',                    slug: 'go',            section: 'Consuming it', title: 'Go binding' },
+  { file: 'language-packages.md',     slug: 'languages',     section: 'Consuming it', title: 'Fifteen language packages' },
+  { file: 'c-abi.md',                 slug: 'c-abi',         section: 'Consuming it', title: 'The C ABI' },
   { file: 'sidecar.md',               slug: 'sidecar',       section: 'Consuming it', title: 'The sidecar HTTP API' },
 
   { file: 'rails-crypto.md',          slug: 'crypto',        section: 'The rails',    title: 'Solana & Stellar' },

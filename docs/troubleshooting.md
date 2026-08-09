@@ -185,6 +185,60 @@ this workspace pins.
 Expected and benign, in generated FFI glue. It is the same class of note any
 hand-rolled cgo binding produces.
 
+## The language packages
+
+The full set is in [Fifteen language packages](language-packages.md); these are
+the four traps that cost real time to find.
+
+### A `fork()`ed worker hangs — occasionally, and never in the test
+
+The library is fork-safe. **A handle that is in use at the moment of the fork is
+not.** Its runtime sits behind a mutex, and `fork()` copies a locked mutex as
+locked, with nobody in the child to unlock it. The window is a few microseconds
+wide, so most forks look fine: measured under a parent with four threads
+charging on the same handle, an inherited handle hung **4–8 times in 200** and a
+handle opened in the child hung **0 in 200**. Reproduced independently in Python
+and Ruby.
+
+**A test that forks once is a false green.** Fix it by opening the handle in the
+child — Unicorn's `after_fork`, clustered Puma's `on_worker_boot`, Resque in the
+job's child, or simply per request. Loading the *library* before the fork is
+fine. Note also that the two in-process surfaces differ: the C ABI starts no
+threads at all, while `patala-py`/`patala-go` bring up two Tokio workers on the
+first call. MockRail survived a fork through the UniFFI path too, but only
+because `block_on` drives on the calling thread and MockRail spawns nothing — a
+rail doing real network I/O may want those workers, and that case is
+**UNMEASURED**.
+
+### PHP: `FFI API is restricted by "ffi.enable"` in an fpm worker
+
+`ffi.enable` defaults to `preload`, and the manual's recommended production
+shape — declare the ABI in an `opcache.preload` script, reach it from request
+code with `FFI::scope()` — **does not work under php-fpm on PHP 8.5.9**. The
+preload exemption is lifted for the **CLI SAPI only**, which is why the same
+code runs happily from `php examples/direct_charge.php` and throws in a worker.
+Set `ffi.enable=1`, or use the sidecar.
+
+The second half of the trap: `ffi.enable` and `opcache.preload` are
+`PHP_INI_SYSTEM`, so a `php_admin_value` in a pool block is applied *per worker,
+after the fork* and silently does nothing for either. Set them in `php.ini`.
+
+### Elixir: the sidecar keeps serving after `Port.close/1`
+
+`Port.close/1` closes the port, not the OS process. The child keeps running with
+its stdin at EOF, still bound to its port, and the next `spawn` picks a
+different one while the old server answers requests nobody meant to send. Call
+`Patala.Sidecar.stop/1`, which terminates the child rather than just dropping
+the pipe.
+
+### Elixir: `dlopen` fails with an empty error message
+
+Almost certainly a zero-byte `.so`, and it reads like a linker fault for as long
+as it takes to run `ls -la priv/`. Mix normally **symlinks** `_build/<env>/lib/patala/priv`
+at the source `priv/`, so a build step that copies a NIF into `priv/` copies a
+file onto itself through the symlink — `File.cp!` truncates it to 0 bytes.
+Rebuild the NIF rather than copying it.
+
 ## Sidecar
 
 ### It exits immediately with an `export` line printed
@@ -307,5 +361,7 @@ lie in the other direction.
 - [Quickstart](quickstart.md) — the happy path for each mode.
 - [Choosing a mode](choosing-a-mode.md) — if the trouble is structural rather
   than a typo.
+- [Fifteen language packages](language-packages.md) · [The C ABI](c-abi.md) —
+  each package's README carries its own platform and toolchain notes.
 - [Status](status.md) — before assuming something is broken, check whether it
   has ever been run.

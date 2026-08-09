@@ -1,6 +1,6 @@
 # Quickstart
 
-Four quickstarts, one per audience. Every one of them does the same thing —
+Five quickstarts, one per audience. Every one of them does the same thing —
 a `charge` → `verify` round trip against `MockRail`, the offline default rail
 — because that round trip *is* the seam. Swap the mock for a real rail later
 and none of the code below changes shape.
@@ -188,9 +188,42 @@ One thing to know before you plan around it: the sidecar's rail registry is
 **mock-only** today. The server is real and tested; the set of rails reachable
 through it is one. See [Status](status.md).
 
+## 5. Your language, already packaged
+
+The four above are the four surfaces. You probably do not have to wire one up
+by hand: `sdks/` holds a **working package for fifteen languages**, each with an
+in-process path and a managed-sidecar path, and each with two runnable examples
+that do the exact round trip on this page. Pick a row, run it, read the README
+next to it.
+
+| | Direct | Sidecar |
+|---|---|---|
+| [rust](../sdks/rust/README.md) | `sdks/rust/run.sh direct` | `sdks/rust/run.sh sidecar` |
+| [c](../sdks/c/README.md) | `sdks/c/run-demo.sh direct` | `sdks/c/run-demo.sh sidecar` |
+| [cpp](../sdks/cpp/README.md) | `sdks/cpp/run-demo.sh direct` | `sdks/cpp/run-demo.sh sidecar` |
+| [swift](../sdks/swift/README.md) | `sdks/swift/run.sh direct` | `sdks/swift/run.sh sidecar` |
+| [java](../sdks/java/README.md) | `sdks/java/run-examples.sh direct` | `sdks/java/run-examples.sh sidecar` |
+| [kotlin](../sdks/kotlin/README.md) | `sdks/kotlin/run-examples.sh direct` | `sdks/kotlin/run-examples.sh sidecar` |
+| [dotnet](../sdks/dotnet/README.md) | `sdks/dotnet/run-examples.sh direct` | `sdks/dotnet/run-examples.sh sidecar` |
+| [node](../sdks/node/README.md) | `cd sdks/node && npm run example:direct` | `cd sdks/node && npm run example:sidecar` |
+| [deno](../sdks/deno/README.md) | `cd sdks/deno && deno task example:direct` | `cd sdks/deno && deno task example:sidecar` |
+| [bun](../sdks/bun/README.md) | `cd sdks/bun && bun run example:direct` | `cd sdks/bun && bun run example:sidecar` |
+| [python](../sdks/python/README.md) | `python3 sdks/python/examples/direct_charge.py` | `python3 sdks/python/examples/sidecar_charge.py` |
+| [ruby](../sdks/ruby/README.md) | `ruby sdks/ruby/examples/direct_charge.rb` | `ruby sdks/ruby/examples/sidecar_charge.rb` |
+| [php](../sdks/php/README.md) | `php sdks/php/examples/direct_charge.php` | `php sdks/php/examples/sidecar_charge.php` |
+| [go](../sdks/go/README.md) | `sdks/go/examples/run.sh direct` | `sdks/go/examples/run.sh sidecar` |
+| [elixir](../sdks/elixir/README.md) | `cd sdks/elixir && mix run examples/direct_charge.exs` | `cd sdks/elixir && mix run examples/sidecar_charge.exs` |
+
+Direct mode needs `cargo build -p patala-ffi --release` first (Python and Go
+build their own binding); the sidecar rows need
+`cargo build -p patala-sidecar --release`. Which of the two a given language
+*should* default to is a real question with a per-language answer —
+[Fifteen language packages](language-packages.md) is that answer, and
+[`sdks/README.md`](../sdks/README.md) is the index that ships with the code.
+
 ## What to read next
 
-- [Choosing a mode](choosing-a-mode.md) — you have just tried all four; this
+- [Choosing a mode](choosing-a-mode.md) — you have just tried all five; this
   is how to pick one on purpose.
 - [The rail interface](rails-interface.md) — the seven methods, and why the
   settlement class is in the type.

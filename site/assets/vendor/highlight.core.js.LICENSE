@@ -4,14 +4,34 @@ Licence: BSD-3-Clause
 Source:  https://www.npmjs.com/package/highlight.js (LICENSE from the highlight.js@11.11.1 package)
 
 This file is a custom bundle of highlight.js's core engine
-(highlight.js/lib/core) plus five language grammars — rust, go, python, ini
-(registers the "toml" alias), bash, json — built with esbuild
-(--bundle --minify --format=iife) so the whole thing self-hosts as one
+(highlight.js/lib/core) plus the language grammars listed below, built with
+esbuild (--bundle --minify --format=iife) so the whole thing self-hosts as one
 dependency-free <script> with no CDN and no runtime fetch, matching every
 other vendored library in this directory. No highlight.js source was
-otherwise modified; only the set of languages included was chosen. To
-reproduce: bundle an entry module that imports highlight.js/lib/core and
-registers each language module via hljs.registerLanguage(name, fn).
+otherwise modified; only the set of languages included was chosen.
+
+The exact entry module is checked in beside this file as
+`highlight.core.entry.mjs`, so the bundle is reproducible rather than a blob
+somebody once downloaded:
+
+    npm install highlight.js@11.11.1 esbuild
+    npx esbuild highlight.core.entry.mjs --bundle --minify --format=iife \
+        --outfile=highlight.core.js
+
+26 grammars are registered, and with the aliases each grammar declares that
+covers every language a fenced block in this repo can name:
+
+    bash (sh, zsh)      elixir (ex)         makefile (mk, mak)  shell (console)
+    c (h)               go (golang)         php                 sql
+    cpp (c++, cc, hpp)  http (https)        plaintext (text)    swift
+    csharp (cs)         ini (toml)          python (py)         typescript (ts)
+    diff (patch)        java (jsp)          ruby (rb)           xml (html, svg)
+    dockerfile          javascript (js)     rust (rs)           yaml (yml)
+                        json (jsonc)        kotlin (kt)
+
+A block whose language falls through to plaintext is a defect, not a style
+choice — `scripts/check-docs-chrome.mjs` fails the build if any fence in
+`docs/` names a language this bundle cannot highlight.
 
 # License information
 

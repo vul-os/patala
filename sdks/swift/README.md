@@ -39,6 +39,8 @@ probably works".
 ./sdks/swift/run.sh direct
 ./sdks/swift/run.sh sidecar
 ./sdks/swift/run.sh checks
+
+make -C sdks/swift/uniffi check   # the GENERATED UniFFI bindings, alongside
 ```
 
 Everything runs on `MockRail`: deterministic, offline, no credentials, no
@@ -287,71 +289,116 @@ every path.
 | macOS 15 / arm64 | **built and run** — both examples and 22/22 checks, against an 844,656-byte `libpatala_ffi.dylib` |
 | macOS / x86_64 | not built |
 | Linux | **not built.** The package has `#if canImport(Darwin)` fallbacks to `Glibc` and no other platform code, but it has not been compiled there. CI builds the `.so` for the C smoke test, not for this |
-| **iOS / iPadOS** | **not built, and do not assume it works.** Direct mode `dlopen`s a `.dylib` you built yourself, which is not how third-party code ships on iOS; and the sidecar spawns a child process, which iOS does not permit at all. The realistic shapes are an `.xcframework` with a *static* patala and UniFFI-generated Swift, or an app that talks to a `patala-sidecar` on a server it trusts. Neither exists in this tree |
+| **iOS / iPadOS** | **not built, and do not assume it works.** Direct mode `dlopen`s a `.dylib` you built yourself, which is not how third-party code ships on iOS; and the sidecar spawns a child process, which iOS does not permit at all. The realistic shapes are an `.xcframework` with a *static* patala and UniFFI-generated Swift, or an app that talks to a `patala-sidecar` on a server it trusts. The UniFFI-generated Swift half of the first one now exists — [`uniffi/`](uniffi/), built and run on macOS — but no `.xcframework` and no iOS build do |
 | watchOS / tvOS | not built |
 
-## UniFFI, and why this package does not use it
+## UniFFI: generated, built and run — in `uniffi/`, alongside this package
 
-UniFFI *does* have a Swift backend, and patala's `#[uniffi::export]` surface
-lives in [`patala-uniffi`](../../patala-uniffi/). Generated Swift bindings
-would give you real structs and enums instead of JSON — `RailCapabilities` with
-a `RailClass` you can `switch` over exhaustively, which is a genuine
-improvement over comparing `String`s.
-
-They are **not generated in this tree**. `patala-go` and `patala-py` are the
-two that are, each with a build step (`uniffi-bindgen generate`) and a `make`
-target that executes it. Adding a third is ordinary work nobody has done, not a
-blocker. Until then this package uses the plain C ABI, which needs no codegen
-step and no toolchain beyond Swift — and which you would be shipping a cdylib
-for either way.
-
-### It was checked, not assumed: the Swift backend works
-
-UniFFI's **Kotlin** backend does not currently compile for patala. Its error
-enum becomes a subclass of `kotlin.Exception` that declares `message` twice —
-the constructor `val` plus the synthesised `override val` — and kotlinc gives
-12 errors. Swift's `Error` is a protocol with no inherited `message`, so the
-same declaration was expected to be fine, but "plausibly fine" is not a fact.
-So it was generated and run, on this machine, Swift 6.1.2:
+UniFFI has a Swift backend, and patala's one `#[uniffi::export]` surface lives
+in [`patala-uniffi`](../../patala-uniffi/) — the same surface `patala-py` and
+`patala-go` are generated from. It is generated for Swift too now, in
+[`sdks/swift/uniffi/`](uniffi/), and it runs:
 
 ```
-$ cargo run -p patala-uniffi --bin uniffi-bindgen -- generate \
-    --library target/debug/libpatala_uniffi.dylib --language swift --out-dir <dir>
-$ swiftc -typecheck patala.swift -Xcc -fmodule-map-file=patalaFFI.modulemap -I .
-$ ./probe            # patala.swift + 20 lines of main.swift, linked to libpatala_uniffi
+$ make -C sdks/swift/uniffi check
+swift: swift-driver version: 1.120.5 Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)
+generate: uniffi 0.29.5 (pinned)
+generate: OK — module patalaFFI, 2411 lines, typed surface present
+typecheck: OK — zero warnings, zero errors
+build: OK — .../build/roundtrip, .../build/checks
+
+patala direct (Swift, generated UniFFI) — namespace `patala`
 id:        mock
-caps:      nonCustodialFinal holds_funds=false
-charge:    1250 USDC ref=uniffi-1
-verify:    true
-tampered:  false
-refused:   InvalidRequest(detail: "rail mock does not support currency EUR")
+caps:      nonCustodialFinal — wallet address, signed final receipt
+           holds_funds=false reversible=false currencies=["USDC"] settlement=instant
+caveat:    patala cannot tell whether this address belongs to an exchange. A struct...
+dest:      "mock:wallet:alice" -> structurallyValid (is_refusal=false, human_must_confirm=true)
+dest:      "eth:wallet:alice" -> wrongNetwork (is_refusal=true, human_must_confirm=true)
+dest:      "" (empty) -> malformed (is_refusal=true, human_must_confirm=true)
+dest:      the same address on a rail that cannot check -> unknown
+           unknown is NOT a refusal and NOT an approval. It needs a human.
+quote:     1250 + 25 fee = 1275 minor units of USDC, instant
+charge:    1250 USDC ref=order-4711 proof=32B issued by mock
+verify:    true  <- the entitlement check
+tampered:  false  <- returned, not thrown
+refused:   InvalidRequest — rail mock does not support currency EUR
+
+OK — offline, MockRail only, no value moved.
+
+patala Swift checks (generated UniFFI bindings)
+  ok   an exhaustive switch over RailClass compiles
+  ...
+  ok   unknown still requires a human
+
+32 checks ran, 0 failed (expected 32)
 PASS
 ```
 
-**UniFFI's Swift backend compiles cleanly and runs a real charge → verify round
-trip.** 2,411 lines / 81,057 bytes of generated `patala.swift` on the default
-features, 2,484 lines / 84,939 bytes with `--features fiat-all` — both
-typecheck with zero diagnostics — and the generated file is already Swift 6
-aware, guarding its `Sendable` conformances with `#if compiler(>=6)`.
+What that buys, in one line: `caps.class` is a `RailClass` a `switch` must
+cover with no `default:`, `verdict.isRefusal` is a `Bool` field rather than a
+JSON lookup, amounts are `UInt64`, and `PatalaError` is an enum you match
+(`catch PatalaError.Unsupported(let operation)`) instead of a string you read.
+[`uniffi/checks/main.swift`](uniffi/checks/main.swift) counts its 32 assertions
+and fails if the number changes — the same discipline as
+[`Sources/patala-checks`](Sources/patala-checks/main.swift) above.
 
-That was verified on **both sides of the Kotlin fix**: once with the error
-variant field named `message`, and again after it was renamed to `detail`
+Generation is reproducible the same way `patala-go`'s is:
+[`uniffi/Makefile`](uniffi/Makefile) pins `UNIFFI_VERSION := 0.29.5` and
+asserts what `cargo tree` resolves, then asserts the generated file names
+(`patala.swift`, `patalaFFI.h`, `patalaFFI.modulemap` — all of them the UniFFI
+*namespace*), the `module patalaFFI` clause in the module map, and the presence
+of `public struct PayRequest`, `public struct Receipt`, `public struct
+DestinationVerdict`, `public enum RailClass` and `public enum PatalaError`.
+Nothing under `uniffi/bindings/` is checked in; it is build output, like
+`/target`.
+
+### Why the generated bindings are *alongside* this package, not inside it
+
+`swiftc` is driven directly there, and this SwiftPM package is left alone. The
+reason is the one in [No module map](#no-module-map-no-unsafeflags):
+
+- Generated Swift **links** `libpatala_uniffi` — it does not `dlopen` it — so a
+  SwiftPM target would need `-L` pointing at `target/release`, i.e.
+  `unsafeFlags`. **A package with `unsafeFlags` cannot be a dependency of
+  another package**, which would take away this package's most useful property
+  in exchange for types.
+- The generated file is build output and is not checked in, so a SwiftPM target
+  would reference sources that do not exist in a clean clone until somebody
+  runs a generator first.
+- The generated bindings need `uniffi-bindgen` at a pinned version in your
+  build; the C ABI needs no codegen step and no toolchain beyond Swift.
+
+So: **use this package** if you want a dependency you can add to a
+`Package.swift` and forget, and are content reading JSON. **Use
+[`uniffi/`](uniffi/)** if you want typed structs and enums and are willing to
+own a generation step — for an app rather than a library, that is usually the
+better trade, and it is the shape an eventual `.xcframework` for iOS would take
+anyway.
+
+### The Kotlin bug never applied to Swift, and that was checked
+
+UniFFI's Kotlin backend used to fail on patala outright: its error enum becomes
+a subclass of `kotlin.Exception` that declares `message` twice — the
+constructor `val` plus the synthesised `override val` — 12 kotlinc errors.
+`Swift.Error` is a protocol with no inherited `message` to collide with, so the
+same declaration was expected to be fine, but "plausibly fine" is not a fact.
+
+It was generated and run on **both sides of the Kotlin fix**: once with the
+error variant field named `message`, and again after it was renamed to `detail`
 (commit `79e5002`) to unblock Kotlin. Both generate, both typecheck, both run.
-Swift never had the Kotlin problem — `Swift.Error` is a protocol with no
-inherited `message` to collide with — and the rename costs Swift nothing. The
-only visible difference is the argument label in `case Rail(detail: String)`;
-the probe above was not edited between the two runs, because it prints the
-whole error rather than reaching for the field, and it compiled unchanged.
+The rename costs Swift nothing — the only visible difference is the argument
+label in `case Rail(detail: String)`.
 
-So the reason this package uses the C ABI is **not** that UniFFI Swift is
-broken. It is that the C ABI needs no codegen step in your build, no
-`uniffi-bindgen` at a pinned version, and no module map — and that a package
-without `unsafeFlags` can be a dependency of another package. If you want typed
-structs and are willing to own a generation step, UniFFI is a working road and
-this section is the evidence.
+Measured on this machine, Swift 6.1.2: **2,411 lines / 81,057 bytes** of
+generated `patala.swift` on the default features, **2,484 lines / 84,939
+bytes** with `--features fiat-all`, both typechecking with zero diagnostics.
+The generated file is already Swift 6 aware, guarding its `Sendable`
+conformances with `#if compiler(>=6)`.
 
 ## See also
 
+- [`sdks/swift/uniffi`](uniffi/) — the same patala, through generated UniFFI
+  Swift: typed structs, exhaustive `switch`, one `make` target.
 - [`sdks/c`](../c/) — the same six symbols, without the wrapper. The ground
   truth for what a call costs and who owns a pointer.
 - [`sdks/rust`](../rust/) — no ABI at all; `use patala_core`.

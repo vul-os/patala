@@ -12,6 +12,7 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
 use rand::RngCore;
+use zeroize::Zeroize;
 
 use crate::SolanaError;
 
@@ -51,7 +52,12 @@ impl Keypair {
     pub fn generate() -> Self {
         let mut seed = [0u8; 32];
         OsRng.fill_bytes(&mut seed);
-        Self::from_seed(seed)
+        let keypair = Self::from_seed(seed);
+        // The seed lives on inside `SigningKey` (which is `ZeroizeOnDrop`);
+        // this local is a second copy and gets wiped rather than left on the
+        // stack for a core dump or a reused frame to expose.
+        seed.zeroize();
+        keypair
     }
 
     /// This keypair's public key — also its Solana wallet address (§6).
@@ -79,27 +85,42 @@ impl Keypair {
     /// Returns `Ok(None)` when neither is set — a verify-only rail, which is
     /// the right posture for a process that never spends. The key material is
     /// never logged and error messages never quote it.
+    ///
+    /// Every intermediate copy of the secret this function makes — the file's
+    /// contents, the decoded byte vector, the base58 text — is wiped before
+    /// the function returns, on the error paths as well as the success one.
+    /// Only the copy inside `SigningKey` survives, and `ed25519-dalek` wipes
+    /// that on drop. The one copy nothing here can reach is the process
+    /// environment block itself, which is why `SOLANA_KEYPAIR_PATH` (a file,
+    /// `chmod 600`) is the better of the two inputs.
     pub fn from_env() -> Result<Option<Self>, SolanaError> {
         if let Ok(path) = std::env::var("SOLANA_KEYPAIR_PATH") {
-            let raw = std::fs::read_to_string(&path)
+            let mut raw = std::fs::read_to_string(&path)
                 .map_err(|e| SolanaError::Config(format!("SOLANA_KEYPAIR_PATH {path}: {e}")))?;
-            let bytes: Vec<u8> = serde_json::from_str(&raw).map_err(|_| {
+            let parsed: std::result::Result<Vec<u8>, _> = serde_json::from_str(&raw);
+            raw.zeroize();
+            let mut bytes = parsed.map_err(|_| {
                 SolanaError::Config(format!("SOLANA_KEYPAIR_PATH {path}: not a JSON byte array"))
             })?;
-            return Ok(Some(Self::from_bytes(&bytes)?));
+            let keypair = Self::from_bytes(&bytes);
+            bytes.zeroize();
+            return Ok(Some(keypair?));
         }
-        if let Ok(b58) = std::env::var("SOLANA_KEYPAIR") {
-            let bytes = bs58::decode(b58.trim())
-                .into_vec()
-                .map_err(|_| SolanaError::Config("SOLANA_KEYPAIR: not base58".into()))?;
-            return Ok(Some(Self::from_bytes(&bytes)?));
+        if let Ok(mut b58) = std::env::var("SOLANA_KEYPAIR") {
+            let decoded = bs58::decode(b58.trim()).into_vec();
+            b58.zeroize();
+            let mut bytes =
+                decoded.map_err(|_| SolanaError::Config("SOLANA_KEYPAIR: not base58".into()))?;
+            let keypair = Self::from_bytes(&bytes);
+            bytes.zeroize();
+            return Ok(Some(keypair?));
         }
         Ok(None)
     }
 
     fn from_bytes(bytes: &[u8]) -> Result<Self, SolanaError> {
         // Solana keypairs are 64 bytes: 32-byte seed followed by the public key.
-        let seed: [u8; 32] = match bytes.len() {
+        let mut seed: [u8; 32] = match bytes.len() {
             64 => bytes[..32].try_into().unwrap(),
             32 => bytes.try_into().unwrap(),
             n => {
@@ -108,7 +129,9 @@ impl Keypair {
                 )))
             }
         };
-        Ok(Self::from_seed(seed))
+        let keypair = Self::from_seed(seed);
+        seed.zeroize();
+        Ok(keypair)
     }
 }
 

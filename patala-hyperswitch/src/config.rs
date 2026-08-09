@@ -10,7 +10,15 @@ use patala_core::Error;
 
 /// Everything [`crate::HyperswitchRail`] needs to reach a self-hosted
 /// Hyperswitch instance and describe it honestly to `patala-core`.
-#[derive(Clone, Debug)]
+/// `Debug` is written by hand, not derived: this struct holds an API key and a
+/// webhook signing secret, and a derived `Debug` prints both in full. That is
+/// not hypothetical — a `#[derive(Debug)]` here is reachable from `{:?}` in any
+/// consumer, from an `unwrap()`/`expect()` panic payload, and from one
+/// `tracing::debug!(?config)` that nobody reviews. Every one of `patala-fiat`'s
+/// twenty sibling configs is `#[derive(Clone)]` only for the same reason; this
+/// one was the outlier, and its own field docs already claimed the key was
+/// "never `Debug`-printed in full".
+#[derive(Clone)]
 pub struct HyperswitchConfig {
     /// Base URL of the self-hosted Hyperswitch instance, e.g.
     /// `https://hyperswitch.internal.example.org`. No trailing slash required
@@ -76,6 +84,32 @@ pub struct HyperswitchConfig {
 
     /// HTTP request timeout in seconds. Default `30`.
     pub timeout_secs: u64,
+}
+
+/// Prints every field except the two secrets, which are reported only as
+/// present or absent. `Debug` is kept (rather than removed) so a caller that
+/// legitimately wants to see which instance and which connector a rail is
+/// pointed at still can — it is only the credential values that never render.
+impl std::fmt::Debug for HyperswitchConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn redacted(present: bool) -> &'static str {
+            if present {
+                "<redacted>"
+            } else {
+                "<unset>"
+            }
+        }
+        f.debug_struct("HyperswitchConfig")
+            .field("base_url", &self.base_url)
+            .field("api_key", &redacted(!self.api_key.is_empty()))
+            .field("connector", &self.connector)
+            .field("webhook_secret", &redacted(self.webhook_secret.is_some()))
+            .field("requires_kyc", &self.requires_kyc)
+            .field("currencies", &self.currencies)
+            .field("settlement_days", &self.settlement_days)
+            .field("timeout_secs", &self.timeout_secs)
+            .finish()
+    }
 }
 
 impl HyperswitchConfig {

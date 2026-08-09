@@ -317,9 +317,27 @@ pub async fn webhook(
     // would turn a clear "missing header" rejection into a confusing
     // "invalid signature" one. No signature scheme in this workspace uses a
     // non-ASCII header value.
-    let forwarded = headers
-        .iter()
-        .filter_map(|(name, value)| value.to_str().ok().map(|v| (name.as_str(), v.to_string())));
+    //
+    // `Authorization` and friends are dropped too, and that one is not
+    // cosmetic. Every `/v1` route is behind `auth::require_token`, so a
+    // request that reaches this handler is *guaranteed* to carry
+    // `Authorization: Bearer <PATALA_SIDECAR_TOKEN>` — this sidecar's own
+    // credential, the thing whose isolation is the entire reason the process
+    // exists. Forwarding the header verbatim copied that token into
+    // `WebhookDelivery::headers`, where it was handed to arbitrary rail code
+    // and sat in a `Debug`-printable map. No `verify_webhook` in this
+    // workspace reads any of these names (the twenty-two schemes read
+    // `Stripe-Signature`, `X-Paystack-Signature`, `verif-hash`, `webhook-*`,
+    // and so on), and none could: a processor's own Authorization header
+    // cannot survive the proxy hop that has to replace it with the sidecar
+    // token to get past the gate at all.
+    const NEVER_FORWARD: [&str; 3] = ["authorization", "proxy-authorization", "cookie"];
+    let forwarded = headers.iter().filter_map(|(name, value)| {
+        if NEVER_FORWARD.contains(&name.as_str()) {
+            return None;
+        }
+        value.to_str().ok().map(|v| (name.as_str(), v.to_string()))
+    });
 
     let delivery = WebhookDelivery::new(body.to_vec(), now_unix())
         .with_headers(forwarded)

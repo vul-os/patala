@@ -90,8 +90,8 @@ default = []
 # per-rail feature-gating convention. Enabling one adds exactly one
 # constructor to `PatalaRail` (`new_solana`/`new_stellar`/`new_hyperswitch`)
 # without changing the shape of any existing method — see `src/lib.rs`.
-solana = ["dep:patala-solana"]
-stellar = ["dep:patala-stellar"]
+solana = ["dep:patala-solana", "dep:zeroize"]
+stellar = ["dep:patala-stellar", "dep:zeroize"]
 hyperswitch = ["dep:patala-hyperswitch"]
 
 # `fiat` alone pulls in `patala-fiat` with ITS OWN default features only

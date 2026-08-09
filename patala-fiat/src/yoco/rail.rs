@@ -68,16 +68,34 @@ fn safe_path_segment(s: &str) -> Result<&str> {
 
 /// Mirrors cackle's `decodeYocoWebhookSecret`: strips the `whsec_` prefix
 /// and base64-decodes the remainder.
+///
+/// A **zero-length** decoded key is refused here, and that is not pedantry.
+/// Yoco is the one rail in this crate whose HMAC is hand-rolled rather than
+/// routed through `crate::httpshared`, and every helper there opens with
+/// `if secret.is_empty() { return false; }`. Without the same guard, the
+/// non-empty-string check in [`YocoRail::new`] is satisfied by the literal
+/// `"whsec_"`, which base64-decodes to nothing — and
+/// `Hmac::<Sha256>::new_from_slice(&[])` succeeds, so the rail would go on to
+/// verify Svix signatures under an empty key that anyone who knows the
+/// construction can reproduce. Fail closed at construction instead.
 fn decode_webhook_secret(whsec: &str) -> Result<Vec<u8>> {
     let payload = whsec.strip_prefix("whsec_").unwrap_or(whsec);
     use base64::Engine as _;
-    base64::engine::general_purpose::STANDARD
+    let decoded = base64::engine::general_purpose::STANDARD
         .decode(payload)
         .map_err(|e| {
             Error::InvalidRequest(format!(
                 "yoco: webhook_secret not valid base64 after whsec_ prefix: {e}"
             ))
-        })
+        })?;
+    if decoded.is_empty() {
+        return Err(Error::InvalidRequest(
+            "yoco: webhook_secret decodes to zero bytes; an empty HMAC key verifies signatures \
+             anyone can compute"
+                .into(),
+        ));
+    }
+    Ok(decoded)
 }
 
 /// One `PaymentRail` talking to Yoco's Checkouts API. See module docs for
@@ -370,6 +388,32 @@ mod tests {
             settlement_days: 2,
             timeout_secs: 5,
         }
+    }
+
+    #[test]
+    fn a_webhook_secret_that_decodes_to_nothing_is_refused_at_construction() {
+        // `"whsec_"` passes the non-empty-string check in `new`, base64-decodes
+        // to zero bytes, and `Hmac::<Sha256>::new_from_slice(&[])` SUCCEEDS —
+        // so without this guard the rail would verify Svix signatures under an
+        // empty key, which anyone who knows the construction can compute. Yoco
+        // is the one rail whose HMAC is hand-rolled instead of going through
+        // `crate::httpshared`, where every helper already refuses an empty
+        // secret; this is the same refusal, moved to construction time.
+        for whsec in ["whsec_", "", "   "] {
+            let built = YocoRail::new(YocoConfig {
+                webhook_secret: whsec.to_string(),
+                ..config()
+            });
+            match built {
+                Err(Error::InvalidRequest(_)) => {}
+                Err(other) => panic!("{whsec:?} was refused, but as {other:?} not InvalidRequest"),
+                Ok(_) => panic!("{whsec:?} is an empty HMAC key and must never build a rail"),
+            }
+        }
+
+        // ...and a real key still builds, so the guard is not just refusing
+        // everything.
+        assert!(YocoRail::new(config()).is_ok());
     }
 
     fn rail_for(base_url: String) -> YocoRail {

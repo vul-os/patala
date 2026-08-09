@@ -135,6 +135,8 @@ uniffi::setup_scaffolding!("patala");
 /// Parse a caller-supplied 32-byte seed into a fixed-size array, failing
 /// closed (as `PatalaError::InvalidRequest`, never a panic) on any other
 /// length. Shared by every real-rail constructor that accepts a raw seed.
+///
+/// The error names the length only, never a byte of the seed.
 #[cfg(any(feature = "solana", feature = "stellar"))]
 fn seed32(bytes: &[u8], rail: &str) -> Result<[u8; 32], PatalaError> {
     bytes.try_into().map_err(|_| PatalaError::InvalidRequest {
@@ -143,6 +145,33 @@ fn seed32(bytes: &[u8], rail: &str) -> Result<[u8; 32], PatalaError> {
             bytes.len()
         ),
     })
+}
+
+/// Hand a caller-supplied raw Ed25519 seed to a rail's signer and wipe every
+/// copy of it this crate made on the way.
+///
+/// A seed arrives here as an owned `Vec<u8>` that UniFFI allocated from the
+/// foreign side, and `seed32` copies it again into a `[u8; 32]`. Both are
+/// plain heap/stack allocations that would otherwise be dropped un-wiped, so
+/// a core dump, a swapped page or a reused allocation could still hold the
+/// private key of the wallet the money moves from. The copy that survives is
+/// the one inside `ed25519_dalek::SigningKey`, which is `ZeroizeOnDrop`.
+///
+/// The length-mismatch path wipes too: a caller who passed a 31-byte seed by
+/// mistake passed 31 bytes of a real key.
+#[cfg(any(feature = "solana", feature = "stellar"))]
+fn with_seed32<T>(
+    mut seed: Vec<u8>,
+    rail: &str,
+    build: impl FnOnce([u8; 32]) -> T,
+) -> Result<T, PatalaError> {
+    use zeroize::Zeroize;
+    let parsed = seed32(&seed, rail);
+    seed.zeroize();
+    let mut bytes = parsed?;
+    let built = build(bytes);
+    bytes.zeroize();
+    Ok(built)
 }
 
 /// The shared runtime every [`PatalaRail`] method blocks on. One process-wide
@@ -827,7 +856,9 @@ impl PatalaRail {
         let rpc: Arc<dyn patala_solana::rpc::SolanaRpc> = Arc::new(SolanaHttpRpc::new(rpc_url));
         let mut rail = SolanaRail::new(cfg, rpc);
         if let Some(seed) = keypair_seed {
-            rail = rail.with_signer(SolanaKeypair::from_seed(seed32(&seed, "solana")?));
+            rail = with_seed32(seed, "solana", |s| {
+                rail.with_signer(SolanaKeypair::from_seed(s))
+            })?;
         }
         Ok(Arc::new(Self {
             inner: Arc::new(rail),
@@ -877,7 +908,9 @@ impl PatalaRail {
         let rpc: Arc<dyn patala_stellar::rpc::StellarRpc> = Arc::new(HorizonRpc::new(horizon_url));
         let mut rail = StellarRail::new(cfg, rpc);
         if let Some(seed) = keypair_seed {
-            rail = rail.with_signer(StellarKeypair::from_seed(seed32(&seed, "stellar")?));
+            rail = with_seed32(seed, "stellar", |s| {
+                rail.with_signer(StellarKeypair::from_seed(s))
+            })?;
         }
         Ok(Arc::new(Self {
             inner: Arc::new(rail),
@@ -1266,7 +1299,7 @@ mod tests {
         .expect("constructing a SolanaRail must not require network access");
         assert_eq!(rail.id(), "solana");
         let caps = rail.capabilities();
-        assert_eq!(caps.class, RailClass::NonCustodialFinal);
+        assert_eq!(caps.rail_class, RailClass::NonCustodialFinal);
         assert!(
             !caps.holds_funds,
             "a wallet-to-wallet rail never custodies funds"
@@ -1311,7 +1344,7 @@ mod tests {
         .expect("constructing a StellarRail must not require network access");
         assert_eq!(rail.id(), "stellar");
         let caps = rail.capabilities();
-        assert_eq!(caps.class, RailClass::NonCustodialFinal);
+        assert_eq!(caps.rail_class, RailClass::NonCustodialFinal);
         assert!(!caps.holds_funds);
         assert_eq!(caps.currencies, vec!["USDC".to_string()]);
     }
@@ -1333,7 +1366,7 @@ mod tests {
         let rail =
             PatalaRail::new_stellar("http://127.0.0.1:1".into(), "public".into(), None, None)
                 .expect("public network uses the well-known Circle mainnet issuer");
-        assert_eq!(rail.capabilities().class, RailClass::NonCustodialFinal);
+        assert_eq!(rail.capabilities().rail_class, RailClass::NonCustodialFinal);
     }
 
     #[cfg(feature = "hyperswitch")]
@@ -1352,7 +1385,7 @@ mod tests {
         .expect("constructing a HyperswitchRail must not require network access");
         assert_eq!(rail.id(), "hyperswitch");
         let caps = rail.capabilities();
-        assert_eq!(caps.class, RailClass::CustodialReversible);
+        assert_eq!(caps.rail_class, RailClass::CustodialReversible);
         assert!(
             caps.holds_funds,
             "the fronted PROCESSOR custodies funds, even though patala itself never does"

@@ -34,6 +34,11 @@ sha2 = "0.10"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand_core = { version = "0.6", features = ["std"] }
 stellar-strkey = "0.0.8"
+# Already in the tree transitively (ed25519-dalek pulls it in), so naming it
+# directly adds no crate to the graph. `SigningKey` wipes the seed it keeps;
+# this is for the intermediate copies `keys.rs` makes on the way there — the
+# `S...` StrKey text out of the environment, and the decoded seed array.
+zeroize = "1"
 stellar-xdr = { version = "22", features = ["curr", "base64"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 

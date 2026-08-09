@@ -28,6 +28,11 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 bs58 = "0.5"
 sha2 = "0.10"
 curve25519-dalek = "4"
+# Already in the tree transitively (curve25519-dalek/ed25519-dalek pull it in),
+# so naming it directly adds no crate to the graph. `SigningKey` wipes the seed
+# it keeps; this is for the intermediate copies `keys.rs` makes on the way there
+# — the keypair file's contents, the decoded byte vector, the base58 text.
+zeroize = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 

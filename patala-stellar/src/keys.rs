@@ -15,6 +15,7 @@
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use stellar_strkey::ed25519::{PrivateKey as StrkeySeed, PublicKey as StrkeyPub};
+use zeroize::Zeroize;
 
 use crate::StellarError;
 
@@ -68,6 +69,8 @@ impl Keypair {
 
     /// Generate a fresh random keypair from the OS CSPRNG.
     pub fn generate() -> Self {
+        // Straight into `SigningKey`, which is `ZeroizeOnDrop`: no
+        // intermediate seed copy is made here to have to wipe.
         Self(SigningKey::generate(&mut rand_core::OsRng))
     }
 
@@ -97,14 +100,25 @@ impl Keypair {
     /// Returns `Ok(None)` when unset — a verify-only rail, the right posture
     /// for a process that never spends. The key material is never logged and
     /// error messages never quote it.
+    ///
+    /// Every intermediate copy of the secret made here — the `S...` text out
+    /// of the environment, the decoded `StrkeySeed`, the raw seed array — is
+    /// wiped before this returns, on the error path as well as the success
+    /// one. Only the copy inside `SigningKey` survives, and `ed25519-dalek`
+    /// wipes that on drop. The process environment block itself holds a copy
+    /// nothing in this crate can reach.
     pub fn from_env() -> Result<Option<Self>, StellarError> {
-        let Ok(s) = std::env::var("STELLAR_SECRET_KEY") else {
+        let Ok(mut s) = std::env::var("STELLAR_SECRET_KEY") else {
             return Ok(None);
         };
-        let seed = StrkeySeed::from_string(s.trim())
-            .map_err(|_| StellarError::Config("STELLAR_SECRET_KEY: not a valid S... seed".into()))?
-            .0;
-        Ok(Some(Self::from_seed(seed)))
+        let parsed = StrkeySeed::from_string(s.trim());
+        s.zeroize();
+        let mut decoded = parsed.map_err(|_| {
+            StellarError::Config("STELLAR_SECRET_KEY: not a valid S... seed".into())
+        })?;
+        let keypair = Self::from_seed(decoded.0);
+        decoded.0.zeroize();
+        Ok(Some(keypair))
     }
 }
 

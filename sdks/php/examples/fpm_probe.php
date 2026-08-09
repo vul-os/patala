@@ -185,6 +185,18 @@ function run_pool(string $phpFpm, string $dir, int $port, string $ffiEnable): ar
         exit(1);
     }
 
+    // A fatal error, or a failing check() calling exit(), would otherwise leave
+    // a php-fpm master running and still bound to its port — an orphan nobody
+    // is looking for. Registered per pool and made idempotent, so the normal
+    // teardown below stays the one that actually runs.
+    \register_shutdown_function(static function () use (&$proc): void {
+        if (\is_resource($proc)) {
+            \proc_terminate($proc);
+            \proc_close($proc);
+            $proc = null;
+        }
+    });
+
     $listening = false;
     for ($i = 0; $i < 100; ++$i) {
         $probe = @\stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 0.2);
@@ -226,6 +238,7 @@ function run_pool(string $phpFpm, string $dir, int $port, string $ffiEnable): ar
 
     \proc_terminate($proc);
     \proc_close($proc);
+    $proc = null;   // the shutdown guard above sees this and stays out of the way
 
     return [$preloaded, $results];
 }

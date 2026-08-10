@@ -89,6 +89,48 @@ patala_find_kotlin_stdlib() {
   return 1
 }
 
+# Print the pinned JNA version, read from the Makefile so it lives in exactly
+# one place.
+#
+# --no-print-directory is not decoration. GNU make turns the "Entering
+# directory" / "Leaving directory" messages on for a SUB-make, and -s does not
+# suppress them on make 4.x. Both callers are reached through `make
+# smoke-kotlin`, so the make here runs at MAKELEVEL 2 and its stdout is
+#
+#   make[2]: Entering directory '…/sdks/kotlin'
+#   5.14.0
+#   make[2]: Leaving directory '…/sdks/kotlin'
+#
+# — all three lines captured into the version. The callers then looked for a
+# jar at .../jna/make[2]: Entering directory '…'/jna-….jar and reported "no JNA
+# jar", naming a version that was three lines of make chatter.
+#
+# This is invisible on a Mac: macOS ships GNU Make 3.81, where -s DOES silence
+# the directory messages, so every local run printed a clean 5.14.0 and only
+# Ubuntu's make 4.x failed.
+#
+# The shape check is the other half. The callers used to assert the version was
+# merely non-empty — which three lines of make output satisfy comfortably — so
+# the one guard positioned to catch this passed it straight through.
+patala_jna_version() {
+  local dir="${1:?patala_jna_version: makefile directory required}"
+  local version
+  version="$(make -s --no-print-directory -C "${dir}" print-jna-version)" || {
+    echo "patala: FAIL — \`make print-jna-version\` failed in ${dir}" >&2
+    return 1
+  }
+  case "${version}" in
+    *[![:digit:].]* | '' | *.*.*.* | *..*)
+      printf 'patala: FAIL — JNA_VERSION read from %s/Makefile is not a version:\n' "${dir}" >&2
+      printf '  %s\n' "${version}" >&2
+      printf 'If that looks like make output rather than a number, the sub-make is\n' >&2
+      printf 'printing directory messages into the value again.\n' >&2
+      return 1
+      ;;
+  esac
+  echo "${version}"
+}
+
 # Print the path to the JNA jar at the PINNED version, or fail with the one
 # command that installs it.
 #

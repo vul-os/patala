@@ -73,8 +73,7 @@ echo "run-examples: cdylib $(wc -c < "${libpath}" | tr -d ' ') bytes"
 # The JNA version is pinned in ONE place — the Makefile — and read from it
 # here, so this script and `make check` can never compile against different
 # jars.
-jna_version="$(make -s -C "${here}" print-jna-version)"
-[ -n "${jna_version}" ] || fail "could not read JNA_VERSION from the Makefile"
+jna_version="$(patala_jna_version "${here}")" || exit 1
 jna="$(patala_find_jna "${jna_version}")" || exit 1
 stdlib="$(patala_find_kotlin_stdlib)" || exit 1
 echo "run-examples: jna $(basename "${jna}")"

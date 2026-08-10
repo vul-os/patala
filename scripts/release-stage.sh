@@ -152,10 +152,12 @@ fi
 
 [ -n "$VERSION" ] || die "$E_USAGE" "--version is required." \
   "Pass the version being released, WITHOUT the leading 'v'."
-[ -n "$OS" ] && [ -n "$ARCH" ] || die "$E_USAGE" \
-  "--os and --arch are both required." \
-  "They name the platform the asset claims to be for, and are checked against" \
-  "this host rather than trusted."
+if [ -z "$OS" ] || [ -z "$ARCH" ]; then
+  die "$E_USAGE" \
+    "--os and --arch are both required." \
+    "They name the platform the asset claims to be for, and are checked against" \
+    "this host rather than trusted."
+fi
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "${here}/.." && pwd)"
@@ -292,15 +294,19 @@ magic="$(head -c 20 -- "$libpath" | od -An -tx1 | tr -d ' \n')"
 case "${OS}/${ARCH}" in
   linux/amd64)
     # ELF, e_machine == 0x3E (x86-64) at byte offset 18.
-    [ "${magic:0:8}" = "7f454c46" ] && [ "${magic:36:4}" = "3e00" ] || die "$E_LIBRARY" \
-      "${libpath} is not an x86-64 ELF shared object (magic ${magic:0:8}, e_machine ${magic:36:4})." \
-      "The asset would be named linux_amd64 and would not load on one."
+    if [ "${magic:0:8}" != "7f454c46" ] || [ "${magic:36:4}" != "3e00" ]; then
+      die "$E_LIBRARY" \
+        "${libpath} is not an x86-64 ELF shared object (magic ${magic:0:8}, e_machine ${magic:36:4})." \
+        "The asset would be named linux_amd64 and would not load on one."
+    fi
     ;;
   darwin/arm64)
     # Mach-O 64 (cffaedfe little-endian), cputype 0x0100000C == arm64.
-    [ "${magic:0:8}" = "cffaedfe" ] && [ "${magic:8:8}" = "0c000001" ] || die "$E_LIBRARY" \
-      "${libpath} is not an arm64 Mach-O shared library (magic ${magic:0:8}, cputype ${magic:8:8})." \
-      "The asset would be named darwin_arm64 and would not load on one."
+    if [ "${magic:0:8}" != "cffaedfe" ] || [ "${magic:8:8}" != "0c000001" ]; then
+      die "$E_LIBRARY" \
+        "${libpath} is not an arm64 Mach-O shared library (magic ${magic:0:8}, cputype ${magic:8:8})." \
+        "The asset would be named darwin_arm64 and would not load on one."
+    fi
     ;;
   *)
     die "$E_PLATFORM" "no magic-byte expectation is written for ${OS}/${ARCH}." \

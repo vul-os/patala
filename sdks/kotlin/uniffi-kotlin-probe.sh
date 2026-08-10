@@ -65,8 +65,7 @@ export PATH
 command -v cargo >/dev/null 2>&1 || fail "cargo is not on PATH"
 command -v kotlinc >/dev/null 2>&1 || fail "kotlinc is not on PATH (brew install kotlin)"
 
-jna_version="$(make -s -C "${here}" print-jna-version)"
-[ -n "${jna_version}" ] || fail "could not read JNA_VERSION from the Makefile"
+jna_version="$(patala_jna_version "${here}")" || exit 2
 jna="$(patala_find_jna "${jna_version}")" || exit 2
 
 uniffi_version="$(cd "${root}" && cargo tree -p patala-uniffi -i uniffi --depth 0 2>/dev/null \

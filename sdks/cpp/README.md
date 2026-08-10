@@ -8,7 +8,7 @@ dependency beyond the standard library and
 ```cpp
 #include "patala.hpp"
 
-patala::require_abi("0.1.1");                 // throws on a stale library
+patala::require_abi("0.1.2");                 // throws on a stale library
 const patala::Rail rail{R"({"rail":"mock","currencies":["USDC"]})"};
 
 const std::string receipt = rail.charge(pay_request);   // throws on failure

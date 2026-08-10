@@ -1,6 +1,6 @@
 {
   "name": "patala",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "A sovereign payment-rail substrate \u2014 the patala sidecar, or libpatala_ffi in-process.",
   "main": "index.js",
   "types": "index.d.ts",

@@ -17,7 +17,7 @@
 
 [package]
 name = "patala-rust-examples"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2021"
 publish = false
 license = "MIT OR Apache-2.0"

@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <PackageId>Patala</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.2</Version>
     <Description>A sovereign, centerless payment-rail substrate — embedded, or as a local sidecar.</Description>
     <PackageLicenseExpression>MIT OR Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://vulos.org/projects/patala/</PackageProjectUrl>

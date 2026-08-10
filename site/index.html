@@ -1227,7 +1227,12 @@
       <ul class="nogui-list">
         <li><span class="w">Crate</span><span><code>patala-core</code> plus whichever rail feature you enable</span></li>
         <li><span class="w">Binding</span><span>one generated UniFFI surface — Python, Go, Kotlin</span></li>
-        <li><span class="w">C ABI</span><span>six <code>extern "C"</code> symbols, eleven language packages</span></li>
+        <!-- data-count="subset": eleven is not the total, it is the fifteen minus Rust
+     (a Cargo dependency with no FFI) and the three that are sidecar-only. The
+     gate in scripts/check-docs-chrome.mjs requires every OTHER "<n> language
+     packages" on this page to equal what sdks/ ships, and this attribute is
+     how a genuine subset says so rather than being quietly excused. -->
+<li><span class="w">C ABI</span><span>six <code>extern "C"</code> symbols, <span data-count="subset">eleven language packages</span></span></li>
         <li><span class="w">Sidecar</span><span>loopback HTTP, token-gated, keys in one process</span></li>
       </ul>
     </div>

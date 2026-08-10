@@ -269,6 +269,86 @@ for (const marker of [
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+// The landing's package grid must be exactly what sdks/ ships.
+//
+// "fifteen language packages" is a headline claim made in three places that
+// have no mechanical relationship: the prose in §07, the grid of <li class=
+// "pkg"> beneath it, and the directories themselves. Adding a sixteenth SDK
+// and forgetting the landing is a one-line mistake nothing else here notices,
+// and docs drifting from source is this repo's most common defect by a wide
+// margin.
+//
+// Unlike the equivalent check in llmux — where the link slugs are doc anchors
+// that do not map onto directory names — this compares the NAMES, because
+// .pk-n already spells them the way the directories are spelled. Set equality
+// catches a rename in either direction, which a count would not.
+{
+  const SDKS = join(ROOT, 'sdks');
+  const dirs = existsSync(SDKS)
+    ? readdirSync(SDKS, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+        .map((e) => e.name).sort()
+    : [];
+  const indexSrc = readFileSync(INDEX_HTML, 'utf8');
+  const listed = [...indexSrc.matchAll(/<span class="pk-n">([^<]+)<\/span>/g)]
+    .map((m) => m[1].trim()).sort();
+
+  // Floors first: an empty sdks/ or an empty grid would make the comparison
+  // below trivially true, which is how a check ends up examining nothing.
+  assert(dirs.length >= 10, 'sdks/ must hold the package directories this check compares against',
+    `found ${dirs.length} — the package-grid check verified NOTHING`);
+  assert(listed.length >= 10, 'the landing must list its language packages in a .pk-n grid',
+    `found ${listed.length} — the package-grid check verified NOTHING`);
+
+  assert(dirs.join(',') === listed.join(','),
+    'the landing package grid must name exactly the directories under sdks/',
+    `sdks/   ${dirs.join(', ')}\n      landing ${listed.join(', ')}`);
+
+  // And the prose has to agree with both. Spelled out, because that is how
+  // the page says it.
+  // Not every "<number> language packages" on the page is the total, and the
+  // first draft of this check did not know that: §04 says the C ABI is reached
+  // by "eleven language packages", which is the fifteen minus Rust (a Cargo
+  // dependency with no FFI) and the three that are sidecar-only. That is a
+  // SUBSET claim and it is correct.
+  //
+  // So: the total must appear at least once, and no claim may exceed it. A
+  // subset can be any size up to the whole; it can never be larger.
+  const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+    'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen',
+    'eighteen', 'nineteen', 'twenty'];
+  const WORD = WORDS[listed.length];
+  // A subset says so in the markup, with data-count="subset". Everything else
+  // is read as a claim about the total and must equal it.
+  //
+  // "At least one occurrence is right" was the first attempt and it is too
+  // weak: this page states the total twice, so changing one of them to
+  // "fourteen" left the other still saying "Fifteen" and the check passed. One
+  // correct occurrence masked a drifted one.
+  const SUBSET_BLOCK = /<span[^>]*data-count="subset"[^>]*>[\s\S]*?<\/span>/gi;
+  const subsetSrc = (indexSrc.match(SUBSET_BLOCK) || []).join(' ');
+  const totalSrc = indexSrc.replace(SUBSET_BLOCK, ' ');
+  const numbered = (s) => [...s.matchAll(/\b([a-z]+)\s+language packages\b/gi)]
+    .map((m) => m[1].toLowerCase()).filter((w) => WORDS.includes(w));
+
+  const totals = numbered(totalSrc);
+  const subsets = numbered(subsetSrc);
+
+  assert(totals.length > 0, 'the landing must state how many language packages ship',
+    'no unmarked "<number> language packages" phrase found — the prose half of this check verified NOTHING');
+  for (const c of totals) {
+    assert(c === WORD, `the landing says "${c} language packages" but sdks/ ships ${listed.length}`,
+      WORD ? `expected "${WORD}" — if this is deliberately a subset, mark it data-count="subset"` : 'extend WORDS');
+  }
+  // A subset can be any size up to the whole. It can never be larger.
+  for (const c of subsets) {
+    assert(WORDS.indexOf(c) <= listed.length,
+      `a data-count="subset" phrase claims "${c} language packages" but only ${listed.length} ship`,
+      'a subset of the packages can be any size up to the total, never more');
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────────
 if (failures.length) {
   console.error(`check-docs-chrome: FAIL — ${failures.length} of ${checks} invariants broken\n`);
   for (const f of failures) console.error(`  ✗ ${f}\n`);

@@ -1,5 +1,5 @@
 {
-  "name": "@vulos/patala-bun",
+  "name": "@vul-os/patala-bun",
   "version": "0.1.2",
   "description": "patala for Bun \u2014 the C ABI in-process, or the sidecar over loopback.",
   "type": "module",

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 Gem::Specification.new do |spec|
-  spec.name = "vulos-patala"
+  spec.name = "vul-os-patala"
   spec.version = File.read(File.expand_path("../../VERSION", __dir__)).strip
   spec.authors = ["imranparuk"]
   spec.summary = "patala from Ruby: in-process over the C ABI, or over the local sidecar"

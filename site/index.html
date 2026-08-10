@@ -178,15 +178,45 @@
   /* The headline gets the whole measure to itself. Boxing it into a column
      beside the honesty panel forced "Move value." to wrap at 1440 and threw
      away the one thing this hero is for. Lead, actions and the honesty panel
-     share the row beneath it instead. */
-  .hero-top{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:44px;align-items:start;padding-bottom:6px}
-  @media(max-width:980px){.hero-top{grid-template-columns:minmax(0,1fr);gap:26px}}
+     share the row beneath it instead.
+
+     THE DATUM. Sharing a row is not the same as being composed into one. The
+     two columns used to be `align-items:start` under no rule at all: the lede
+     began at y=341 and the card's first line at y=365 because a bordered panel
+     starts at its border and a paragraph starts at its half-leading, and they
+     ended 31px apart at the bottom for the same kind of reason. Two blocks in
+     the same row, agreeing about nothing.
+
+     One hairline across the full measure now fixes both ends. Both columns
+     hang from it — the lede at a stated padding, the panel with its 3px amber
+     edge pulled up the hairline's own pixel so the panel reads as a lit
+     SEGMENT of the datum rather than a box that happens to be nearby — and the
+     row is `stretch`, with the action row pushed to the bottom of its column,
+     so whichever column is taller sets one shared bottom edge for both. */
+  .hero-top{
+    display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:0 44px;
+    align-items:stretch;padding-bottom:6px;border-top:1px solid var(--hair-strong);
+  }
+  .hero-say{display:flex;flex-direction:column;padding-top:26px}
+  /* The actions sit on the row's bottom edge, not 20px under the lede — that
+     is the half of the datum the hairline cannot do on its own. */
+  .hero-say .cta-row{margin-top:auto}
+  @media(max-width:980px){
+    .hero-top{grid-template-columns:minmax(0,1fr);row-gap:26px;align-items:start}
+    .hero-say{padding-top:22px}
+  }
   .badge{
     display:inline-flex;align-items:center;gap:9px;border:1px solid var(--hair-strong);padding:6px 13px 6px 10px;
     border-radius:20px;font-family:var(--mono);font-size:12px;letter-spacing:.09em;text-transform:uppercase;
     color:var(--ink-dim);margin-bottom:16px;
   }
   .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ev-testnet);flex:none}
+  /* At 390 the pill wrapped to two lines with the word MAINNET alone on the
+     second — a hanging orphan inside a rounded chip, which reads as a mistake.
+     Each fact is atomic now (the &nbsp;s in the markup), so the only break the
+     browser can pick is between facts, and the pill gives back its tracking
+     before it takes a second line at all. */
+  @media(max-width:430px){.badge{font-size:11.5px;letter-spacing:.05em;padding:6px 11px 6px 9px;gap:8px}}
 
   /* Enormous, confident display type. Archivo 800 is dense and squared-off,
      and it is allowed to be the loudest thing above the fold — it holds this
@@ -211,6 +241,8 @@
   .honest{
     border:1px solid var(--hair-strong);border-top:3px solid var(--ev-testnet);background:var(--surface);
     padding:16px 18px 15px;border-radius:3px;
+    /* Sits ON the hero datum, not below it — see .hero-top. */
+    margin-top:-1px;
   }
   .honest .status{margin-bottom:8px}
   .honest p{font-size:13.5px;color:var(--ink-dim);line-height:1.62}
@@ -218,22 +250,33 @@
   .honest b{color:var(--ink);font-weight:600}
   .honest a{color:var(--ink);text-decoration:underline;text-underline-offset:2px}
 
-  /* THE READOUT — the hero's own facts, and the ONE full-bleed element on the
-     page. Everything else keeps the 1160px measure, so this band is the single
-     change of scale above the fold and it is spent on the six numbers rather
-     than on ornament. Numerals in the display face, not mono: they are a
-     headline here, not a data cell, and they are set tabular so the six cells
-     align on the same rhythm whatever the digits.
+  /* THE READOUT — the hero's own facts. Numerals in the display face, not
+     mono: they are a headline here, not a data cell, and they are set tabular
+     so the six cells align on the same rhythm whatever the digits.
 
-     auto-fit with a minmax floor rather than a fixed six-up: the row reflows
-     6 -> 3 -> 2 -> 1 on its own, and the min() guard stops the floor exceeding
-     the container at 320px, which is the classic way a minmax track puts a
-     grid wider than its parent. */
+     FULL-BLEED RULES, GRID-ALIGNED CONTENT. The two hairlines run the whole
+     viewport, so the band is still the page's one change of scale; the numbers
+     inside it do not. They used to: the band was `padding:0 24px` around a
+     1600px-capped grid, so at 1440 the first numeral began at x=44 and the
+     last ended at x=1396 while the headline above them ran 164 -> 1276. Six
+     figures that are the hero's own facts, aligned to nothing in the hero.
+     Full bleed can be right; misaligned full bleed is just a leak.
+
+     The alignment is DERIVED, not typed in, because it depends on two numbers
+     that already exist and have to keep agreeing: .wrap's gutter and the
+     cell's own horizontal padding. The grid is inset by the difference, so the
+     first cell's TEXT — not its box — lands exactly on the container edge at
+     every width, and the last cell's text ends exactly on the other one.
+     Anything that changes --cell-x below changes the inset with it. */
   .spec-band{
-    position:relative;z-index:1;margin:26px 0 0;padding:0 24px;
+    --gutter:24px;   /* .wrap's horizontal padding */
+    --cell-x:20px;   /* .spec i's horizontal padding, below */
+    position:relative;z-index:1;margin:26px 0 0;
+    padding:0 calc(var(--gutter) - var(--cell-x));
     border-top:1px solid var(--hair-strong);border-bottom:1px solid var(--hair-strong);
   }
-  @media(max-width:480px){.spec-band{padding:0 18px}}
+  @media(max-width:900px){.spec-band{--cell-x:16px}}
+  @media(max-width:480px){.spec-band{--gutter:18px;--cell-x:14px}}
   /* Separators are drawn as GRID GAP over a hairline ground, not as per-cell
      borders: with a wrapping row any border-left/border-top scheme is wrong on
      whichever cell happens to start a line, and that changes with the width.
@@ -243,7 +286,10 @@
      5+1 at 768px and did exactly that. So the counts are explicit and every
      one of them divides six: 6, then 3, then 2. Never auto-fit here. */
   .spec{
-    max-width:1600px;margin:0 auto;
+    /* The container measure, widened by one cell padding at each end, so the
+       TEXT inside the outer cells sits on 1160px-measure's own edges. */
+    max-width:calc(1160px - 2 * var(--gutter) + 2 * var(--cell-x));
+    margin:0 auto;
     display:grid;grid-template-columns:repeat(6,minmax(0,1fr));
     gap:1px;background:var(--hair);
   }
@@ -251,7 +297,7 @@
   @media(max-width:620px){.spec{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .spec i{
     font-style:normal;display:flex;flex-direction:column;gap:2px;min-width:0;
-    padding:16px 20px 14px;background:var(--canvas);
+    padding:16px var(--cell-x) 14px;background:var(--canvas);
   }
   .spec b{
     font-family:var(--disp);font-weight:700;font-size:clamp(30px,3.4vw,44px);line-height:1;
@@ -266,8 +312,8 @@
   /* Named .mark, not .seam: .seam is the hero diagram panel, and reusing that
      name here silently gave these numerals the panel's border and background. */
   .spec b.mark{color:var(--vermilion-deep)}
-  @media(max-width:900px){.spec i{padding:14px 16px 12px}}
-  @media(max-width:480px){.spec i{padding:12px 14px 11px}}
+  @media(max-width:900px){.spec i{padding:14px var(--cell-x) 12px}}
+  @media(max-width:480px){.spec i{padding:12px var(--cell-x) 11px}}
 
   /* ── ILLUSTRATION 1 · THE SEAM ─────────────────────────────────────────── */
   .seam{margin:28px 0 0;padding:22px 26px 18px;border:1px solid var(--hair-strong);border-radius:4px;background:var(--surface)}
@@ -422,7 +468,7 @@
      than 1fr and take the document with it. This is exactly what put 105px of
      horizontal scroll on the body at 390px. Every multi-column grid on this
      page opts its items out. */
-  .hero-top>*,.nogui>*,.zeros>*,.z-rows li>*,.mxn>*,.custody>*,.stations-grid>*,.ladder>*,.spec>*{min-width:0}
+  .hero-top>*,.nogui>*,.zeros>*,.z-rows li>*,.mxn>*,.custody>*,.stations-grid>*,.ladder>*,.spec>*,.pkg-grid>*{min-width:0}
   .nogui p{color:var(--ink-dim);font-size:15px;line-height:1.66;max-width:54ch}
   .nogui p+p{margin-top:11px}
   .nogui p b{color:var(--ink);font-weight:600}
@@ -637,9 +683,13 @@
 
   .stations{border-top:1px solid var(--hair-strong)}
   /* Not four identical cards. Only the first is direct — the other three each
-   cross a language boundary (UniFFI, cgo, loopback HTTP) — so the first
-   track is wider and the three that follow are marked as a group. */
-  .stations-grid{display:grid;grid-template-columns:minmax(0,1.34fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
+   cross a language boundary (UniFFI, the C ABI, loopback HTTP) — so the first
+   track is wider and the three that follow are marked as a group. 1.34fr was
+   sized when the first station held the longest copy and the other three held
+   a sentence each; with the C ABI station written in, the widest track carries
+   the shortest paragraph and the three that matter wrap to six lines. 1.12
+   keeps the distinction and gives the copy back. */
+  .stations-grid{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)}
   .station{padding:16px 18px 0 18px;border-left:1px solid var(--hair);position:relative;min-width:0}
   .station::before{
     content:"";position:absolute;top:-5px;left:19px;width:9px;height:9px;border-radius:50%;
@@ -650,6 +700,7 @@
   .station .kick{margin-bottom:7px}
   .station h3{font-family:var(--disp);font-weight:700;font-size:16px;margin-bottom:6px;color:var(--ink)}
   .station p{font-size:13px;color:var(--ink-dim);line-height:1.55;padding-bottom:16px}
+  .station p b{color:var(--ink);font-weight:600}
   .station code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
   @media(max-width:920px){
     .stations-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -662,6 +713,69 @@
     .station::before{left:0}
     .station:first-child{border-top:none}
   }
+
+  /* ── THE FIFTEEN ────────────────────────────────────────────────────────
+     The landing used to name four languages. `sdks/` ships FIFTEEN working
+     packages, `docs/` names all fifteen and so does the README — so the page
+     most likely to be read first was the only surface that said "any language"
+     in the abstract and then never showed the reader that eleven more exist.
+     That is the most persuasive true fact about this product, and it was going
+     unsaid.
+
+     A ledger, not a logo wall. Fifteen marks would mean fifteen drawings that
+     are not the languages' own marks (see the LANGUAGE MARKS note in the body
+     for why none of those may be reproduced), and a wall of shapes would say
+     "we support things" where the actual claim is sharper: how each one gets
+     in, and which mode its own README recommends. Name, mechanism, default.
+
+     FIVE TRACKS, THEN THREE, THEN ONE — every count divides fifteen, so the
+     last row is never ragged, which is the same rule the hero readout is held
+     to and for the same reason: the row rule would otherwise stop mid-grid.
+
+     NO NEW HUE. The page's colour schema carries exactly two variables
+     (settlement class and evidence) and one brand reservation, so a third
+     meaning may not take a colour. The default mode is a WORD plus a SHAPE —
+     filled square for in-process, hollow for a separate process, half-filled
+     for "depends on your build" — which is the same shape-plus-word rule the
+     settlement chips already follow, and it survives greyscale. */
+  .pkgs{margin-top:30px}
+  .pkgs-cap{
+    display:flex;flex-wrap:wrap;gap:6px 20px;align-items:baseline;justify-content:space-between;
+    margin-bottom:6px;
+  }
+  .pkgs-cap .hint{font-size:13px;color:var(--ink-faint)}
+  .pkgs-cap .hint b{color:var(--ink);font-weight:600}
+  .pkg-grid{
+    list-style:none;margin:0;padding:0;
+    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0 26px;
+  }
+  @media(max-width:1000px){.pkg-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:600px){.pkg-grid{grid-template-columns:minmax(0,1fr);gap:0}}
+  .pkg{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;align-items:baseline;
+    padding:12px 0 13px;border-top:1px solid var(--hair);min-width:0;
+  }
+  .pk-n{font-family:var(--mono);font-size:13.5px;font-weight:500;color:var(--ink);min-width:0}
+  .pk-m{grid-column:1/-1;font-size:12.5px;color:var(--ink-dim);line-height:1.5}
+  .pk-m code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
+  .pk-d{
+    display:inline-flex;align-items:center;gap:6px;justify-self:end;white-space:nowrap;
+    font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .pk-d::before{content:"";width:8px;height:8px;flex:none;border:1.4px solid currentColor;border-radius:2px}
+  /* Filled: the library is inside your own process. */
+  .pk-d.in{color:var(--ink-dim)}
+  .pk-d.in::before{background:currentColor}
+  /* Half: php, where the answer is a php.ini setting and not a preference. */
+  .pk-d.dep::before{background:linear-gradient(90deg,currentColor 0 50%,transparent 50%)}
+  .pkgs-foot{border-top:1px solid var(--hair);padding-top:15px;margin-top:2px}
+  .pkgs-foot p{font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:88ch}
+  .pkgs-foot b{color:var(--ink);font-weight:600}
+  .pkgs-foot code{font-family:var(--mono);font-size:.94em;color:var(--ink)}
+  .pkgs-foot a{color:var(--vermilion);border-bottom:1px solid currentColor}
+  :root[data-theme="light"] .pkgs-foot a{color:var(--vermilion-deep)}
+  .pkgs-foot a:hover{opacity:.82}
 
   .cb-panel{margin-top:24px}
   /* The tab strip is a ruled selector, not a row of pills: one hairline runs
@@ -690,15 +804,23 @@
   .lang-pane{display:block;padding-top:14px}
   html.js .lang-pane{display:none}
   html.js .lang-pane.active{display:block}
-  .cb-note{margin-top:10px;font-size:13.5px;color:var(--ink-dim);line-height:1.6;max-width:70ch}
+  /* text-wrap:pretty because the shortest of these notes broke as
+     "...an implementation of" / "it." — a two-letter last line under a code
+     frame, which reads as a rendering fault rather than a sentence. */
+  .cb-note{margin-top:10px;font-size:13.5px;color:var(--ink-dim);line-height:1.6;max-width:70ch;text-wrap:pretty}
   .cb-note b{color:var(--ink);font-weight:600}
   /* The one claim about embedding that is genuinely unusual, so it is stated
      under the four stations rather than inside one of them — it is true of all
-     four. Hung off the same hairline the stations sit on. */
-  .stations-foot{
-    border-top:1px solid var(--hair);padding:15px 0 0;margin-top:2px;
-    font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:88ch;
-  }
+     four. Hung off the same hairline the stations sit on.
+
+     THE RULE IS THE FULL MEASURE; THE TEXT IS NOT. Putting `max-width:88ch`
+     on the bordered element itself drew a hairline that ran 726px of a 1112px
+     column and then stopped, under a four-track grid whose own dividers reach
+     the far edge — a rule that looks like it broke rather than like it ended.
+     The border belongs to the section, the measure belongs to the sentence, so
+     they are now two elements. Same for .pkgs-foot below. */
+  .stations-foot{border-top:1px solid var(--hair);padding-top:15px;margin-top:2px}
+  .stations-foot p{font-size:13.5px;color:var(--ink-dim);line-height:1.65;max-width:88ch}
   .stations-foot b{color:var(--ink);font-weight:600}
   .stations-foot .no-rt{color:var(--cls-final)}
   /* The site's default anchor is colour:inherit, which inside a paragraph of
@@ -729,7 +851,15 @@
          full run is still reachable rather than merely implied.
        · five panes at once meant none of them was being looked at.
      Without JS the strip is hidden and all five stack, exactly as before. */
-  .proof-view{margin-top:4px}
+  /* The panes are CAPTURES at a fixed pixel width — 720px for four of the
+     five, 920 for the test run — so this block cannot fill a 1112px column
+     without upscaling a 12.5px mono screenshot, which is the one thing §06
+     must not do. It used to try anyway: the tab strip and its hairline ran the
+     full column while the pane under it stopped 390px short, so the evidence
+     looked like it had been left in a corner of a bigger box. The block is now
+     the width of its widest capture, and the strip, the pane and the caption
+     are one column with one right edge. */
+  .proof-view{margin-top:4px;max-width:920px}
   .proof-item{min-width:0;margin:0}
   .proof-item img{width:100%;max-width:720px;height:auto;display:block;border:1px solid var(--hair-strong);border-radius:2px}
   .proof-item img.wide{max-width:920px}
@@ -793,9 +923,16 @@
   @media(max-width:600px){.final-cta{padding:22px 20px}}
   /* Explicit line break, and no breaking inside "Self-host": left to itself
      the browser hyphen-broke it as "Self- / host" mid-headline. */
-  .final-cta h2{font-family:var(--disp);font-weight:800;font-size:clamp(23px,3.2vw,32px);letter-spacing:-.024em;margin-bottom:9px;color:var(--ink)}
+  /* line-height was never set here, so a display headline with an explicit
+     <br> in it inherited the BODY's 1.6 and set its two lines 51px apart at
+     32px — two sentences that happened to be stacked, not one headline on two
+     lines. Every other display heading on this page sets its own. */
+  .final-cta h2{font-family:var(--disp);font-weight:800;font-size:clamp(23px,3.2vw,32px);line-height:1.1;letter-spacing:-.024em;margin-bottom:11px;color:var(--ink)}
   .final-cta h2 span{white-space:nowrap}
   .final-cta p{color:var(--ink-dim);font-size:14.5px;max-width:54ch}
+  /* The licence line is a second paragraph and was set solid against the
+     first, so the close read as one four-line block with a stray sentence. */
+  .final-cta p+p{margin-top:9px}
   .final-cta .cta-row{flex-direction:column;align-items:stretch;gap:10px}
   .final-cta .cta-row .btn{justify-content:center}
   @media(max-width:820px){.final-cta .cta-row{flex-direction:row}}
@@ -895,10 +1032,10 @@
 </div></nav>
 
 <header class="hero" id="top"><div class="wrap">
-  <div class="badge"><span class="dot"></span> Foundational · 2 testnet runs · 0 mainnet</div>
+  <div class="badge"><span class="dot"></span> Foundational&nbsp;· 2&nbsp;testnet&nbsp;runs&nbsp;· 0&nbsp;mainnet</div>
   <h1>Move value.<br>Hold <span class="accent">none</span> of it.</h1>
   <div class="hero-top">
-    <div>
+    <div class="hero-say">
       <p class="lead">patala is a sovereign, centreless payment-rail substrate — <em>one interface</em> to move money, fiat or crypto, that any product can vendor and self-host. The platform holds no funds, takes no cut, and no one owns the network. <em>Patala</em> is Sesotho/Setswana for "to pay."</p>
       <div class="cta-row">
         <a class="btn pri" href="./docs.html">Read the docs</a>
@@ -1033,7 +1170,8 @@
       <p>The whole attack surface is the trait boundary, and that boundary is reviewable in an afternoon.</p>
       <ul class="nogui-list">
         <li><span class="w">Crate</span><span><code>patala-core</code> plus whichever rail feature you enable</span></li>
-        <li><span class="w">Binding</span><span>one generated UniFFI surface, Python and Go</span></li>
+        <li><span class="w">Binding</span><span>one generated UniFFI surface — Python, Go, Kotlin</span></li>
+        <li><span class="w">C ABI</span><span>six <code>extern "C"</code> symbols, eleven language packages</span></li>
         <li><span class="w">Sidecar</span><span>loopback HTTP, token-gated, keys in one process</span></li>
       </ul>
     </div>
@@ -1128,7 +1266,7 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
 <div class="tooth-rule evidence" role="presentation"></div>
 
 <!-- ══ 04 · THE EVIDENCE LADDER ═══════════════════════════════════════════ -->
-<section class="blk airy" id="status"><div class="wrap wide">
+<section class="blk airy" id="status"><div class="wrap">
   <div class="srule" style="--hue:var(--ev-testnet)">
     <span class="n">§ 04</span><span class="t">Evidence</span><span class="r"></span>
     <span class="f">highest rung reached: <b>live testnet</b></span>
@@ -1251,11 +1389,11 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
 <section class="blk" id="bindings"><div class="wrap">
   <div class="srule" style="--hue:var(--vermilion-deep)">
     <span class="n">§ 05</span><span class="t">Consuming it</span><span class="r"></span>
-    <span class="f"><b>5</b> adapters · <b>4</b> ways in</span>
+    <span class="f"><b>4</b> ways in · <b>15</b> language packages</span>
   </div>
   <div class="sec-head rv">
     <h2>One Rust core. Four ways in. <em>Not twenty</em> implementations.</h2>
-    <p>Write every rail adapter once, in the core, and reach it four different ways — or write each rail again in each language and keep twenty copies in step forever. patala is the first shape.</p>
+    <p>Write every rail adapter once, in the core, and reach it four different ways — or write each rail again in each language and keep twenty copies in step forever. patala is the first shape, and it ships as <b>fifteen language packages</b> over those four ways.</p>
   </div>
 
   <!-- ILLUSTRATION 3 · M×N vs M×1 -->
@@ -1307,14 +1445,14 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
         <p>Program against <code>PaymentRail</code> directly. The default build pulls no chain and no processor — opt into a rail with its feature flag.</p>
       </div>
       <div class="station">
-        <div class="kick">02 · UniFFI</div>
-        <h3>Python</h3>
-        <p><code>patala-py</code> wraps the core over UniFFI with synchronous methods — no <code>asyncio</code> loop needed just to call <code>charge()</code>.</p>
+        <div class="kick">02 · Generated binding</div>
+        <h3>UniFFI</h3>
+        <p>One <code>#[uniffi::export]</code> surface, generated per language: <code>patala-py</code> (synchronous — no <code>asyncio</code> loop to call <code>charge()</code>), <code>patala-go</code> over cgo, and the Kotlin package, which <em>is</em> the generated code.</p>
       </div>
       <div class="station">
-        <div class="kick">03 · cgo</div>
-        <h3>Go</h3>
-        <p><code>patala-go</code>, the same UniFFI IDL generated for Go. 19 top-level binding tests, CI-enforced with the pinned <code>uniffi-bindgen-go</code>.</p>
+        <div class="kick">03 · C ABI</div>
+        <h3>Six symbols</h3>
+        <p><code>patala-ffi</code> — JSON in, JSON out, <code>uint64</code> handles, six <code>extern "C"</code> functions. It is what <b>eleven of the fifteen</b> packages load, and it speaks the sidecar's own JSON.</p>
       </div>
       <div class="station">
         <div class="kick">04 · Loopback HTTP</div>
@@ -1322,7 +1460,39 @@ $ # a library and a sidecar, and nothing else in this tree.</code></pre>
         <p><code>patala-sidecar</code> — <code>quote</code> / <code>charge</code> / <code>verify</code> / <code>webhook</code> as JSON on <code>127.0.0.1</code> only, token-gated, fail-closed. Any language, zero FFI.</p>
       </div>
     </div>
-    <p class="stations-foot"><span class="no-rt">Whichever you pick, embedding patala puts <b>no language runtime in your process.</b></span> The core is Rust: no garbage collector to pause your threads, no second scheduler competing with yours, no signal handlers installed behind your back, no <code>fork()</code> hazard, nothing to initialise before your <code>main</code>. The costs that <em>do</em> exist are named rather than buried — a Tokio runtime created lazily inside the bindings so a Python caller never has to run an event loop, and cgo if you choose Go. <a href="./docs.html#choose">Choosing a mode</a> lays all four out side by side.</p>
+    <div class="stations-foot"><p><span class="no-rt">Whichever you pick, embedding patala puts <b>no language runtime in your process.</b></span> The core is Rust: no garbage collector to pause your threads, no second scheduler competing with yours, no signal handlers installed behind your back, no <code>fork()</code> hazard, nothing to initialise before your <code>main</code>. The costs that <em>do</em> exist are named rather than buried — a Tokio runtime created lazily inside the bindings so a Python caller never has to run an event loop, and cgo if you choose Go. <a href="./docs.html#choose">Choosing a mode</a> lays all four out side by side.</p></div>
+  </div>
+
+  <!-- ── THE FIFTEEN ──────────────────────────────────────────────────────
+       Fifteen working packages, each with the mechanism it uses and the mode
+       its own README recommends. The recommendation is the point: it is a real
+       verdict per language, arrived at by measurement, and for Java and Kotlin
+       it is the OPPOSITE of the advice the Go-cored products in this suite
+       give. sdks/README.md stays the authority — this is an index into it, not
+       a second copy of the table. -->
+  <div class="pkgs rv">
+    <div class="pkgs-cap">
+      <span class="kick">The fifteen · one core, two modes</span>
+      <span class="hint"><b>11</b> of the fifteen recommend running it <b>inside your own process</b>.</span>
+    </div>
+    <ul class="pkg-grid">
+      <li class="pkg"><span class="pk-n">rust</span><span class="pk-d in">direct</span><span class="pk-m">a Cargo dependency, no FFI</span></li>
+      <li class="pkg"><span class="pk-n">c</span><span class="pk-d in">direct</span><span class="pk-m">links <code>libpatala_ffi</code></span></li>
+      <li class="pkg"><span class="pk-n">cpp</span><span class="pk-d in">direct</span><span class="pk-m">header-only RAII</span></li>
+      <li class="pkg"><span class="pk-n">swift</span><span class="pk-d in">direct</span><span class="pk-m"><code>dlopen</code>, no module map</span></li>
+      <li class="pkg"><span class="pk-n">java</span><span class="pk-d in">direct</span><span class="pk-m">FFM, JDK 22+</span></li>
+      <li class="pkg"><span class="pk-n">kotlin</span><span class="pk-d in">direct</span><span class="pk-m">generated UniFFI over JNA</span></li>
+      <li class="pkg"><span class="pk-n">node</span><span class="pk-d in">direct</span><span class="pk-m">koffi, with a working <code>callAsync</code></span></li>
+      <li class="pkg"><span class="pk-n">deno</span><span class="pk-d in">direct</span><span class="pk-m"><code>Deno.dlopen</code>, non-blocking</span></li>
+      <li class="pkg"><span class="pk-n">bun</span><span class="pk-d in">direct</span><span class="pk-m"><code>bun:ffi</code>, synchronous</span></li>
+      <li class="pkg"><span class="pk-n">python</span><span class="pk-d in">direct</span><span class="pk-m"><code>patala-py</code>, over UniFFI</span></li>
+      <li class="pkg"><span class="pk-n">ruby</span><span class="pk-d in">direct</span><span class="pk-m"><code>fiddle</code>, from the stdlib</span></li>
+      <li class="pkg"><span class="pk-n">php</span><span class="pk-d dep">depends</span><span class="pk-m">the <code>FFI</code> extension — your <code>php.ini</code> decides</span></li>
+      <li class="pkg"><span class="pk-n">dotnet</span><span class="pk-d">sidecar</span><span class="pk-m"><code>LibraryImport</code> — but no Windows DLL exists</span></li>
+      <li class="pkg"><span class="pk-n">go</span><span class="pk-d">sidecar</span><span class="pk-m"><code>patala-go</code> in-process, or keep a static binary</span></li>
+      <li class="pkg"><span class="pk-n">elixir</span><span class="pk-d">sidecar</span><span class="pk-m">a dirty-IO NIF exists; BEAM reasons</span></li>
+    </ul>
+    <div class="pkgs-foot"><p><b>Rust is the one with no boundary at all</b> — a dependency line, no shared library, no <code>unsafe</code>, no platform matrix to ship. And <b>Java and Kotlin default to in-process here, the reverse of the Go-cored products beside it</b>: the same probe reports patala's library replacing <b>0</b> of HotSpot's signal handlers where the Go-cored control replaces 5, and the default library measures <b>844,656 bytes</b> against that control's 12,787,504 — measured on one machine, not inferred from the language. The index that ships with the code is <a href="https://github.com/vul-os/patala/tree/main/sdks" target="_blank" rel="noopener">sdks/README.md</a>; <a href="./docs.html#languages">Fifteen language packages</a> has a run command for every one.</p></div>
   </div>
 
   <div class="cb-panel" data-tabgroup>

@@ -293,11 +293,19 @@ html.js .hero .hero-top > .honest{animation-delay:.23s}
 }
 
 .wrap{max-width:1160px;margin:0 auto;padding:0 24px;position:relative;z-index:1}
-/* A second, wider measure. The two sections that carry a real table — the
-   rail ledger and the evidence ladder — get it, so the page has a change of
-   SCALE between argument and data rather than nine sections at one width.
-   Prose inside them keeps its own max-width, so the measure never widens. */
-.wrap.wide{max-width:1320px}
+/* There was a `.wrap.wide{max-width:1320px}` here, written for "the two
+   sections that carry a real table — the rail ledger and the evidence ladder".
+   Only ONE of the two ever took it. The rail ledger stayed at 1160 and the
+   evidence ladder went to 1320, so the largest block on the landing began 80px
+   to the LEFT of every heading above and below it: one page, two left edges,
+   for a distinction the page had stopped making. The ladder is back on the
+   measure and the class is deleted rather than left defined and unused, so
+   that re-adding `class="wide"` to a section is a change somebody has to make
+   on purpose instead of a class that silently does nothing.
+
+   A wider measure for data is still a good idea. It has to be applied to every
+   data block or to none, and today it is none. The docs page keeps its own
+   measure (--doc-max) and never used this. */
 @media(max-width:480px){.wrap{padding:0 18px}}
 
 .disp{font-family:var(--disp);font-weight:700}

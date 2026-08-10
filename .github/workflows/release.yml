@@ -1,0 +1,327 @@
+name: Release
+
+# What a patala release publishes, and why only these things:
+#
+#   patala_<v>_source.zip                 The archive of the tag. patala is on
+#                                         no registry — every Rust consumer
+#                                         vendors by path or by git — so this
+#                                         is the only artifact most users
+#                                         need, and the only one that can be
+#                                         pinned by digest today.
+#   patala_<v>_c-abi_linux_amd64.tar.gz   libpatala_ffi + include/patala.h,
+#   patala_<v>_c-abi_darwin_arm64.tar.gz  built with every rail compiled in.
+#                                         This is the artifact a consumer
+#                                         genuinely cannot rebuild trivially:
+#                                         the C ABI exists precisely for the
+#                                         languages UniFFI has no backend for
+#                                         (C, C++, Node/Deno/Bun, PHP, Elixir),
+#                                         whose users have no Rust toolchain.
+#   SHA256SUMS                            One line per asset above.
+#
+# TWO PLATFORMS, NOT A LIST OF ASPIRATIONS. Nothing here cross-compiles: each
+# bundle is built on the platform it names, because scripts/ffi-ctest.sh
+# dlopens the library it just built and drives a real charge -> verify round
+# trip through it. A platform this workflow cannot both build AND execute is a
+# platform patala does not publish. linux/amd64 and darwin/arm64 are what
+# GitHub's runners are; linux/arm64 and darwin/amd64 are absent for that reason
+# and no other.
+#
+# Deliberately NOT published (each is a claim that would outrun the evidence):
+#   * a Python wheel — patala-py/pyproject.toml still declares 0.1.0 while the
+#     crate is at 0.1.1, and nothing in CI builds a manylinux wheel. A wheel
+#     attached to a GitHub Release is also not installable by `pip install`
+#     anyway, so it would be ceremony, not distribution.
+#   * the patala-sidecar binary — its registry is mock-only today (see
+#     patala-sidecar/src/registry.rs), so a published sidecar would be a
+#     payments daemon that cannot make a payment.
+#   * the generated Go/Kotlin/Swift/Python bindings — those are generated FROM
+#     a cdylib by each language's own bindgen at the version pinned in
+#     patala-go/README.md; shipping a frozen copy would create a second thing
+#     that can drift from the library.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Job-level permissions are set on the jobs below. Keeping the workflow default
+# at read means a step added later does not silently inherit write scope.
+permissions:
+  contents: read
+
+jobs:
+  # ci.yml runs on pushes to main and on pull requests — not on tags. A tag can
+  # be pushed at any commit, so the full gate runs here too rather than being
+  # assumed to have run somewhere earlier.
+  check:
+    name: make check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable, with rustfmt + clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      - name: make check
+        run: make check
+
+  c-abi:
+    name: c abi bundle (${{ matrix.os }}/${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      # One platform failing must not publish a release missing that platform:
+      # the release job needs BOTH legs, and asserts both tarballs arrived.
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            os: linux
+            arch: amd64
+          # macos-latest is Apple Silicon. release-stage.sh checks `uname -m`
+          # against the arch in the asset name rather than trusting that, so if
+          # GitHub changes the image again this job goes red instead of
+          # publishing an amd64 dylib in a file called darwin_arm64.
+          - runner: macos-latest
+            os: darwin
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + build
+        uses: Swatinem/rust-cache@v2
+
+      # ffi-ctest.sh needs a C compiler; fail here with an obvious message
+      # rather than inside the packaging script.
+      - name: Verify the C toolchain
+        run: cc --version
+
+      # Builds the cdylib with every rail, runs patala-ffi/ctest/smoke.c
+      # against that exact artifact (58 counted checks, dlopened by name
+      # through include/patala.h), checks the tag against ./VERSION and every
+      # crate manifest, checks the library's magic bytes against the platform
+      # the asset name claims, and only then packages it. Every one of those
+      # refusals is exercised locally — the script exists so they are not
+      # guards that live only in unrunnable YAML.
+      - name: Build, prove and stage the C ABI bundle
+        run: |
+          bash scripts/release-stage.sh \
+            --version "${GITHUB_REF_NAME#v}" \
+            --os "${{ matrix.os }}" \
+            --arch "${{ matrix.arch }}" \
+            --outdir release
+
+      - name: Upload the bundle for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: c-abi-${{ matrix.os }}-${{ matrix.arch }}
+          path: release/patala_*_c-abi_${{ matrix.os }}_${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Create GitHub Release (checksummed + attested)
+    needs: [check, c-abi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the Release and upload assets
+      id-token: write       # mint the OIDC token the attestation is signed with
+      attestations: write   # record the attestation against this repo
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify the tag names the version in the tree
+        id: version
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          if [ "${FILE_VERSION}" != "${VERSION}" ]; then
+            echo "::error::./VERSION says '${FILE_VERSION}' but the tag is '${TAG}'."
+            exit 1
+          fi
+          # Exported so the release body can name assets exactly. Assets are
+          # versioned WITHOUT the leading 'v', so a body that interpolated
+          # github.ref_name would print filenames that do not exist and the
+          # copy-pasted verify command would fail on a correct release.
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # Everything that will be published lands in release/ and nothing else
+      # does. The manifest below covers that directory, so "published" and
+      # "covered" are the same set by construction rather than two lists someone
+      # keeps in sync by hand.
+      - name: Stage the C ABI bundles built by the matrix
+        uses: actions/download-artifact@v4
+        with:
+          pattern: c-abi-*
+          merge-multiple: true
+          path: release
+
+      # `needs:` already fails the release when a matrix leg fails, but it says
+      # nothing about a leg that succeeded and uploaded the wrong name. The
+      # release body tells users to verify these exact filenames; assert they
+      # are here before publishing a page that names them.
+      - name: Assert every platform this release claims actually arrived
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          missing=0
+          for want in \
+            "patala_${VERSION}_c-abi_linux_amd64.tar.gz" \
+            "patala_${VERSION}_c-abi_darwin_arm64.tar.gz"; do
+            if [ ! -s "release/${want}" ]; then
+              echo "::error::expected asset is missing or empty: ${want}"
+              missing=$((missing + 1))
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "both platform bundles present:"
+          ls -l release/
+
+      - name: Stage the source archive
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          git archive --format=zip HEAD -o "release/patala_${VERSION}_source.zip"
+
+      # =====================================================================
+      # RELEASE SIGNING — copied from the suite's shared RELEASE-TEMPLATE.md.
+      # This step is the ONLY thing that writes SHA256SUMS and scripts/verify.sh
+      # is the ONLY thing that reads it; the step after this runs verify.sh
+      # against this job's own output, so producer and consumer cannot drift
+      # apart without a red release.
+      # =====================================================================
+      - name: Emit SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd release
+
+          # Portable listing (no `find -printf`): the staging dir is flat by
+          # construction, one line per asset, sorted so the manifest is
+          # reproducible.
+          mapfile -t ASSETS < <(find . -maxdepth 1 -type f ! -name SHA256SUMS -exec basename {} \; | LC_ALL=C sort)
+
+          # FAIL CLOSED. A build that produced nothing must be a red release,
+          # not a green one with an empty manifest. An empty SHA256SUMS vouches
+          # for nothing while looking exactly like a manifest that vouched for
+          # everything.
+          if [ "${#ASSETS[@]}" -eq 0 ]; then
+            echo "::error::release/ contains no artifacts — refusing to publish a release whose manifest would vouch for nothing."
+            exit 1
+          fi
+
+          : > SHA256SUMS
+          for a in "${ASSETS[@]}"; do
+            sha256sum "$a" >> SHA256SUMS
+          done
+
+          # COVERAGE ASSERTION. Without it the step is trivially satisfiable: a
+          # one-line manifest "covers" a ten-asset release and every later check
+          # still passes. Pin line count to asset count.
+          # tr: BSD wc pads with spaces; the arithmetic test copes but the error
+          # message would read "        1 line(s)".
+          LINES="$(wc -l < SHA256SUMS | tr -d ' ')"
+          if [ "$LINES" -ne "${#ASSETS[@]}" ]; then
+            echo "::error::SHA256SUMS has ${LINES} line(s) for ${#ASSETS[@]} staged artifact(s) — the manifest does not cover the release."
+            exit 1
+          fi
+
+          echo "SHA256SUMS covers ${#ASSETS[@]} artifact(s):"
+          cat SHA256SUMS
+          printf '%s\n' "${ASSETS[@]}" > /tmp/release-assets.txt
+
+      # The producer checked by the consumer. If verify.sh and the emit step
+      # ever disagree about the format, it surfaces here — in a red release job,
+      # not in a user's terminal after the release is public.
+      - name: Verify SHA256SUMS with the same script users run
+        run: |
+          set -euo pipefail
+          mapfile -t ASSETS < /tmp/release-assets.txt
+          bash scripts/verify.sh --dir release "${ASSETS[@]}"
+
+      # Proves the verifier's refusals still fire on this runner, on this
+      # release, before anything is published. A verifier whose failure paths
+      # are never exercised is a verifier that has probably stopped failing.
+      - name: Prove the verifier still refuses broken releases
+        run: bash scripts/verify.sh --selftest
+
+      # Short-lived sigstore certificate minted from this job's OIDC identity:
+      # no long-lived key, no new secret, no new hosted service, and the
+      # identity it binds is "vul-os/patala's release workflow at this commit"
+      # rather than "whoever holds the key". Attests every file in release/,
+      # SHA256SUMS included — so an attestation on the manifest transitively
+      # covers every asset the manifest names.
+      #
+      # Deliberately NOT load-bearing: verify.sh's digest path needs only curl
+      # and sha256sum, and --attest is opt-in. If this action is removed or
+      # broken, SHA256SUMS still verifies and nobody's verification silently
+      # becomes a no-op.
+      - name: Attest build provenance (sigstore via OIDC — no long-lived key)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release/*"
+
+      - name: Extract CHANGELOG notes
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          SEMVER="${VERSION#v}"
+          NOTES=$(awk "/^## \[${SEMVER}\]/{found=1; next} found && /^## /{exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            PREV_TAG=$(git tag --sort=-v:refname | sed -n '2p' || echo "")
+            if [ -z "$PREV_TAG" ]; then
+              NOTES=$(git log --pretty=format:"- %s (%h)")
+            else
+              NOTES=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD")
+            fi
+          fi
+          {
+            echo "NOTES<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: |
+            ${{ steps.changelog.outputs.NOTES }}
+
+            ### Verify before you run this
+
+            ```sh
+            curl -fsSLO https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/verify.sh
+            bash verify.sh --tag ${{ github.ref_name }} --attest \
+              patala_${{ steps.version.outputs.version }}_source.zip \
+              patala_${{ steps.version.outputs.version }}_c-abi_linux_amd64.tar.gz
+            ```
+
+            `verify.sh` fetches `SHA256SUMS`, looks up the exact entry for each
+            asset and compares digests. It exits non-zero, with a distinct
+            diagnostic, on a missing or malformed manifest, a missing entry, a
+            truncated download or a digest mismatch. There is no skip path and a
+            missing `SHA256SUMS` is never treated as "nothing to check".
+            `--attest` additionally checks the sigstore build provenance (needs
+            the `gh` CLI); without it, provenance is NOT checked and the script
+            says so rather than letting a pass imply more than it checked.
+
+            The C ABI bundles carry `lib/libpatala_ffi.*` and the matching
+            `include/patala.h`, built with every rail compiled in
+            (`fiat-all,solana,stellar,hyperswitch`). They are built and
+            **executed** on the platform they name — `linux/amd64` and
+            `darwin/arm64` are the platforms this workflow can dlopen its own
+            output on, and are therefore the only ones published.
+          # Publish the directory the manifest covers, not a hand-listed set of
+          # names — a name list and a manifest are two things to keep in sync.
+          files: release/*
+          generate_release_notes: true

@@ -589,6 +589,17 @@
   .vulos-home img { display: block; width: 22px; height: 22px; border-radius: 6px; }
   .vulos-foot { display: inline-flex; align-items: center; gap: 9px; min-height: 40px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: 1; transition: color .15s ease; }
   .vulos-foot:hover { text-decoration: underline; }
+  /* The shared Vulos mark is one flat #2E383A on transparency — drawn for
+     paper. On patala's ink it measured 1.28:1, a smudge rather than a dimmed
+     logo, and .vulos-home's opacity made it worse. brightness(0) invert(1)
+     recolours a single-colour stencil losslessly, counters included. Scoped to
+     the dark state: patala stamps data-theme on the root and falls back to
+     dark, so :not([data-theme="light"]) is the correct guard. The markup is
+     shared suite chrome and is untouched — check-suite-chrome asserts the
+     element and blanks style blocks before it looks. */
+  :root:not([data-theme="light"]) .vulos-foot img,
+  :root:not([data-theme="light"]) .vulos-home img { filter: brightness(0) invert(1); }
+  :root:not([data-theme="light"]) .vulos-home { opacity: .78; }
   .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
 </style>
 <script src="./assets/vendor/marked.umd.js"></script>

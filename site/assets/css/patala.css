@@ -441,6 +441,14 @@ nav.top .wrap{display:flex;align-items:center;justify-content:space-between;heig
 .btn.pri{background:var(--vermilion);border-color:var(--vermilion);color:var(--vermilion-ink);font-weight:500}
 .btn.pri:hover{background:var(--vermilion-bright);border-color:var(--vermilion-bright)}
 .btn.sm{padding:7px 13px;font-size:12.5px;min-height:44px}
+/* The header's source link is the GitHub MARK, no word — the same treatment
+   the Vulos mark beside it already gets. It keeps the .btn chip it always had
+   rather than becoming a bare glyph, so it squares off to the .iconbtn's 44px
+   and its Octicon fills with currentColor, which is what makes it legible on
+   both the paper and the ink palette off one path. The word is gone, so the
+   accessible name comes from aria-label on the anchor. */
+.btn.sm.gh-mark{width:44px;padding:0;gap:0}
+.btn.sm.gh-mark svg{width:18px;height:18px;display:block}
 
 footer.site{border-top:1px solid var(--hair);padding:32px 0;color:var(--ink-faint);font-size:13px}
 footer.site .fwrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between;align-items:center}

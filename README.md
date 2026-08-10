@@ -322,6 +322,24 @@ key). `scripts/verify.sh` is the consumer half and fails closed — there is no
 skip path, and a missing manifest is never read as "nothing to check". patala
 is still on **no package registry**, so Rust consumers vendor by path or git.
 
+### The site's contrast is measured, not reviewed
+
+`node scripts/check-contrast-rendered.mjs` loads the landing and every docs
+chapter in a real browser, at two widths and in both themes, and computes WCAG
+AA contrast from the **composited** pixels — cumulative ancestor `opacity`,
+each background's alpha, then the text colour — rather than from the hex values
+in the stylesheet. A gate that reads colour values cannot see a fade: the same
+check found a tab strip at `opacity:.72` measuring 3.67:1 in a sibling repo
+while every token involved was individually fine.
+
+`--selftest` breaks the page eight ways and requires each break to be refused,
+including an opacity fade, an unparseable colour function, prose hidden behind
+`aria-hidden`, and text at `opacity:0` that hovering never reveals. Each
+mutation must also demonstrably *change* the rendered measurement first — a
+selector that matches is not a declaration that wins — and the unmodified page
+must still pass, because a gate that refuses everything refuses every mutation
+too.
+
 ## Deferred (designed for, not built)
 
 Any-stablecoin mint generalization, an Algorand rail, and a gateway-discovery

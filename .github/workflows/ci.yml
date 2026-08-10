@@ -254,3 +254,37 @@ jobs:
       # adapters are actually linked into the C surface.
       - name: make smoke-ffi
         run: make smoke-ffi
+
+  rendered-contrast:
+    name: text contrast measured from composited pixels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Playwright is not vendored: this repo ships no npm tree for the site,
+      # which is plain HTML/CSS with no build step. Installed here, for this
+      # job only; --no-save keeps it out of the checkout.
+      - name: Install Playwright (chromium only)
+        run: |
+          set -euo pipefail
+          npm install --no-save --silent playwright@1
+          npx --yes playwright install --with-deps chromium
+
+      # Measures WCAG AA from the composited pixels — cumulative ancestor
+      # opacity, each background's alpha, then the text colour — rather than
+      # from the hex values in the stylesheet, because a gate that reads colour
+      # values cannot see a fade. In the sibling repos this exact check found a
+      # tab strip at opacity:.72 sitting at 3.67:1, and a chip painted with a
+      # theme token that was the wrong colour for the band it sat in.
+      #
+      # --selftest first: eight deliberate breakages, each required to be
+      # refused, plus a positive control — a gate that refuses everything
+      # refuses every mutation too.
+      - name: Every visible string clears WCAG AA, composited
+        run: |
+          node scripts/check-contrast-rendered.mjs --selftest
+          node scripts/check-contrast-rendered.mjs

@@ -1,18 +1,35 @@
 {
-  "name": "@vul-os/patala-bun",
+  "name": "@vulos/patala-bun",
   "version": "0.1.2",
-  "description": "patala for Bun — the C ABI in-process, or the sidecar over loopback.",
+  "description": "patala for Bun \u2014 the C ABI in-process, or the sidecar over loopback.",
   "type": "module",
   "module": "index.ts",
-  "exports": { ".": "./index.ts" },
+  "exports": {
+    ".": "./index.ts"
+  },
   "license": "MIT OR Apache-2.0",
-  "keywords": ["payments", "usdc", "stellar", "solana", "non-custodial", "bun", "ffi"],
-  "files": ["index.ts", "README.md"],
-  "engines": { "bun": ">=1.1.0" },
+  "keywords": [
+    "payments",
+    "usdc",
+    "stellar",
+    "solana",
+    "non-custodial",
+    "bun",
+    "ffi"
+  ],
+  "files": [
+    "index.ts",
+    "README.md"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
   "scripts": {
     "check": "../node/node_modules/.bin/tsc -p tsconfig.json --noEmit",
     "example:direct": "bun run examples/direct.ts",
     "example:sidecar": "bun run examples/sidecar.ts"
   },
-  "devDependencies": { "@types/bun": "1.3.14" }
+  "devDependencies": {
+    "@types/bun": "1.3.14"
+  }
 }

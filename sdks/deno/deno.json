@@ -1,5 +1,5 @@
 {
-  "name": "@vul-os/patala",
+  "name": "@vulos/patala",
   "version": "0.1.2",
   "exports": "./mod.ts",
   "license": "MIT OR Apache-2.0",

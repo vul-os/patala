@@ -410,6 +410,17 @@ nav.top .wrap{display:flex;align-items:center;justify-content:space-between;heig
 }
 .iconbtn:hover{color:var(--ink);border-color:var(--ink-faint)}
 .iconbtn svg{width:17px;height:17px}
+/* The theme button shows the theme ONE CLICK AWAY — a sun while you are on
+   ink, a moon while you are on paper. Both glyphs ship in the markup and CSS
+   picks between them off the same data-theme the head script settles before
+   first paint. It used to be an inline style:display:none plus a script at the
+   END of the body: on a machine asking for paper the page painted paper and
+   the button showed the sun — "switch to light", while already light — until
+   that script caught up. The default here (no attribute, script disabled) is
+   the sun, matching the dark palette a reader without JavaScript gets. */
+#themeToggle .icon-moon{display:none}
+:root[data-theme="light"] #themeToggle .icon-sun{display:none}
+:root[data-theme="light"] #themeToggle .icon-moon{display:block}
 
 /* The one place Vulos appears beyond the footer's single line: a compact,
    logo-only button in the header, nothing else — no band, no tagline, no

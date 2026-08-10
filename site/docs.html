@@ -646,7 +646,7 @@
     <a class="nl" href="./docs.html">Docs</a>
     <button class="iconbtn" id="themeToggle" type="button" aria-label="Switch to light theme" aria-pressed="false">
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.4M12 19.1v2.4M4.2 4.2l1.7 1.7M18.1 18.1l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.2 19.8l1.7-1.7M18.1 5.9l1.7-1.7" stroke-linecap="round"/></svg>
-      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true" style="display:none"><path d="M20 14.1A8.3 8.3 0 1 1 9.9 4a6.6 6.6 0 0 0 10.1 10.1Z" stroke-linejoin="round"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 14.1A8.3 8.3 0 1 1 9.9 4a6.6 6.6 0 0 0 10.1 10.1Z" stroke-linejoin="round"/></svg>
     </button>
     <a class="btn sm" href="https://github.com/vul-os/patala" target="_blank" rel="noopener">GitHub</a>
     <a class="vulos-home" href="https://vulos.org" target="_blank" rel="noopener" title="Vulos — open, self-hostable software" aria-label="Vulos — open, self-hostable software"><img src="./assets/vulos-logo.png" alt="" width="22" height="22"></a>
@@ -1522,13 +1522,16 @@ docRows().forEach(function(a){ a.addEventListener('click', closeSheet); });
 (function(){ var c = current(); loadedSlug = c.slug; load(c.slug, c.head); })();
 
 (function(){
+  // Which glyph shows is CSS's job (see #themeToggle in patala.css) so the
+  // button is right at FIRST PAINT; this script runs at the end of the body
+  // and only keeps the accessible name and pressed state in step. The toggle
+  // is two-state and always writes an explicit value: a reader on a light
+  // machine who clicks to dark and back ends on a STORED light, which is the
+  // same pixels as following the machine and is a state the button can
+  // actually show. There is no third "follows my machine" state to misreport.
   var btn=document.getElementById('themeToggle');
-  var sun=btn.querySelector('.icon-sun'), moon=btn.querySelector('.icon-moon');
   function sync(){
-    var t=document.documentElement.getAttribute('data-theme');
-    var isLight=t==='light';
-    sun.style.display=isLight?'none':'block';
-    moon.style.display=isLight?'block':'none';
+    var isLight=document.documentElement.getAttribute('data-theme')==='light';
     btn.setAttribute('aria-pressed', String(isLight));
     btn.setAttribute('aria-label', isLight?'Switch to dark theme':'Switch to light theme');
   }
@@ -1539,6 +1542,21 @@ docRows().forEach(function(a){ a.addEventListener('click', closeSheet); });
     try{ localStorage.setItem('patala-theme', next); }catch(e){}
     sync();
   });
+  // Nothing stored yet means "follow the machine", and that keeps being true
+  // while the page is open: flipping the OS theme flips the page. A stored
+  // choice ends it.
+  if(window.matchMedia){
+    var mql=window.matchMedia('(prefers-color-scheme: light)');
+    var onSystem=function(){
+      var stored=null;
+      try{ stored=localStorage.getItem('patala-theme'); }catch(e){}
+      if(stored==='light'||stored==='dark') return;
+      document.documentElement.setAttribute('data-theme', mql.matches?'light':'dark');
+      sync();
+    };
+    if(mql.addEventListener) mql.addEventListener('change', onSystem);
+    else if(mql.addListener) mql.addListener(onSystem);
+  }
 })();
 // Copy-to-clipboard, the Wrap control and the scroll affordance are all in
 // ./assets/js/codeblock.js — one implementation, shared with the landing.

@@ -103,7 +103,7 @@ extern "C" {
 #endif
 
 /*
- * Returns the patala version this library was built from, e.g. "0.1.0", as a
+ * Returns the patala version this library was built from, e.g. "0.1.1", as a
  * static string. Do NOT free it.
  *
  * Compare it against the version your bindings were generated for. A shared

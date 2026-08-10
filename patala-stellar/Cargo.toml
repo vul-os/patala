@@ -1,6 +1,6 @@
 [package]
 name = "patala-stellar"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "patala rail #3: native Circle USDC on Stellar. NonCustodialFinal, wallet-to-wallet, real Ed25519 signing + XDR transaction construction + Horizon submission/verification (PATALA.md §4, §6). One payment settled on Stellar TESTNET 2026-07-30; mainnet + multi-party unverified — see README."
 license = "MIT OR Apache-2.0"

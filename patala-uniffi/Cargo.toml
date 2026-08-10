@@ -1,6 +1,6 @@
 [package]
 name = "patala-uniffi"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "The one UniFFI surface over patala-core, namespaced `patala`. Every UniFFI target language (Python, Go, Swift, Kotlin, ...) is generated from THIS crate's `#[uniffi::export]` definitions — see PATALA.md §5: adapters are written once in Rust, and every language is a generated consumer of that one definition."
 license = "MIT OR Apache-2.0"

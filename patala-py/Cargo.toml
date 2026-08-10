@@ -1,6 +1,6 @@
 [package]
 name = "patala-py"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Python packaging of patala's one UniFFI surface (patala-uniffi). See PATALA.md §5: adapters are written once in Rust; this crate is the Python consumer of that one core. MockRail always available; SolanaRail/StellarRail/HyperswitchRail behind --features solana/stellar/hyperswitch."
 license = "MIT OR Apache-2.0"

@@ -9,6 +9,21 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-08-10
+
+**patala's first published release.** `[0.1.0]` below is a real entry — a
+versioned cut recorded on 2026-07-21 — but it was never tagged, so nothing was
+ever fetchable. Rather than retroactively tag a section describing a different
+tree, this is cut as 0.1.1 and 0.1.0 stays as the development record it is.
+
+Two public field names changed on the way here, and both were free only because
+nothing had shipped: `PatalaError`'s `message` → `detail`, and
+`RailCapabilities`'s `class` → `rail_class`. Each unblocked a UniFFI backend
+whose generated code did not compile — Kotlin in the first case, Ruby in the
+second — and UniFFI mangles both per language (`_class` in Python, `Class` in
+Go), so after a tag either rename would have broken every binding at once. All
+five UniFFI backends now generate and run: Python, Go, Kotlin, Swift, Ruby.
+
 ### Security
 
 Everything here was found by a review commissioned specifically because patala

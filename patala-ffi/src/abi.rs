@@ -119,7 +119,7 @@ unsafe fn as_str<'a>(p: *const c_char) -> &'a str {
     as_str_opt(p).unwrap_or("")
 }
 
-/// Returns the patala version this library was built from, e.g. `"0.1.0"`, as
+/// Returns the patala version this library was built from, e.g. `"0.1.1"`, as
 /// a static string the caller must **not** free.
 ///
 /// A host compares it against the version its bindings were generated for. A

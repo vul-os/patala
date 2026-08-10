@@ -215,8 +215,25 @@ namespace Patala
             PostJsonAsync($"/v1/rails/{rail ?? RailId}/validate-destination",
                 "{\"destination\":" + Json.Quote(destination) + "}");
 
-        /// <summary>True when the verdict says do not send.</summary>
-        public static bool IsRefusal(string verdictJson) => Json.Field(verdictJson, "is_refusal") == "true";
+        /// <summary>
+        /// True when the verdict says <b>do not send</b>.
+        ///
+        /// <para>Read from the document's own <c>is_refusal</c> field — which
+        /// Rust computes once, in <c>DestinationVerdict::is_refusal()</c>, from
+        /// an exhaustive match — and never re-derived from <c>status</c> here,
+        /// where a status added later would fall through to a default of "not
+        /// a refusal".</para>
+        ///
+        /// <para><b>Fails closed.</b> A verdict this SDK cannot parse, one with
+        /// no <c>is_refusal</c>, or one whose <c>is_refusal</c> is not a JSON
+        /// boolean, all answer <c>true</c>. This was
+        /// <c>Json.Field(verdictJson, "is_refusal") == "true"</c> over a
+        /// substring scan that did not skip whitespace after the colon, so a
+        /// verdict reformatted anywhere between patala and here read as
+        /// <c>" true"</c> and this returned <b>false for a Malformed
+        /// verdict</b>.</para>
+        /// </summary>
+        public static bool IsRefusal(string verdictJson) => Json.Flag(verdictJson, "is_refusal", true);
 
         /// <summary>
         /// <c>POST /v1/rails/{rail}/webhook</c> — forward a processor's

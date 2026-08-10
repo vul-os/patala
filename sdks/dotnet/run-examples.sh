@@ -16,7 +16,13 @@
 # Fails closed: a missing toolchain, a library that would not build, or an
 # example that exits non-zero is a FAILURE, never a skip.
 #
-# Usage:  sdks/dotnet/run-examples.sh [direct|sidecar]
+# Usage:  sdks/dotnet/run-examples.sh [direct|sidecar|checks]
+#
+# `checks` is the counted assertion suite over the pure-C# half of this SDK —
+# Json.Quote, Json.Field, Json.Flag and the IsRefusal helpers over them. It
+# needs no library and no child process, and it exists because that half is
+# where this SDK made its own decisions and where IsRefusal fail-OPENed on a
+# reformatted verdict. Included in the default `both` run.
 #
 set -euo pipefail
 
@@ -42,7 +48,7 @@ case "$(uname -s)" in
   *)      libfile="libpatala_ffi.so" ;;
 esac
 libpath="${root}/target/release/${libfile}"
-if [ "${which}" != "sidecar" ]; then
+if [ "${which}" != "sidecar" ] && [ "${which}" != "checks" ]; then
   echo "run-examples: building ${libfile}…"
   ( cd "${root}" && cargo build -p patala-ffi --release ) >"${tmp}/lib.log" 2>&1 \
     || { cat "${tmp}/lib.log" >&2; fail "the shared library did not build"; }
@@ -52,7 +58,7 @@ fi
 
 # --- the sidecar binary ------------------------------------------------------
 bin="${root}/target/release/patala-sidecar"
-if [ "${which}" != "direct" ]; then
+if [ "${which}" != "direct" ] && [ "${which}" != "checks" ]; then
   echo "run-examples: building patala-sidecar…"
   ( cd "${root}" && cargo build -p patala-sidecar --release ) >"${tmp}/bin.log" 2>&1 \
     || { cat "${tmp}/bin.log" >&2; fail "patala-sidecar did not build"; }

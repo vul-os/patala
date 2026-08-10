@@ -1,23 +1,37 @@
 using System;
 using System.Text;
+using System.Text.Json;
 
 namespace Patala
 {
     /// <summary>
-    /// The only JSON this SDK writes, and a reader used strictly for printing.
+    /// The only JSON this SDK writes, and the two readers it uses.
     ///
-    /// <para>Neither path parses JSON. Every document patala returns — a
-    /// Quote, a Receipt, a DestinationVerdict — is handed to you as a
-    /// <c>string</c> for <c>System.Text.Json</c> or whatever you already use,
-    /// so this SDK has no serializer dependency and cannot disagree with yours
-    /// about how a <c>u64</c> should be decoded. It must not become a
-    /// <c>double</c>: amounts are integer minor units on both sides of the
-    /// boundary.</para>
+    /// <para>The SDK does not <b>deserialise</b> patala's documents. Every one
+    /// it returns — a Quote, a Receipt, a DestinationVerdict — is handed to you
+    /// as a <c>string</c> for <c>System.Text.Json</c> or whatever you already
+    /// use, so this SDK cannot disagree with yours about how a <c>u64</c>
+    /// should be decoded. It must not become a <c>double</c>: amounts are
+    /// integer minor units on both sides of the boundary.</para>
     ///
-    /// <para>But the SDK does build one request object for you —
+    /// <para>It does build one request object for you —
     /// <c>{"destination": …}</c> — and a destination arrives from a user.
     /// Concatenating that into JSON without escaping is how injection bugs get
     /// written, so the escaping lives here, in one place.</para>
+    ///
+    /// <para><b>The two readers use a real parser, and used not to.</b>
+    /// <see cref="Field"/> was a substring scan that did not skip whitespace
+    /// after the colon, and <see cref="Patala.Sidecar.IsRefusal"/> was
+    /// <c>Field(json, "is_refusal") == "true"</c> over it. A verdict
+    /// re-serialised by <c>JsonSerializer</c> with <c>WriteIndented</c>, or by
+    /// any proxy on the way, yields <c>" true"</c> — so <c>IsRefusal</c>
+    /// returned <b>false for a Malformed verdict</b>, and the payout gate in
+    /// this SDK's own README sent the money. Two lines away, <c>IsValid</c>
+    /// used the same shape and failed CLOSED; the polarity was simply
+    /// inverted on the one question in this API where failing open costs.
+    /// <c>System.Text.Json</c> is in the <c>net8.0</c> shared framework, so
+    /// using it here adds no package reference and no version to reconcile —
+    /// it was never the reason not to parse.</para>
     /// </summary>
     public static class Json
     {
@@ -69,39 +83,78 @@ namespace Patala
             + ",\"reference\":" + Quote(reference) + "}";
 
         /// <summary>
-        /// The value of a top-level scalar field, <b>for printing and
-        /// assertions only</b>.
+        /// The text of a <b>top-level</b> field, for printing.
         ///
-        /// <para>Not a parser and not a substitute for one: it does not
-        /// understand nesting, so a key that also appears inside a nested
-        /// object may be found there first. The one place the SDK itself uses
-        /// it is <c>is_refusal</c>, a top-level boolean on a flat document.
-        /// </para>
+        /// <para>A string comes back unquoted and unescaped; anything else
+        /// comes back as its exact source text, so a <c>u64</c> keeps every
+        /// digit it was sent with and never passes through a
+        /// <c>double</c>.</para>
+        ///
+        /// <para>Top-level only, and null on any doubt: an unparseable
+        /// document, a document that is not an object, or an absent key. The
+        /// substring scan this replaced could match a key inside a nested
+        /// object first, and did not skip whitespace after the colon.</para>
         /// </summary>
-        /// <returns>the field's text, or null when the key is absent</returns>
+        /// <returns>the field's text, or null</returns>
         public static string? Field(string json, string key)
         {
-            int at = json.IndexOf("\"" + key + "\":", StringComparison.Ordinal);
-            if (at < 0)
+            if (!TryGet(json, key, out JsonElement value))
             {
                 return null;
             }
-            int from = at + key.Length + 3;
-            if (from < json.Length && json[from] == '"')
+            return value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : value.GetRawText();
+        }
+
+        /// <summary>
+        /// A <b>top-level</b> JSON boolean, or <paramref name="fallback"/> on
+        /// any doubt at all.
+        ///
+        /// <para>"Any doubt" is deliberately everything: a document that will
+        /// not parse, one that is not an object, an absent key, and a value
+        /// that is present but is not <c>true</c> or <c>false</c> — a string
+        /// <c>"true"</c> included. The caller chooses which way that falls, and
+        /// for <c>is_refusal</c> it must be <c>true</c>: a verdict this SDK
+        /// cannot read is a verdict it has not been told to send against.</para>
+        /// </summary>
+        public static bool Flag(string json, string key, bool fallback)
+        {
+            if (!TryGet(json, key, out JsonElement value))
             {
-                int end = from + 1;
-                while (end < json.Length && json[end] != '"')
+                return fallback;
+            }
+            return value.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                _ => fallback,
+            };
+        }
+
+        private static bool TryGet(string json, string key, out JsonElement value)
+        {
+            value = default;
+            if (json == null)
+            {
+                return false;
+            }
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object
+                    || !doc.RootElement.TryGetProperty(key, out JsonElement found))
                 {
-                    end += json[end] == '\\' ? 2 : 1;
+                    return false;
                 }
-                return json.Substring(from + 1, Math.Min(end, json.Length) - from - 1);
+                // Clone: the element borrows the document, which is disposed here.
+                value = found.Clone();
+                return true;
             }
-            int to = from;
-            while (to < json.Length && json[to] != ',' && json[to] != '}')
+            catch (JsonException)
             {
-                to++;
+                return false;
             }
-            return json.Substring(from, to - from);
         }
     }
 

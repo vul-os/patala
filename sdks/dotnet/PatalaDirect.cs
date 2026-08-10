@@ -478,9 +478,21 @@ namespace Patala
         /// than re-derived from <c>status</c>: a re-derivation falls through
         /// to its default for any status added later, and that default is "not
         /// a refusal" — failing open, on the one question in this API where
-        /// failing open loses money.</para>
+        /// failing open loses money. Rust computes the field once, in
+        /// <c>DestinationVerdict::is_refusal()</c>, from an exhaustive
+        /// match.</para>
+        ///
+        /// <para><b>And reading it fails closed too.</b> A verdict this SDK
+        /// cannot parse, one with no <c>is_refusal</c>, or one whose
+        /// <c>is_refusal</c> is not a JSON boolean, all answer <c>true</c>.
+        /// Reading the right field is only half of it: this was
+        /// <c>Json.Field(verdictJson, "is_refusal") == "true"</c> over a
+        /// substring scan that did not skip whitespace after the colon, so one
+        /// reformatting anywhere between patala and here made it return
+        /// <b>false for a Malformed verdict</b> — the same fail-open it was
+        /// written to avoid, one layer down.</para>
         /// </summary>
-        public bool IsRefusal(string verdictJson) => Json.Field(verdictJson, "is_refusal") == "true";
+        public bool IsRefusal(string verdictJson) => Json.Flag(verdictJson, "is_refusal", true);
 
         /// <summary>
         /// The sentence to show the human being asked for a payout address,

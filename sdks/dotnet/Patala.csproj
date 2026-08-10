@@ -30,11 +30,21 @@
   <!--
     No package references. The sidecar uses System.Net.Http and
     System.Diagnostics.Process; the direct path uses LibraryImport and
-    SafeHandle. Neither deserialises JSON, because neither should: a Receipt's
-    amount_minor is an integer number of minor units, and a serializer
-    configured to hand you a double for every number is a rounding bug in a
-    payments library. Documents come back as strings, for the serializer you
-    already configured.
+    SafeHandle; Json.cs uses System.Text.Json. All three are in the net8.0
+    shared framework, so none of them adds a dependency to reconcile.
+
+    Neither path DESERIALISES a patala document, because neither should: a
+    Receipt's amount_minor is an integer number of minor units, and a
+    serializer configured to hand you a double for every number is a rounding
+    bug in a payments library. Documents come back as strings, for the
+    serializer you already configured.
+
+    Json.Field/Json.Flag are the exception and are narrow on purpose: they read
+    ONE top-level scalar, return a number as its exact source text, and fall
+    back on any doubt. They use JsonDocument because the substring scan they
+    replaced was how IsRefusal came to return false for a Malformed verdict —
+    "no serializer dependency" was a true claim defending a scan that could not
+    do its job.
   -->
 
   <!-- Keep the examples out of the library compilation. -->

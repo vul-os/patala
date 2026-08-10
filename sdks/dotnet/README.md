@@ -24,9 +24,10 @@ it](#what-was-measured-and-what-was-not). .NET's answer stays "sidecar" on a
 completely different ground: there is no DLL to load on Windows.
 
 ```sh
-sdks/dotnet/run-examples.sh            # both
+sdks/dotnet/run-examples.sh            # all three
 sdks/dotnet/run-examples.sh direct     # offline
 sdks/dotnet/run-examples.sh sidecar    # loopback only; still offline
+sdks/dotnet/run-examples.sh checks     # counted assertions, no library, no process
 ```
 
 Both examples drive `MockRail`. patala is a payments library, and an example
@@ -229,14 +230,26 @@ An exact match on the library's own answer, so an unrecognised third answer is
 `false`.
 
 ```csharp
-public bool IsRefusal(string verdictJson) => Json.Field(verdictJson, "is_refusal") == "true";
+public bool IsRefusal(string verdictJson) => Json.Flag(verdictJson, "is_refusal", true);
 ```
 
 Read from the document's own `is_refusal` rather than re-derived from `status`.
 A re-derivation falls through to its default for any status added later, and
 that default is "not a refusal" — failing open, on the one question in this API
 where failing open loses money. `is_refusal` is in the JSON for exactly this
-reason: it is a *method* on the Rust type, and a method does not survive JSON.
+reason: it is a *method* on the Rust type — `DestinationVerdict::is_refusal()`,
+an exhaustive match — and a method does not survive JSON.
+
+And the *reading* fails closed too, which is the half that did not. This used
+to be `Json.Field(verdictJson, "is_refusal") == "true"` over a substring scan
+that did not skip whitespace after the colon, so a verdict reformatted anywhere
+between patala and here — `JsonSerializer` with `WriteIndented`, or any proxy —
+came back as `" true"` and this returned **`false` for a `Malformed` verdict**.
+The payout gate above would have sent the money. `Json.Flag` uses
+`System.Text.Json` (in the `net8.0` shared framework, so still no package
+reference) and answers the caller's fallback — here `true` — for an unparseable
+document, an absent key, or an `is_refusal` that is not a JSON boolean.
+`sdks/dotnet/run-examples.sh checks` is the counted suite over it.
 
 There is also a third state that is neither. From the example, using a rail
 configured without destination checks — the offline stand-in for a fiat rail,
@@ -360,6 +373,7 @@ sdks/dotnet/
   Patala.csproj
   examples/DirectCharge.cs    runnable — offline, MockRail
   examples/SidecarCharge.cs   runnable — loopback only, MockRail
+  examples/Checks.cs          counted assertions over the pure-C# half
   examples/Program.cs         picks one
   examples/Examples.csproj
   run-examples.sh

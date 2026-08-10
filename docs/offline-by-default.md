@@ -116,12 +116,17 @@ is what `patala-sidecar` is built on — the sidecar is an HTTP *server*, so a
 server stack in its dependency tree is the thing itself, not a leak:
 
 ```text
+$ cargo tree -i hyper -e normal
 hyper v1.11.0
 ├── axum v0.7.9
-│   └── patala-sidecar v0.1.1
+│   └── patala-sidecar v0.1.2
 └── hyper-util v0.1.20
     └── axum v0.7.9 (*)
 ```
+
+`-e normal` is doing real work in that command: without it the tree also shows
+`reqwest` and `wiremock` arriving as **dev-dependencies**, which are not in a
+build and would make the paragraph above look wrong when it is right.
 
 The precise claim is the one worth making: **the default build contains no
 outbound HTTP client and no chain or processor code.** Saying "no HTTP

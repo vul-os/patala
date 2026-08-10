@@ -30,7 +30,20 @@
 //!    (plain header, header + replay window, static-token header, config-URL
 //!    plus header, query parameter), asserting the `WebhookEvent` a consumer
 //!    actually receives.
-//! 5. `every_compiled_adapter_overrides_validate_destination` and the four
+//! 5. `every_offline_adapter_has_an_accepted_delivery` and the three tests
+//!    after it — the ACCEPTING half, fleet-wide. Everything in 1–3 feeds each
+//!    rail something it must reject, and for a long time the accepting half
+//!    was six hand-written round trips out of twenty. That gap was measurable:
+//!    three rails read an ABSENT settlement-status field as settled, and eight
+//!    could emit an empty (or, for two, a constant `"0"`) `event_id` — and
+//!    this file's 58 assertions caught none of them, because none of them ever
+//!    looked at an event a rail had accepted. `accepted_case()` now signs one
+//!    delivery per rail, with the very secrets that rail's `Adapter` entry is
+//!    configured with, plus two mutations: the id field removed, and the
+//!    settlement-status field removed. A rail whose verification is a live
+//!    re-fetch has no offline delivery to sign and must be named in
+//!    `REFETCH_RAILS`; it cannot be quietly absent from both.
+//! 6. `every_compiled_adapter_overrides_validate_destination` and the four
 //!    tests after it — a new adapter that forgets `validate_destination`
 //!    inherits the trait default and fails here; and no adapter, on any input,
 //!    may ever report `StructurallyValid`, which would claim a redirect URL or
@@ -46,7 +59,7 @@
 
 #![allow(clippy::vec_init_then_push)]
 
-use patala_core::{DestinationStatus, Error, PaymentRail, WebhookDelivery};
+use patala_core::{DestinationStatus, Error, PaymentRail, WebhookDelivery, WebhookStatus};
 
 /// Fixed "now" for every replay-window check here — never the system clock.
 const NOW: u64 = 1_700_000_000;
@@ -598,6 +611,578 @@ async fn documented_signature_headers_are_the_ones_actually_read() {
         "no header-carried scheme was compiled in, so this test verified NOTHING"
     );
     println!("documented_signature_headers: pinned {checked} header-carried schemes.");
+}
+
+// ==========================================================================
+// Fleet-wide POSITIVE round trips.
+//
+// Everything above this line feeds each rail a delivery it must REJECT. That
+// half was fleet-wide; the accepting half was six hand-written round trips out
+// of twenty, and the gap is measurable: three rails read an ABSENT settlement
+// status as settled and eight could emit an empty (or, for two, a constant
+// `"0"`) `event_id`, and this file — 58 assertions — noticed none of them,
+// because it never once looked at an event a rail had ACCEPTED.
+//
+// So: one signed delivery per rail, signed with the very secrets that rail's
+// `Adapter` entry above is configured with, plus two mutations of it, and
+// three fleet-wide assertions over all three. A new adapter that does not
+// appear here fails `every_offline_adapter_has_an_accepted_delivery` by name.
+// ==========================================================================
+
+/// A delivery a rail must ACCEPT, and two mutations of it that it must not
+/// accept *silently*.
+struct Accepted {
+    /// Genuinely signed, describing this scheme's settled case — or, for a
+    /// signature-only scheme, its "here is an object" case.
+    good: WebhookDelivery,
+    /// The same delivery, re-signed, with the field this scheme's event id
+    /// comes from removed. The rail must either refuse it or still name it:
+    /// `WebhookEvent::event_id` is documented "Never empty: a caller cannot
+    /// suppress a duplicate it cannot name."
+    unnameable: Option<WebhookDelivery>,
+    /// The same delivery, re-signed, with the field the processor uses to
+    /// report the OUTCOME removed. The rail must not read that as settled.
+    /// `None` for a signature-only scheme (BTCPay, Coinbase Commerce, LNbits,
+    /// OpenNode), which carries no settlement claim to remove and reports
+    /// `Unconfirmed` either way.
+    status_absent: Option<WebhookDelivery>,
+}
+
+/// The rails whose "signature check" IS an authenticated re-fetch of the
+/// processor's own API, so no delivery can be verified offline and there is
+/// nothing for this table to sign. Named rather than silently absent, so the
+/// count assertion below can tell "cannot" from "nobody wrote one". Each has
+/// its own wiremock-backed round trip in its rail.rs.
+const REFETCH_RAILS: &[&str] = &["iyzico", "mercadopago", "mollie", "payfast", "paypal"];
+
+#[cfg(any(
+    feature = "btcpay",
+    feature = "checkoutcom",
+    feature = "coinbasecommerce",
+    feature = "opennode",
+    feature = "razorpay",
+    feature = "stripe"
+))]
+fn hmac_sha256_hex_for(key: &[u8], msg: &[u8]) -> String {
+    use hmac::Mac;
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(key).unwrap();
+    mac.update(msg);
+    hex::encode(mac.finalize().into_bytes())
+}
+
+#[cfg(any(feature = "adyen", feature = "square", feature = "yoco"))]
+fn hmac_sha256_b64_for(key: &[u8], msg: &[u8]) -> String {
+    use base64::Engine as _;
+    use hmac::Mac;
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(key).unwrap();
+    mac.update(msg);
+    base64::engine::general_purpose::STANDARD.encode(mac.finalize().into_bytes())
+}
+
+#[cfg(any(feature = "midtrans", feature = "payu"))]
+fn sha512_hex_for(parts: &[&str]) -> String {
+    use sha2::Digest;
+    let mut h = sha2::Sha512::new();
+    for p in parts {
+        h.update(p.as_bytes());
+    }
+    hex::encode(h.finalize())
+}
+
+#[cfg(feature = "adyen")]
+fn adyen_delivery(psp: &str, merchant_ref: &str, success: &str) -> WebhookDelivery {
+    let key = b"test-adyen-hmac-key-32-bytes!!!!";
+    let signing = [
+        psp,
+        "",
+        "",
+        merchant_ref,
+        "5000",
+        "EUR",
+        "AUTHORISATION",
+        success,
+    ]
+    .join(":");
+    let sig = hmac_sha256_b64_for(key, signing.as_bytes());
+    let body = format!(
+        r#"{{"live":"false","notificationItems":[{{"NotificationRequestItem":{{"additionalData":{{"hmacSignature":"{sig}"}},"amount":{{"value":5000,"currency":"EUR"}},"eventCode":"AUTHORISATION","merchantReference":"{merchant_ref}","pspReference":"{psp}","success":"{success}"}}}}]}}"#
+    );
+    WebhookDelivery::new(body.into_bytes(), NOW)
+}
+
+#[cfg(feature = "midtrans")]
+fn midtrans_delivery(transaction_id: &str, status: &str) -> WebhookDelivery {
+    let sig = sha512_hex_for(&["ord_1", "200", "10000.00", "midtrans-server-key"]);
+    let body = format!(
+        r#"{{"order_id":"ord_1","transaction_id":"{transaction_id}","transaction_status":"{status}","gross_amount":"10000.00","currency":"IDR","status_code":"200","signature_key":"{sig}"}}"#
+    );
+    WebhookDelivery::new(body.into_bytes(), NOW)
+}
+
+#[cfg(feature = "payu")]
+fn payu_delivery(mihpayid: &str, status: &str) -> WebhookDelivery {
+    // PayU's reverse hash: SALT|status|udf5..udf1|email|firstname|productinfo|amount|txnid|key
+    let hash = sha512_hex_for(&[
+        "payu-salt|",
+        status,
+        "|||||",
+        "|a@b.com|Jane|Order txn_1|100.00|txn_1|payu-merchant-key",
+    ]);
+    let body = url_encode_pairs(&[
+        ("status", status),
+        ("txnid", "txn_1"),
+        ("amount", "100.00"),
+        ("productinfo", "Order txn_1"),
+        ("firstname", "Jane"),
+        ("email", "a@b.com"),
+        ("mihpayid", mihpayid),
+        ("hash", &hash),
+    ]);
+    WebhookDelivery::new(body.into_bytes(), NOW)
+}
+
+/// `application/x-www-form-urlencoded`, for the two rails that sign a form
+/// body. Deliberately hand-rolled: the `url` crate is behind the `payu`
+/// feature, and OpenNode's body must be buildable without it.
+#[cfg(any(feature = "payu", feature = "opennode"))]
+fn url_encode_pairs(pairs: &[(&str, &str)]) -> String {
+    fn esc(s: &str) -> String {
+        let mut out = String::new();
+        for b in s.bytes() {
+            match b {
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    out.push(b as char)
+                }
+                b' ' => out.push('+'),
+                _ => out.push_str(&format!("%{b:02X}")),
+            }
+        }
+        out
+    }
+    pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", esc(k), esc(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+/// The accepted-delivery case for one adapter, or `None` for a re-fetch rail.
+fn accepted_case(name: &str) -> Option<Accepted> {
+    match name {
+        #[cfg(feature = "adyen")]
+        "adyen" => Some(Accepted {
+            good: adyen_delivery("psp_1", "ord_1", "true"),
+            unnameable: Some(adyen_delivery("", "ord_1", "false")),
+            // Adyen's settlement claim is `success`; an absent one deserialises
+            // to "" and must not read as "true".
+            status_absent: Some(adyen_delivery("psp_1", "ord_1", "")),
+        }),
+
+        #[cfg(feature = "btcpay")]
+        "btcpay" => {
+            let deliver = |invoice: &str| {
+                let body = format!(
+                    r#"{{"type":"InvoiceSettled","invoiceId":"{invoice}","storeId":"store1"}}"#
+                )
+                .into_bytes();
+                let sig = format!(
+                    "sha256={}",
+                    hmac_sha256_hex_for(b"btcpay-webhook-secret", &body)
+                );
+                WebhookDelivery::new(body, NOW).with_header("BTCPay-Sig", sig)
+            };
+            Some(Accepted {
+                good: deliver("inv_wh"),
+                unnameable: Some(deliver("")),
+                status_absent: None,
+            })
+        }
+
+        #[cfg(feature = "checkoutcom")]
+        "checkoutcom" => {
+            let deliver = |id: &str, status_field: &str| {
+                let body = format!(
+                    r#"{{"id":"{id}","type":"payment_captured","data":{{"id":"pay_1"{status_field},"amount":5000,"currency":"USD","reference":"ord_1"}}}}"#
+                )
+                .into_bytes();
+                let sig = hmac_sha256_hex_for(b"cko-webhook-secret", &body);
+                WebhookDelivery::new(body, NOW).with_header("Cko-Signature", sig)
+            };
+            Some(Accepted {
+                good: deliver("evt_1", r#","status":"Captured""#),
+                unnameable: Some(deliver("", r#","status":"Captured""#)),
+                status_absent: Some(deliver("evt_1", "")),
+            })
+        }
+
+        #[cfg(feature = "coinbasecommerce")]
+        "coinbasecommerce" => {
+            let deliver = |charge: &str| {
+                let body = format!(
+                    r#"{{"event":{{"type":"charge:confirmed","data":{{"id":"{charge}"}}}}}}"#
+                )
+                .into_bytes();
+                let sig = hmac_sha256_hex_for(b"cc-webhook-secret", &body);
+                WebhookDelivery::new(body, NOW).with_header("X-CC-Webhook-Signature", sig)
+            };
+            Some(Accepted {
+                good: deliver("charge_1"),
+                unnameable: Some(deliver("")),
+                status_absent: None,
+            })
+        }
+
+        #[cfg(feature = "flutterwave")]
+        "flutterwave" => {
+            let deliver = |id_field: &str, status: &str| {
+                let body = format!(
+                    r#"{{"event":"charge.completed","data":{{{id_field}"tx_ref":"ord_1","amount":100,"currency":"NGN","status":"{status}"}}}}"#
+                )
+                .into_bytes();
+                WebhookDelivery::new(body, NOW).with_header("verif-hash", "flw-webhook-hash")
+            };
+            Some(Accepted {
+                good: deliver(r#""id":9,"#, "successful"),
+                // `id` is an i64 with a serde default, so an absent one is not
+                // "empty" -- it is the CONSTANT "0" that every such delivery
+                // shares. Caught by the same assertion.
+                unnameable: Some(deliver("", "failed")),
+                status_absent: Some(deliver(r#""id":9,"#, "")),
+            })
+        }
+
+        #[cfg(feature = "lnbits")]
+        "lnbits" => {
+            let deliver = |hash: &str| {
+                WebhookDelivery::new(format!(r#"{{"payment_hash":"{hash}"}}"#).into_bytes(), NOW)
+                    .with_query_param("secret", "lnbits-webhook-secret")
+            };
+            Some(Accepted {
+                good: deliver("hash123"),
+                unnameable: Some(deliver("")),
+                status_absent: None,
+            })
+        }
+
+        #[cfg(feature = "midtrans")]
+        "midtrans" => Some(Accepted {
+            good: midtrans_delivery("txn_1", "settlement"),
+            unnameable: Some(midtrans_delivery("", "deny")),
+            status_absent: Some(midtrans_delivery("txn_1", "")),
+        }),
+
+        #[cfg(feature = "opennode")]
+        "opennode" => {
+            let deliver = |charge: &str| {
+                let body = url_encode_pairs(&[
+                    ("id", charge),
+                    (
+                        "hashed_order",
+                        &hmac_sha256_hex_for(b"opennode-api-key", charge.as_bytes()),
+                    ),
+                ]);
+                WebhookDelivery::new(body.into_bytes(), NOW)
+            };
+            Some(Accepted {
+                good: deliver("charge_1"),
+                unnameable: Some(deliver("")),
+                status_absent: None,
+            })
+        }
+
+        #[cfg(feature = "paystack")]
+        "paystack" => {
+            let deliver = |id_field: &str, status: &str| {
+                let body = format!(
+                    r#"{{"event":"charge.success","data":{{{id_field}"status":"{status}","reference":"ord_1","amount":5000,"currency":"NGN"}}}}"#
+                )
+                .into_bytes();
+                let sig = {
+                    use hmac::Mac;
+                    let mut mac =
+                        hmac::Hmac::<sha2::Sha512>::new_from_slice(b"sk_test_paystack").unwrap();
+                    mac.update(&body);
+                    hex::encode(mac.finalize().into_bytes())
+                };
+                WebhookDelivery::new(body, NOW).with_header("X-Paystack-Signature", sig)
+            };
+            Some(Accepted {
+                good: deliver(r#""id":555,"#, "success"),
+                unnameable: Some(deliver("", "success")),
+                // Paystack refuses a charge.success whose data.status
+                // disagrees, including an absent one, so this doubles as the
+                // absent-status case.
+                status_absent: Some(deliver(r#""id":555,"#, "")),
+            })
+        }
+
+        #[cfg(feature = "payu")]
+        "payu" => Some(Accepted {
+            good: payu_delivery("mihpay123", "success"),
+            unnameable: Some(payu_delivery("", "failure")),
+            status_absent: Some(payu_delivery("mihpay123", "")),
+        }),
+
+        #[cfg(feature = "razorpay")]
+        "razorpay" => {
+            let deliver = |id: &str, status_field: &str| {
+                let body = format!(
+                    r#"{{"event":"payment.captured","payload":{{"payment":{{"entity":{{"id":"{id}","order_id":"order_1","amount":5000,"currency":"INR"{status_field},"created_at":1753000000}}}}}}}}"#
+                )
+                .into_bytes();
+                let sig = hmac_sha256_hex_for(b"rzp-webhook-secret", &body);
+                WebhookDelivery::new(body, NOW).with_header("X-Razorpay-Signature", sig)
+            };
+            Some(Accepted {
+                good: deliver("pay_1", r#","status":"captured""#),
+                unnameable: Some(deliver("", r#","status":"authorized""#)),
+                status_absent: Some(deliver("pay_1", "")),
+            })
+        }
+
+        #[cfg(feature = "square")]
+        "square" => {
+            let deliver = |event_id: &str, status: &str| {
+                let body = format!(
+                    r#"{{"event_id":"{event_id}","type":"payment.updated","data":{{"object":{{"payment":{{"id":"sqpay_1","status":"{status}","reference_id":"ord_1","amount_money":{{"amount":5000,"currency":"USD"}}}}}}}}}}"#
+                )
+                .into_bytes();
+                let mut signed = b"https://example.com/webhooks/square".to_vec();
+                signed.extend_from_slice(&body);
+                let sig = hmac_sha256_b64_for(b"square-signature-key", &signed);
+                WebhookDelivery::new(body, NOW).with_header("x-square-hmacsha256-signature", sig)
+            };
+            Some(Accepted {
+                good: deliver("evt_1", "COMPLETED"),
+                unnameable: Some(deliver("", "COMPLETED")),
+                status_absent: Some(deliver("evt_1", "")),
+            })
+        }
+
+        #[cfg(feature = "stripe")]
+        "stripe" => {
+            let deliver = |id: &str, status_field: &str| {
+                let body = format!(
+                    r#"{{"id":"{id}","type":"checkout.session.completed","data":{{"object":{{"id":"cs_test_1"{status_field},"amount_total":5000,"currency":"usd","client_reference_id":"ord_1"}}}}}}"#
+                )
+                .into_bytes();
+                let mut signed = format!("{NOW}.").into_bytes();
+                signed.extend_from_slice(&body);
+                let sig = format!(
+                    "t={NOW},v1={}",
+                    hmac_sha256_hex_for(b"whsec_fake_secret_for_unit_tests", &signed)
+                );
+                WebhookDelivery::new(body, NOW).with_header("Stripe-Signature", sig)
+            };
+            Some(Accepted {
+                good: deliver("evt_1", r#","payment_status":"paid""#),
+                unnameable: Some(deliver("", r#","payment_status":"paid""#)),
+                status_absent: Some(deliver("evt_1", "")),
+            })
+        }
+
+        #[cfg(feature = "xendit")]
+        "xendit" => {
+            let deliver = |id: &str, status: &str| {
+                let body = format!(
+                    r#"{{"id":"{id}","external_id":"ord_1","status":"{status}","amount":10000,"paid_amount":10000,"currency":"IDR"}}"#
+                )
+                .into_bytes();
+                WebhookDelivery::new(body, NOW)
+                    .with_header("x-callback-token", "xendit-callback-token")
+            };
+            Some(Accepted {
+                good: deliver("inv_9", "PAID"),
+                unnameable: Some(deliver("", "PAID")),
+                status_absent: Some(deliver("inv_9", "")),
+            })
+        }
+
+        #[cfg(feature = "yoco")]
+        "yoco" => {
+            let deliver = |checkout: &str, status_field: &str| {
+                let body = format!(
+                    r#"{{"type":"payment.succeeded","payload":{{"id":"{checkout}"{status_field},"amount":1000,"currency":"ZAR"}}}}"#
+                )
+                .into_bytes();
+                let mut signed = format!("msg_1.{NOW}.").into_bytes();
+                signed.extend_from_slice(&body);
+                let sig = format!(
+                    "v1,{}",
+                    hmac_sha256_b64_for(b"yoco-raw-webhook-key", &signed)
+                );
+                WebhookDelivery::new(body, NOW)
+                    .with_header("webhook-id", "msg_1")
+                    .with_header("webhook-timestamp", NOW.to_string())
+                    .with_header("webhook-signature", sig)
+            };
+            Some(Accepted {
+                good: deliver("chk_abc", r#","status":"completed""#),
+                unnameable: Some(deliver("", r#","status":"completed""#)),
+                status_absent: Some(deliver("chk_abc", "")),
+            })
+        }
+
+        _ => None,
+    }
+}
+
+/// Every adapter that CAN be verified offline has a signed delivery in the
+/// table above. A new adapter is either in that table or in `REFETCH_RAILS`,
+/// deliberately; it cannot be quietly absent from both.
+#[test]
+fn every_offline_adapter_has_an_accepted_delivery() {
+    let compiled = covered_or_loudly_skip("every_offline_adapter_has_an_accepted_delivery");
+    let missing: Vec<&str> = compiled
+        .iter()
+        .map(|a| a.name)
+        .filter(|n| !REFETCH_RAILS.contains(n) && accepted_case(n).is_none())
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "no signed delivery in accepted_case() for: {}. Every rail whose \
+         verification is offline must have one, or the three assertions below \
+         silently skip it -- which is how three rails came to read an absent \
+         settlement status as settled. If verification genuinely needs a live \
+         re-fetch, add the rail to REFETCH_RAILS and give it a wiremock round \
+         trip in its own rail.rs.",
+        missing.join(", ")
+    );
+    println!(
+        "every_offline_adapter_has_an_accepted_delivery: {} offline rails signed, \
+         {} re-fetch rails excluded by name.",
+        compiled.len()
+            - compiled
+                .iter()
+                .filter(|a| REFETCH_RAILS.contains(&a.name))
+                .count(),
+        compiled
+            .iter()
+            .filter(|a| REFETCH_RAILS.contains(&a.name))
+            .count()
+    );
+}
+
+#[tokio::test]
+async fn every_accepted_event_is_nameable_and_carries_money_only_when_settled() {
+    let compiled = covered_or_loudly_skip(
+        "every_accepted_event_is_nameable_and_carries_money_only_when_settled",
+    );
+    let mut checked = 0usize;
+    for adapter in &compiled {
+        let Some(case) = accepted_case(adapter.name) else {
+            continue;
+        };
+        checked += 1;
+        let event = adapter
+            .rail
+            .verify_webhook(&case.good)
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{}: rejected a delivery signed with its own configured secret: {e}",
+                    adapter.name
+                )
+            });
+        assert_eq!(
+            event.rail_id, adapter.name,
+            "{}: the event names a different rail",
+            adapter.name
+        );
+        assert!(
+            !event.event_id.is_empty(),
+            "{}: WebhookEvent::event_id is empty -- 'a caller cannot suppress a \
+             duplicate it cannot name'",
+            adapter.name
+        );
+        if event.status != WebhookStatus::Settled {
+            assert_eq!(
+                event.amount_minor, 0,
+                "{}: {:?} carries amount_minor {} -- money is reported only for \
+                 Settled",
+                adapter.name, event.status, event.amount_minor
+            );
+            assert!(
+                event.currency.is_empty(),
+                "{}: {:?} carries currency {:?}",
+                adapter.name,
+                event.status,
+                event.currency
+            );
+        }
+    }
+    assert!(
+        checked > 0,
+        "no accepted delivery ran, so this verified NOTHING"
+    );
+    println!("accepted round trips: {checked} rails.");
+}
+
+#[tokio::test]
+async fn no_compiled_adapter_emits_an_event_it_cannot_name() {
+    let compiled = covered_or_loudly_skip("no_compiled_adapter_emits_an_event_it_cannot_name");
+    let mut checked = 0usize;
+    for adapter in &compiled {
+        let Some(delivery) = accepted_case(adapter.name).and_then(|c| c.unnameable) else {
+            continue;
+        };
+        checked += 1;
+        match adapter.rail.verify_webhook(&delivery).await {
+            Err(_) => {}
+            Ok(event) => {
+                assert!(
+                    !event.event_id.is_empty(),
+                    "{}: a correctly signed delivery with no id reached Ok with an \
+                     EMPTY event_id -- 'a caller cannot suppress a duplicate it \
+                     cannot name'",
+                    adapter.name
+                );
+                assert_ne!(
+                    event.event_id, "0",
+                    "{}: a correctly signed delivery with no id was named \"0\" -- \
+                     an absent integer id collapses every distinct delivery onto \
+                     the same key, so deduplicating on it discards them all but \
+                     the first",
+                    adapter.name
+                );
+            }
+        }
+    }
+    assert!(
+        checked > 0,
+        "no unnameable delivery ran, so this verified NOTHING"
+    );
+    println!("unnameable deliveries: {checked} rails.");
+}
+
+#[tokio::test]
+async fn no_compiled_adapter_reads_an_absent_status_as_settled() {
+    let compiled = covered_or_loudly_skip("no_compiled_adapter_reads_an_absent_status_as_settled");
+    let mut checked = 0usize;
+    for adapter in &compiled {
+        let Some(delivery) = accepted_case(adapter.name).and_then(|c| c.status_absent) else {
+            continue;
+        };
+        checked += 1;
+        if let Ok(event) = adapter.rail.verify_webhook(&delivery).await {
+            assert_ne!(
+                event.status,
+                WebhookStatus::Settled,
+                "{}: a correctly signed delivery whose settlement-status field is \
+                 ABSENT reported Settled for {} {} -- the event type says what the \
+                 processor called this delivery, the status field says what the \
+                 money did, and only the second may answer the second question",
+                adapter.name,
+                event.amount_minor,
+                event.currency
+            );
+        }
+    }
+    assert!(
+        checked > 0,
+        "no absent-status delivery ran, so this verified NOTHING"
+    );
+    println!("absent-status deliveries: {checked} rails.");
 }
 
 // --------------------------------------------------------------------------

@@ -101,12 +101,20 @@ function pageHtml(label, bodyHtml, width) {
   </body></html>`;
 }
 
+// One width for all five. Four of these used to render at 720 and one at 920,
+// and §06's pane is sized for the widest — so four tabs out of five showed a
+// capture with 200px of empty page beside it, under a tab rule that ran the
+// full 920. The slack was never in the layout; it was in the captures. They
+// are all 920 now, which also un-wraps the long lines: the round-trip
+// transcript has a 235-character line in it and the Python one a 174, and at
+// 720 those were folding onto a second line inside the pane.
+const SHOT_WIDTH = 920;
 const SHOTS = [
-  { file: 'sidecar-boot.txt', label: 'terminal · sidecar boot', out: 'sidecar-boot.png', width: 720 },
-  { file: 'sidecar-roundtrip.txt', label: 'terminal · http round-trip', out: 'sidecar-roundtrip.png', width: 720 },
-  { file: 'test-suite.txt', label: 'terminal · cargo test --workspace', out: 'test-suite.png', width: 920 },
-  { file: 'binding-python.txt', label: 'terminal · python binding', out: 'binding-python.png', width: 720 },
-  { file: 'binding-go.txt', label: 'terminal · go binding', out: 'binding-go.png', width: 720 },
+  { file: 'sidecar-boot.txt', label: 'terminal · sidecar boot', out: 'sidecar-boot.png', width: SHOT_WIDTH },
+  { file: 'sidecar-roundtrip.txt', label: 'terminal · http round-trip', out: 'sidecar-roundtrip.png', width: SHOT_WIDTH },
+  { file: 'test-suite.txt', label: 'terminal · cargo test --workspace', out: 'test-suite.png', width: SHOT_WIDTH },
+  { file: 'binding-python.txt', label: 'terminal · python binding', out: 'binding-python.png', width: SHOT_WIDTH },
+  { file: 'binding-go.txt', label: 'terminal · go binding', out: 'binding-go.png', width: SHOT_WIDTH },
 ];
 
 const TMP_DIR = resolve(OUT_DIR, '_render-tmp');

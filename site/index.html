@@ -481,6 +481,42 @@
   }
   .nogui-list li{display:contents}
   .nogui-list li>*{padding:9px 0;border-bottom:1px solid var(--hair);font-size:13.5px;color:var(--ink-dim)}
+  /* THE REGISTER CLOSES THE ROW. These two columns have no reason to be the
+     same height — the left is a heading, two paragraphs and a four-row
+     register, the right is a custody diagram and a shell pane — and at 1440
+     the left ran out 142px early, leaving a hole in the corner of the section
+     rather than a margin.
+
+     Nothing is added to fix it. The register is a ledger, and a ledger's rows
+     are allowed to breathe: the column becomes a flex column and the register
+     takes the slack (`flex:1`). Its four rows are implicit `auto` tracks, and
+     a grid's default `align-content` already stretches auto tracks to a
+     definite height — so the slack is shared out between the four rows with
+     no track sizing written at all, and the two columns now end on the same
+     pixel at 1440. Because it is a fraction of whatever is left over, it
+     re-solves itself at every width instead of being right at one.
+
+     `grid-auto-rows:minmax(min-content,1fr)` was the first attempt and it
+     OVERSHOT by 24px: under an indefinite height a `1fr` row contributes the
+     largest max-content of any 1fr track to the container's own intrinsic
+     size, so the column grew, so the row grew, so it grew again. Letting the
+     default stretch do it has no such feedback.
+
+     The cells stay ordinary blocks and their text stays at the top of the
+     row, which is where a ledger's text belongs and — more to the point — the
+     only place it can be. Centring the text in the taller rows was tried and
+     reverted: BOTH ways of doing it (display:grid or display:flex on the cell
+     with align-content:center) break the line. A grid or flex container
+     anonymises contiguous TEXT RUNS but promotes every ELEMENT child to an
+     item of its own, so "<code>patala-core</code> plus whichever rail feature
+     you enable" stopped being one sentence and became a chip stacked above a
+     clause. The rules stay on the cells for the same reason: they have to sit
+     on the row's bottom edge, and a centred cell's border would float up with
+     its text. */
+  @media(min-width:901px){
+    .nogui>:first-child{display:flex;flex-direction:column}
+    .nogui-list{flex:1 1 auto}
+  }
   .nogui-list li .w{
     font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
     color:var(--vermilion-deep);white-space:nowrap;padding-right:16px;
@@ -851,18 +887,25 @@
          full run is still reachable rather than merely implied.
        · five panes at once meant none of them was being looked at.
      Without JS the strip is hidden and all five stack, exactly as before. */
-  /* The panes are CAPTURES at a fixed pixel width — 720px for four of the
-     five, 920 for the test run — so this block cannot fill a 1112px column
-     without upscaling a 12.5px mono screenshot, which is the one thing §06
-     must not do. It used to try anyway: the tab strip and its hairline ran the
-     full column while the pane under it stopped 390px short, so the evidence
-     looked like it had been left in a corner of a bigger box. The block is now
-     the width of its widest capture, and the strip, the pane and the caption
-     are one column with one right edge. */
+  /* The panes are CAPTURES at a fixed pixel width, so this block cannot fill a
+     1112px column without upscaling a 12.5px mono screenshot, which is the one
+     thing §06 must not do. It used to try anyway: the tab strip and its
+     hairline ran the full column while the pane under it stopped 390px short,
+     so the evidence looked like it had been left in a corner of a bigger box.
+     The block is the width of its captures, and the strip, the pane and the
+     caption are one column with one right edge.
+
+     ALL FIVE CAPTURES ARE 920 NOW, and that is the second half of the same
+     fix. Four of them used to be 720 against a 920 box sized for the fifth, so
+     four tabs out of five showed 200px of empty pane to the right of the
+     evidence, under a rule that ran the full width — the slack was never in
+     the layout, it was in the captures. scripts/render-shots.mjs renders every
+     transcript at one width now; the transcripts themselves are untouched, and
+     the long lines in the round-trip and Python runs stopped folding as a
+     bonus. Nothing is upscaled: 920 is what they are. */
   .proof-view{margin-top:4px;max-width:920px}
   .proof-item{min-width:0;margin:0}
-  .proof-item img{width:100%;max-width:720px;height:auto;display:block;border:1px solid var(--hair-strong);border-radius:2px}
-  .proof-item img.wide{max-width:920px}
+  .proof-item img{width:100%;max-width:920px;height:auto;display:block;border:1px solid var(--hair-strong);border-radius:2px}
   /* Stacked (no JS), the five panes need air between them; tabbed, only one
      is ever on screen and the rule would be drawing a line under nothing. */
   html:not(.js) .proof-view .proof-item+.proof-item{margin-top:26px;padding-top:26px;border-top:1px solid var(--hair)}
@@ -903,8 +946,10 @@
   }
   .pan-note{display:none}
   @media(max-width:640px){
+    /* One pan width for all five, unchanged: the test run was already a 920
+       capture shown at 640 here and that was accepted, so the other four
+       matching it introduces no scale this page had not already shipped. */
     .proof-scroll img{width:640px;max-width:640px}
-    .proof-item img.wide{max-width:920px}
     .pan-note{
       display:block;margin-top:7px;font-family:var(--mono);font-size:12px;
       letter-spacing:.02em;color:var(--ink-faint);
@@ -1641,23 +1686,23 @@ patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
     </div>
 
     <figure class="lang-pane proof-item active" data-pane="proof-boot">
-      <div class="proof-scroll" data-scroller><img src="./assets/shots/sidecar-boot.webp" width="720" height="222" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
+      <div class="proof-scroll" data-scroller><img src="./assets/shots/sidecar-boot.webp" width="920" height="202" alt="Terminal: exporting PATALA_SIDECAR_TOKEN and running cargo run -p patala-sidecar, ending with the real log line patala-sidecar listening on 127.0.0.1:8420 (loopback only)."></div>
       <figcaption>The sidecar — <code>cargo run -p patala-sidecar</code>, actually booting.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-http">
-      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/sidecar-roundtrip.webp" width="720" height="571" alt="Terminal: curl round-trips against the running sidecar — healthz returns ok, capabilities, a charge, verify returning valid true, and a 401 when the Authorization header is missing."></div>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/sidecar-roundtrip.webp" width="920" height="550" alt="Terminal: curl round-trips against the running sidecar — healthz returns ok, capabilities, a charge, verify returning valid true, and a 401 when the Authorization header is missing."></div>
       <figcaption>Real HTTP round-trips against it: capabilities, charge, verify — and the fail-closed 401 when the token is missing.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-tests">
-      <div class="proof-scroll tall" data-scroller><img class="wide" src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/test-suite.webp" width="920" height="981" alt="Terminal: cargo test --workspace running every crate's tests, all reporting test result ok, followed by an awk one-liner that tallies the real total: 293 passed."></div>
       <figcaption><code>cargo test --workspace</code> — the same <b>293</b> offline tests <a href="#status" style="color:var(--ev-exec);text-decoration:underline;text-underline-offset:2px">rung 02</a> cites, tallied here by a real <code>awk</code> one-liner reading the log, not typed in by hand. Scroll for the full run.<span class="pan-note">920px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-py">
-      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/binding-python.webp" width="720" height="509" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/binding-python.webp" width="920" height="489" alt="Terminal: the Python smoke test running under a real interpreter — capabilities, quote, charge, verify, tampered-receipt rejection, error mapping and webhook checks, all OK, ending ALL PYTHON SMOKE ASSERTIONS PASSED."></div>
       <figcaption>The Python binding, over a real interpreter — same MockRail round-trip, called from <code>patala-py</code>.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
     <figure class="lang-pane proof-item" data-pane="proof-go">
-      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/binding-go.webp" width="720" height="1309" alt="Terminal: cd patala-go &amp;&amp; make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
+      <div class="proof-scroll tall" data-scroller><img src="./assets/shots/binding-go.webp" width="920" height="1227" alt="Terminal: cd patala-go &amp;&amp; make test — 19 Go binding tests over real cgo, all PASS, ending go-test-gate: OK with 19 top-level tests passed and 10 required tests present."></div>
       <figcaption>The Go binding, over real cgo — the same UniFFI surface, generated for Go. Scroll for all 19 tests.<span class="pan-note">720px capture — drag the pane sideways.</span></figcaption>
     </figure>
   </div>

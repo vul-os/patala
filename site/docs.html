@@ -372,23 +372,49 @@
       opacity:0;transition:opacity .24s;pointer-events:none;
     }
     html.js .dn-scrim.on{opacity:1;pointer-events:auto}
+    /* THE CONTENTS CONTROL IS A BAR, NOT A PILL — and this is a correction.
+       It was a floating vermilion pill at right:16 bottom:16, on the reasoning
+       that the bottom-right corner is where a thumb is. The reasoning was
+       right and the shape was wrong: a pill floating over the page covered a
+       line and a half of running text at every scroll position that was not
+       the end of the document, and no amount of clearance at the bottom fixes
+       something that is over the MIDDLE of the page. It had a measured cost —
+       at 390 it sat on top of "patala's core is Rust" — against no measured
+       benefit, because a pill in the corner is not more reachable than the
+       whole width of the bottom edge.
+
+       So it spans the bottom edge instead. Nothing changes about the thumb
+       argument except that the target got four times bigger; what changes is
+       that the control is now part of the frame rather than an object on the
+       page. Content scrolling behind an opaque, ruled, full-bleed bar at the
+       bottom is exactly the contract this page already has at the top, where
+       nav.top is fixed and the first line of every screenful passes under it.
+       The reader's viewport is shorter by 52px; nothing is ever hidden by
+       something that looks like it is floating over it.
+
+       Surface ground and --vermilion-deep type, not the filled vermilion of a
+       button: this is chrome now, and it matches the header it mirrors.
+       --vermilion-deep is the token tuned as TEXT (5.52:1 dark, 6.11:1 light
+       on --surface, per the note in patala.css) — the fill/ink pair would have
+       been the wrong one to reach for. */
     html.js .dn-fab{
-      display:inline-flex;align-items:center;gap:8px;position:fixed;z-index:58;
-      right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));
-      min-height:48px;padding:0 16px;border-radius:24px;cursor:pointer;
-      border:1px solid var(--vermilion);background:var(--vermilion);color:var(--vermilion-ink);
-      font-family:var(--mono);font-size:13px;letter-spacing:.04em;font-weight:500;
+      display:flex;align-items:center;justify-content:center;gap:9px;
+      position:fixed;z-index:58;left:0;right:0;bottom:0;width:100%;
+      min-height:52px;padding:0 16px env(safe-area-inset-bottom,0px);cursor:pointer;
+      border:0;border-top:1px solid var(--hair-strong);border-radius:0;
+      background:var(--surface);color:var(--vermilion-deep);
+      font-family:var(--mono);font-size:13px;letter-spacing:.06em;font-weight:500;
       box-shadow:var(--shadow);
     }
     html.js .dn-fab svg{width:17px;height:17px;flex:none}
-    /* The control floats over the end of the page, so the page ends above it.
+    /* The control sits on the bottom edge, so the page ends above it.
        This used to be spelled `footer.site{padding-bottom:92px}` — a footer
        this page does not have and is forbidden from having (ratified, and
        mutation-tested by the suite gate). The rule matched nothing, so the
        clearance it was written to provide never existed and the pager's last
        row sat under the control. The clearance belongs to the scroll
        container that actually ends the page. */
-    html.js .docs-shell{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
+    html.js .docs-shell{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
   }
   /* THE TEXT MEASURE, owned by the column rather than by the article, because
      the crumb above the article and the pager below it are the document's own
@@ -466,6 +492,36 @@
   .markdown>pre code{background:none;padding:0;font-size:13px;line-height:1.62;color:var(--code-text);border-radius:0;font-family:var(--mono)}
   .markdown .codeblock{margin:0 0 1.4em}
   .markdown blockquote{margin:1.1em 0;padding:.6em 1.15em;border-left:3px solid var(--pending);background:var(--surface);color:var(--ink-dim)}
+  /* AND THE TEXT SITS IN THE MIDDLE OF THE COLUMN IT IS MEASURED AGAINST.
+     The rule above gives prose 724px inside a 900px column and gives code and
+     tables all 900. Left-aligned, that put every one of the 176px of slack on
+     one side: at 1440 the words ran 398 → 1122 with 150px of paper between
+     them and the rail and 318px between them and the window. The column was
+     centred correctly; the text inside it was not, so the page looked shoved
+     left by the exact width of the widest Rust block on it — a measurement no
+     reader can make and every reader can see.
+
+     margin-inline:auto centres the measure inside the column, so the text now
+     sits 238px off the rail and 230px off the window edge, and code and tables
+     break out of it 88px on EACH side instead of 176px to the right. Two
+     things that follow from that and are not accidents: the breakout reads as
+     a deliberate, symmetrical widening rather than as a leak, and it is still
+     the same 900px block it always was, so nothing that measured 894px has to
+     scroll. Below ~1200 the column is narrower than 724px anyway, `auto`
+     resolves to 0 and none of this applies.
+
+     It has to be its own rule and it has to be here, after the element rules:
+     `margin:.2em 0 .6em` on h1 is a SHORTHAND and would reset margin-inline to
+     0 if this were declared with the max-width up there.
+
+     The crumb and the pager come with the words — they are the document's
+     chrome, they were on the text's left edge before this and they are on it
+     after. `.docs-main > .docs-title` and not `.docs-title`, because the rail's
+     own masthead is the same class and is not in this column. */
+  .markdown p,.markdown ul,.markdown ol,.markdown blockquote,
+  .markdown h1,.markdown h2,.markdown h3,.markdown h4,
+  .docs-main > .docs-title,.docs-pager{margin-inline:auto}
+  .docs-main > .docs-title{max-width:var(--prose)}
   .markdown table{border-collapse:collapse;width:100%;margin:1.4em 0;font-size:14px}
   /* A table is columns, so it is the other half of the code decision: it can
      never soft-wrap without destroying what it is, and it gets the same

@@ -73,8 +73,8 @@ That is measured, not inferred from the language. Loading patala's shared
 library into a JVM replaces **0** of HotSpot's signal handlers and alters **0**
 flags, where the same probe against a Go library reports 5 and 3; a Node
 `worker_threads` worker that has entered patala exits in ~33 ms where the Go
-control never exits at all; and the offline library is **844,656 bytes** against
-llmux's 12,787,504. Each was taken against a Go library in the same environment
+control never exits at all; and the offline library is **849,584 bytes** against
+llmux's 12,823,104. Each was taken against a Go library in the same environment
 as a control. The consequences are practical: Java and Kotlin default to
 in-process here where the siblings default to the sidecar. See
 [The C ABI](c-abi.md) and

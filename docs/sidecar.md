@@ -114,15 +114,45 @@ with the rail's `Malformed` refusal.
 
 The exact mapping lives in `patala-sidecar/src/api.rs`'s `ApiError`.
 
-## Webhooks: forward the request verbatim
+## Webhooks: forward the body verbatim
 
 `/webhook` is the push counterpart to `/verify`. Forward the processor's
-request **byte for byte** — same body, same headers, same query string — and
-the rail says whether the delivery is genuine.
+request — same body, same headers, same query string — and the rail says
+whether the delivery is genuine.
 
-It is the one endpoint whose body is not parsed as JSON, deliberately: every
-webhook scheme signs the exact bytes the processor sent, so re-encoding the
-body here would invalidate the signature of every genuine delivery.
+The **body** is byte for byte. It is the one endpoint whose body is not parsed
+as JSON, deliberately: every webhook scheme signs the exact bytes the processor
+sent, so re-encoding it here would invalidate the signature of every genuine
+delivery.
+
+### Three headers are dropped, since 0.1.1
+
+`authorization`, `proxy-authorization` and `cookie` are **not** forwarded into
+`WebhookDelivery`, and one of those is not cosmetic. Every `/v1` route sits
+behind the token gate, so a request that reaches this handler is *guaranteed* to
+carry `Authorization: Bearer <PATALA_SIDECAR_TOKEN>` — this sidecar's own
+credential, the thing whose isolation is the entire reason the process exists.
+Forwarding headers verbatim copied that token into `WebhookDelivery::headers`,
+where it was handed to arbitrary rail code and sat in a `Debug`-printable map.
+
+Nothing legitimate is lost. None of the twenty-two schemes reads any of those
+names — they read `Stripe-Signature`, `X-Paystack-Signature`, `verif-hash`,
+`webhook-*` and so on — and none could: a processor's own `Authorization` header
+cannot survive the proxy hop that has to *replace* it with the sidecar token to
+get past the gate at all.
+
+A header whose value is not valid UTF-8 is dropped for the same reason, so a
+malformed one produces a clean "invalid signature" rather than a 500.
+
+### A broken clock refuses the delivery
+
+If the system clock reads before the epoch, the request is refused and says why,
+rather than substituting `0`. `now` is the only input to every replay-window
+check in the workspace, and each computes `|now - signed_timestamp|` — so a `0`
+makes every genuine delivery look aeons old. Every rail *with* a window (Stripe's
+five minutes, Yoco's) would reject everything while every rail *without* one
+carried on: a silent, partial, fleet-wide outage disguised as a signature
+failure. There is no honest `now` to substitute.
 
 A `200` means the rail authenticated it. Read `status` — `"Settled"`,
 `"NotSettled"` or `"Unconfirmed"` — for what it claims, and gate entitlement

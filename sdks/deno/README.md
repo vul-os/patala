@@ -15,7 +15,7 @@ identical in both; only the transport differs.
 | where a signing key lives | in this process, alongside your app | in the sidecar's process, and nowhere else |
 | blocks the isolate | no — `callAsync` is `nonblocking` | no |
 | survives a `fork()` | the library yes; **open the handle in the child** — see below | yes |
-| extra bytes on disk | **844,656 bytes** | the binary you already have |
+| extra bytes on disk | **849,584 bytes** | the binary you already have |
 | rails reachable today | every rail the library was built with | **`mock` only** — the registry is unwritten |
 | platforms | **darwin/arm64 built and executed here** — see below | wherever the binary builds |
 
@@ -81,9 +81,9 @@ deno run --allow-ffi examples/direct.ts
 ```
 deno        2.7.11 on darwin/aarch64
 library     /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
-abi         0.1.0
+abi         0.1.1
 
-version     patala: ABI version mismatch — this library is 0.1.0, the caller expected "0.0.0-not-this-one". A stale libpatala_ffi is earlier on the load path than the one you installed.
+version     patala: ABI version mismatch — this library is 0.1.1, the caller expected "0.0.0-not-this-one". A stale libpatala_ffi is earlier on the load path than the one you installed.
 
 rail        handle 1, id mock
 caps        NonCustodialFinal, reversible false, holds_funds false
@@ -247,6 +247,27 @@ fetches nothing, so the listener being up is the whole story.
   (`kind: "rail_error"`), an operational failure.
 - `404` means that `rail_id` is not registered. Today only `"mock"` is.
 
+### `valid` is the JSON boolean `true`, or it is not valid
+
+Since 0.1.1 this SDK **narrows the two documents you make a decision on** at the
+boundary, rather than `as`-casting them into their interfaces.
+
+A cast is a compile-time assertion about a value that arrived at runtime over a
+socket or across a C ABI, and `JSON.parse` hands back whatever shape it was
+given. An absent `valid` is `undefined`; a `valid` that some proxy stringified
+is `"false"` — which is **truthy**. `if (result.valid)` then grants entitlement
+against a receipt no rail confirmed.
+
+Both directions now fail closed:
+
+| field | value you get |
+|---|---|
+| `verify().valid` | `true` **only** for the JSON boolean `true` |
+| `is_refusal` | `false` **only** for the JSON boolean `false` |
+| `human_must_confirm` | `false` **only** for the JSON boolean `false` |
+
+"I could not read the verdict" and "do not send" are the same answer.
+
 ### If you are behind a proxy
 
 Deno's `fetch` honours `HTTP_PROXY`/`HTTPS_PROXY` **for loopback URLs too**, so
@@ -270,9 +291,9 @@ Go-runtime caveats in llmux's and openrate's SDK READMEs are true there and
    handles run concurrently. Open one handle per rail, and more than one if you
    want parallelism on the same rail.
 
-2. **The library is 844,656 bytes** in the default mock-only build — measured,
+2. **The library is 849,584 bytes** in the default mock-only build — measured,
    release, darwin/arm64. A build with all twenty fiat adapters, UniFFI, reqwest
-   and TLS is 6,330,544 bytes.
+   and TLS is 6,350,144 bytes.
 
 3. **`--allow-ffi` is the widest permission Deno has.** See the section above.
    Granting it to run patala grants it to everything else in the process too.
@@ -331,6 +352,7 @@ verify round trip, and **fails** — never skips — if it cannot count them.
 sdks/deno/
   deno.json               tasks, fmt and lint config
   mod.ts                  the patala-core JSON shapes, Rail (direct), Sidecar
+  checks.ts               counted assertions over the boundary narrowing
   examples/direct.ts      MockRail in-process, end to end, under --allow-ffi alone
   examples/sidecar.ts     MockRail over loopback, end to end
 ```
@@ -340,3 +362,13 @@ deno task check      # deno check mod.ts and both examples
 deno task lint
 deno task fmt:check
 ```
+
+```
+deno task checks     # 18 counted assertions over the narrowing, no I/O
+```
+
+`checks.ts` is the only per-SDK regression gate on the narrowing above. It
+touches no network, no child process and no shared library, and it asserts the
+number of assertions that **ran**, so a suite that quietly stops running half of
+itself fails instead of passing.
+

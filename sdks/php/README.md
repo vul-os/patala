@@ -34,11 +34,11 @@ that worker ([`examples/fpm_probe.php`](examples/fpm_probe.php)):
 ```
 B. ffi.enable=1, same master preload — the fork measurement
   ok  the MASTER again loaded the library and charged through it before forking
-    fresh handle: pid=64973 mode=fresh version=0.1.0 verify={"valid":true}
+    fresh handle: pid=64973 mode=fresh version=0.1.1 verify={"valid":true}
   ok  fresh handle: 0/12 requests hung in the forked worker
   ok  answered by one forked php-fpm child (pid 64973), not by this process
   ok  fresh handle: the worker charged and verified through the master's library
-    inherited handle: pid=64973 mode=inherited version=0.1.0 verify={"valid":true}
+    inherited handle: pid=64973 mode=inherited version=0.1.1 verify={"valid":true}
   ok  inherited handle: 0/12 requests hung in the forked worker
   ok  answered by one forked php-fpm child (pid 64973), not by this process
   ok  inherited handle: the worker charged and verified through the master's library
@@ -51,7 +51,7 @@ method in 0.1 ms and then never answers a real one.
 So choose on the merits:
 
 - **Direct** when you control `php.ini` and want one fewer process: no port, no
-  supervision, no loopback surface, and an 844,656-byte library (mock-only,
+  supervision, no loopback surface, and an 849,584-byte library (mock-only,
   release) that installs no signal handlers and starts no threads.
 - **Sidecar** for **key isolation** — the argument that actually matters. A
   non-custodial rail's signing key lives in whichever process calls `charge`.
@@ -130,7 +130,7 @@ php 8.5.9 (cli) on Darwin
 ffi.enable=preload — "preload" still permits FFI::cdef in the CLI SAPI, which is why this runs
 threads before FFI::cdef: 3
 library: /Users/pc/code/vulos/patala/target/debug/libpatala_ffi.dylib
-patala:  0.1.0
+patala:  0.1.1
 threads after FFI::cdef + patala_new: 3
 
 the version probe, because a stale library earlier on the load path is silent
@@ -179,9 +179,12 @@ unchanging number is the whole fork story.
 Two things the FFI extension makes easy to get wrong, both handled in
 `src/Ffi.php` and worth copying:
 
-- **A fresh `char*` err slot per call.** patala writes `*err` on failure only
-  and leaves it untouched otherwise, so a reused slot still holds the previous —
-  already freed — pointer.
+- **`*err` is cleared on entry**, so `*err != NULL` after a call means *that*
+  call failed and one slot is safe to reuse. Since 0.1.1 — and it reverses the
+  advice this package used to give. patala wrote `*err` on failure only, so a
+  reused slot still held the previous, already-freed pointer, and this README
+  was where that trap was first written down. Clearing does not free what was
+  there: call `patala_free` on a message before you reuse its slot.
 - **`patala_free`, never PHP's memory manager and never `free()`.** Every
   non-const `char*` the library returns, results and error messages alike, is
   Rust-allocated.

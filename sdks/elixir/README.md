@@ -123,6 +123,24 @@ sidecar terminated; nothing left running
 ALL 18 ELIXIR SIDECAR ASSERTIONS PASSED
 ```
 
+### A 2xx that is not JSON raises
+
+Since 0.1.1, a `2xx` whose body will not parse raises rather than returning the
+raw binary:
+
+```
+patala-sidecar answered 2xx with something that is not JSON (…): 512 bytes, beginning "<!DOCTYPE html>…"
+```
+
+A successful call is documented as `{:ok, map()}`, and a caller reading
+`body["valid"]` — the entitlement check — or `body["is_refusal"]` through
+`Access` gets `nil` from a binary instead of an error. A `200` that will not
+parse means something else answered: a captive portal, a proxy's error page, a
+truncated read. That is a failure, not a differently-shaped success.
+
+The lenient decode is kept for the paths that hand a status back beside the
+body, where the caller is already inspecting the status.
+
 ### `Port.close/1` does not kill the child — found the hard way
 
 Worth knowing before you copy the spawn code anywhere. Closing a port shuts the
@@ -179,7 +197,7 @@ Real output, same date:
 ```
 elixir 1.20.3 / 29 (erts 17.0.5)
 library: /Users/pc/code/vulos/patala/target/debug/libpatala_ffi.dylib
-patala:  0.1.0
+patala:  0.1.1
 schedulers: 8 normal, 10 dirty-IO
 
 the version probe, because a stale library earlier on the load path is silent
@@ -241,8 +259,8 @@ list, and none of it was copied:
   handle owns a *current-thread* tokio runtime that runs on whichever thread
   called in — which, for a dirty NIF, is a dirty scheduler thread.
 - **Nothing happens at load**: no socket, no file, no background task.
-- The mock-only library is **844,656 bytes** (release), against llmux's
-  12,787,504 (~12.8 MB), measured on this machine on the same day.
+- The mock-only library is **849,584 bytes** (release), against llmux's
+  12,823,104 (~12.8 MB), measured on this machine on the same day.
 
 ## Platforms
 

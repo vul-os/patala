@@ -167,6 +167,9 @@ What `validate_destination` still decides, offline:
 adapter that inherits the trait default fails, one that ever reports
 `StructurallyValid` fails, and `scripts/check-features.sh` fails the build if
 an adapter directory exists that the shape table does not classify.
+`check-features.sh` also builds and lints each of the twenty processor features
+**alone**, so `--all-features` is no longer the only configuration that
+compiles — see [offline by default](offline-by-default.md#what-enforces-this).
 
 ## Giving a customer their money back
 
@@ -204,11 +207,29 @@ Two things this deliberately does not do:
   processor sent, so a body that has been through a JSON round trip will not
   verify.
 - **It never claims settlement it did not establish.** BTCPay, Coinbase
-  Commerce, OpenNode, LNbits and Mollie authenticate a notification that names
-  an object and nothing else; those report `Unconfirmed`, not `NotSettled`.
+  Commerce, OpenNode and LNbits authenticate a notification that names an object
+  and nothing else; those four report `Unconfirmed`, not `NotSettled`. Mollie is
+  **not** one of them — like iyzico, mercadopago, payfast and paypal it
+  re-fetches from the processor and returns a real settlement verdict.
 
-Replay suppression stays yours, keyed on `(rail_id, event_id)` — `event_id` is
-non-empty and stable across redelivery of the same event.
+**An unauthenticated delivery is an `Err`, never a `WebhookEvent`.** That was
+always the contract; 0.1.1 made iyzico obey it. Its `retrieveCheckoutForm`
+round trip *is* its signature check — the callback carries no signature at all —
+and the error was being discarded with `.ok()`, so `POST token=anything` from
+an anonymous caller produced `Ok(NotSettled)`. No money could be fabricated, but
+that verdict can drive a consumer's cancel-order or release-inventory path. An
+unrecognised token is now `Err`.
+
+**Replay suppression stays yours**, keyed on `(rail_id, event_id)`. Since 0.1.1
+that key is guaranteed rather than merely expected: **eight rails now refuse a
+delivery that carries no processor-side id** — payu, payfast, midtrans,
+razorpay, adyen and paypal on an empty `event_id`, paystack and flutterwave on
+an id of `"0"`. The check used to sit inside the *settled* arm only, so a
+correctly signed non-settling redelivery arrived with nothing to suppress it by.
+
+**Three rails no longer read an absent settlement-status field as settled.** Not
+reachable against today's payloads, but a processor changing its shape would
+have read as paid.
 
 ## Honesty conventions on this crate
 
@@ -284,7 +305,7 @@ environment this crate was written in. Every request and response shape was
 checked against the Go original, which cites the processor's published docs,
 and every test mocks HTTP with `wiremock`.
 
-A green `cargo test -p patala-fiat --all-features` — **552 tests** — proves
+A green `cargo test -p patala-fiat --all-features` — **570 tests** — proves
 this crate builds the requests those docs describe and parses the responses
 they describe. It is not proof any adapter works against a live sandbox.
 Validate that yourself before taking money with it.

@@ -83,15 +83,15 @@ it does not know how to count threads on, it **fails** rather than skipping.
 
 | Build | `libpatala_ffi.dylib` |
 |---|---|
-| default — mock rail only, fully offline | **844,656 bytes (0.81 MiB)** |
-| `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,330,544 bytes (6.04 MiB) |
+| default — mock rail only, fully offline | **849,584 bytes (0.81 MiB)** |
+| `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,350,144 bytes (6.06 MiB) |
 
 The default build is under a megabyte because it links `patala-core`, `serde`,
 `serde_json` and tokio's `rt` feature and nothing else — not even
 `patala-uniffi`, which is an *optional* dependency pulled in only by a rail
 feature (see `Cargo.toml`). For comparison, the shared-ABI spec these three
 products follow notes a Go `c-shared` library at 7–17 MB, and llmux's
-`libllmux.dylib` on this same machine is **12,787,504 bytes** (~12.8 MB),
+`libllmux.dylib` on this same machine is **12,823,104 bytes** (~12.8 MB),
 measured rather than quoted. That difference is a consequence of the language,
 not of doing less:
 the offline mock rail here is the same `MockRail` every other patala surface
@@ -215,14 +215,17 @@ client and not even `patala-uniffi`.
 Asking for a rail this build has no feature for is refused **by name**, naming
 the missing feature — never a silent fallback to a different rail.
 `scripts/check-features.sh` fails the workspace build if this crate's
-`fiat-<name>` list drifts from `patala-fiat/src/`.
+`fiat-<name>` list drifts from `patala-fiat/src/`, and — since 0.1.1 — if any
+processor feature fails to build or lint **on its own**. Fourteen of the twenty
+did not, which is why `--all-features` used to be the only advice; it no longer
+is.
 
 ## Tests
 
 ```bash
-cargo test -p patala-ffi                    # 23 tests
-cargo test -p patala-ffi --features fiat-all # 25
-make smoke-ffi                               # 55 checks through C, twice
+cargo test -p patala-ffi                    # 26 tests
+cargo test -p patala-ffi --features fiat-all # 28
+make smoke-ffi                               # 58 checks through C, twice
 ```
 
 The Rust tests cover the registry, the configuration (including that a
@@ -234,14 +237,14 @@ returning 0.
 
 ### Verified in this environment (2026-08-09)
 
-- `cargo test -p patala-ffi` — 23/23; `--features fiat-all` — 25/25;
-  `--features fiat-all,solana,stellar,hyperswitch` — 25/25.
-- `make smoke-ffi` — **55/55 checks** against the default library and 55/55
+- `cargo test -p patala-ffi` — 26/26; `--features fiat-all` — 28/28;
+  `--features fiat-all,solana,stellar,hyperswitch` — 28/28.
+- `make smoke-ffi` — **58/58 checks** against the default library and 58/58
   against the `fiat-all` one, both dlopened from C.
 - The smoke test was mutation-tested, not just run: renaming
   `patala_free`'s export made it fail at `dlsym`, and making a tampered
   `verify` return an error instead of `{"valid":false}` made it report both the
-  failed check and a check count of 54 against the expected 55.
+  failed check and a check count one short of the expected total.
 - `cargo tree -p patala-ffi -e normal` on the default features pulls in no
   `reqwest`, no `patala-uniffi`, no `patala-fiat`.
 - **linux/amd64**: the `.so` is built and `make smoke-ffi` dlopens it from C on

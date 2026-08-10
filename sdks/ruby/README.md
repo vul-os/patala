@@ -47,7 +47,7 @@ So neither Unicorn nor clustered Puma disqualifies direct mode, and you pick on
 the merits instead:
 
 - **Direct** when you want one fewer process: no port, no supervision, no
-  loopback surface, and an 844,656-byte library (mock-only, release build) that
+  loopback surface, and an 849,584-byte library (mock-only, release build) that
   installs no signal handlers and starts no threads.
 - **Sidecar** for **key isolation** — the argument that actually matters. A
   non-custodial rail's signing key lives in whichever process calls `charge`.
@@ -87,7 +87,7 @@ Real output, 2026-08-09, ruby 4.0.5 (arm64-darwin24), fiddle 1.1.8:
 ruby 4.0.5 (arm64-darwin24), fiddle 1.1.8
 threads before dlopen: 2
 library: /Users/pc/code/vulos/patala/target/debug/libpatala_ffi.dylib
-patala:  0.1.0
+patala:  0.1.1
 threads after dlopen + patala_new: 2
 
 the version probe, because a stale library earlier on the load path is silent
@@ -163,6 +163,29 @@ with a body**, not a transport failure, so `Patala::HTTPError` keeps both:
 ok  Patala::HTTPError keeps the status and the parsed body:
     patala-sidecar returned 404 — unknown_rail: no rail is registered under id "nope"
 ```
+
+
+### A 2xx that is not JSON is an error, not a body
+
+Since 0.1.1, a `2xx` response whose body will not parse **raises**:
+
+```
+patala-sidecar answered 2xx with something that is not JSON (…): 512 bytes, beginning "<!DOCTYPE html>…"
+```
+
+It used to be handed back as the raw `String`. That is a money bug, not a
+tidiness one: `verify(...)["valid"]` is the entitlement check, and `String#[]`
+takes a **substring** — so any HTML error page containing the word `valid`
+returned the truthy `"valid"`, and the caller granted entitlement against a
+receipt no rail confirmed. `verdict["is_refusal"]` behaved the same way. A Hash
+and a String answer `[]` with opposite polarities on the one call that decides
+whether money moves.
+
+A `200` that will not parse means something other than this sidecar answered — a
+captive portal, a proxy's error page, a truncated read — and that is a failure,
+not a differently-shaped success. The lenient path is kept only where a status
+comes back alongside the body (`#try`, `Patala::HTTPError`), because there the
+caller is already inspecting the status.
 
 Binary resolution is `PATALA_SIDECAR_BIN`, then `target/{debug,release}/` in a
 checkout, then `patala-sidecar` on `PATH`. `PATALA_SIDECAR_TOKEN` is generated

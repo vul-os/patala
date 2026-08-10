@@ -117,9 +117,9 @@ UniFFI's Kotlin backend did not compile against patala until commit `79e5002`,
 because `patala_core::Error` had two variants with a field named `message` and
 UniFFI renders a flat error enum as a subclass of `kotlin.Exception`, which
 already has an open `message` property — the field was emitted twice, and
-`kotlinc` gave 12 errors. Renaming it to `detail` was the honest fix; patala has
-never been tagged, so it was the cheapest moment in its life to change a public
-field name. `sdks/kotlin` is now the generated Kotlin itself, and
+`kotlinc` gave 12 errors. Renaming it to `detail` was the honest fix; patala had
+not been tagged then, so it was the cheapest moment in its life to change a
+public field name. `sdks/kotlin` is now the generated Kotlin itself, and
 `sdks/kotlin/uniffi-kotlin-probe.sh` guards the rename with an **inverted** exit
 code — `0` while the upstream bug is still there, `1` when it is fixed and
 `detail` can be reconsidered — so the justification cannot outlive the bug.
@@ -212,7 +212,9 @@ There is a fourth guard one level up: `scripts/check-features.sh` keeps
 `patala-fiat`'s processor set in lock-step with the Cargo features that expose
 it, because a new adapter left out of `patala-uniffi`'s `fiat-all` feature would
 silently vanish from the Go binding's cdylib — present in Rust, absent
-everywhere else, and nothing would have failed.
+everywhere else, and nothing would have failed. Since 0.1.1 it also builds and
+lints all twenty processor features **individually**, which caught fourteen
+single-processor configurations that did not compile at all.
 
 ## What the polyglot layer costs
 

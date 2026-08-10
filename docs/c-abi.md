@@ -75,7 +75,7 @@ library in the *same* environment as a control:
 | Python process threads, after `dlopen` → after a round trip | **1 → 1** | `libllmux` 7 → 8 |
 | A `fork()`ed child calling a real method | charge, verify and a fresh handle, all in 0.00 s | `libllmux` answers `models`, then **hangs on `chat`** — never answers, SIGKILLed by the 5 s watchdog (`PATALA_FORK_TIMEOUT`) |
 | Real php-fpm, library loaded *and charged through* in the master pre-fork | **24 requests, 0 hung** | llmux's exact failure scenario |
-| Release library, mock-only build | **844,656 bytes** | `libllmux.dylib` 12,787,504 |
+| Release library, mock-only build | **849,584 bytes** | `libllmux.dylib` 12,823,104 |
 
 The thread claim is not prose anywhere: `patala-ffi/ctest/smoke.c` counts the
 process's threads before `dlopen`, after `dlopen`, and after a full
@@ -84,14 +84,14 @@ platform it does not know how to count threads on, it **fails** rather than
 skipping.
 
 The size is the same story. `--features fiat-all` — twenty processor adapters,
-UniFFI, reqwest and TLS — brings it to 6,330,544 bytes. The default build is
+UniFFI, reqwest and TLS — brings it to 6,350,144 bytes. The default build is
 under a megabyte because it links `patala-core`, `serde`, `serde_json` and
 tokio's `rt` feature and nothing else, not even `patala-uniffi`, which is an
 optional dependency pulled in only by a rail feature.
 
 ## The rules a binding must follow
 
-There are five, and every package in `sdks/` follows all of them.
+There are six, and every package in `sdks/` follows all of them.
 
 **JSON in, JSON out — the same JSON the sidecar serves.** A body that works
 against `POST /v1/rails/:id/charge` works against `patala_call(h, "charge", …)`
@@ -107,10 +107,34 @@ string that must never be freed. This rule matters most on Windows, where a CRT
 mismatch is a real crash rather than a leak — which is one more reason there is
 no Windows DLL yet.
 
-**Use a fresh `char** err` slot per call.** patala writes `*err` on failure only
-and leaves it untouched otherwise, so a slot reused across calls still holds the
-previous — already freed — pointer, and a naive "did we get an error?" check
-reads freed memory. PHP's package documents this as the trap it hit.
+**`*err` is set to `NULL` on entry**, by `patala_new`, `patala_abi_check` and
+`patala_call` alike, so after any of them `*err != NULL` means *that* call
+failed. One `char *err = NULL;` is therefore safe to reuse.
+
+This is new in 0.1.1, and it inverts the advice this page used to give. Only the
+failing path ever wrote `*err`, so a host that branched on `err != NULL` rather
+than on the return value kept seeing the first error it ever hit and reported it
+against every later success. PHP's package documented it as the trap it hit;
+the library now makes the trap impossible instead.
+
+Clearing on entry does *not* free what was there — ownership passed to you when
+it was written — so call `patala_free(err)` before handing the same `char*` to
+another call, or you leak it.
+
+An error message never quotes key material back. A `keypair_seed` given as hex
+is the one string reaching this boundary that *is* a private key, and `*err`
+travels out into whatever the host logs — so a malformed one names the
+**position** and not the character: *"the character at position 17 is not a hex
+digit (it is not quoted back here: this is a private key)"*. Since 0.1.1; it
+used to echo the character, and 64 malformed attempts differing in one position
+each would have read the key out entirely.
+
+**Non-UTF-8 configuration bytes are refused**, `0` with `*err` set, rather than
+treated as absent. The distinction is load-bearing: absent means the offline
+`MockRail`, so collapsing the two turned a corrupt configuration asking for a
+real processor into a mock that reported every charge as settled — a settled
+receipt for money that never moved. If your host builds `config_json` from a
+byte string or a latin-1 source, encode it as UTF-8 first.
 
 **Handles are `uint64` registry keys, never pointers, and are never reused.** A
 closed or invented handle is a clean error rather than a segfault in your
@@ -213,7 +237,9 @@ client and not even `patala-uniffi`.
 Asking for a rail this build has no feature for is refused **by name**, naming
 the missing feature — never a silent fallback to a different rail.
 `scripts/check-features.sh` fails the workspace build if this crate's
-`fiat-<name>` list drifts from `patala-fiat/src/`.
+`fiat-<name>` list drifts from `patala-fiat/src/`, and — since 0.1.1 — if any
+processor feature fails to build or lint **on its own**, so linking exactly one
+processor is a supported configuration rather than one that happened to work.
 
 ## Try it
 
@@ -282,12 +308,12 @@ artifact and resolves the symbols **by name** can catch that.
 threads across the whole thing, and **asserts the number of checks it ran**, so
 a C test that exits 0 having executed three of them is a failure.
 
-Verified in this environment (2026-08-09): 23/23 Rust tests on default
-features, 25/25 with `--features fiat-all`, and **55/55 checks through C**
+Verified in this environment (2026-08-10, v0.1.1): 26/26 Rust tests on default
+features, 28/28 with `--features fiat-all`, and **58/58 checks through C**
 against both libraries. The smoke test was also mutation-tested rather than
 merely run — renaming `patala_free`'s export made it fail at `dlsym`, and making
 a tampered `verify` return an error instead of `{"valid":false}` made it report
-both the failed check and a count of 54 against the expected 55.
+both the failed check and a count one short of the expected total.
 
 ## Related documents
 

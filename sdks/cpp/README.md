@@ -8,7 +8,7 @@ dependency beyond the standard library and
 ```cpp
 #include "patala.hpp"
 
-patala::require_abi("0.1.0");                 // throws on a stale library
+patala::require_abi("0.1.1");                 // throws on a stale library
 const patala::Rail rail{R"({"rail":"mock","currencies":["USDC"]})"};
 
 const std::string receipt = rail.charge(pay_request);   // throws on failure
@@ -44,12 +44,12 @@ artifact and resolves every symbol by name.
 ## Real output
 
 macOS 15.7.3 (24G419), Apple silicon, Apple clang 17.0.0, `-std=c++17`,
-patala 0.1.0, `libpatala_ffi.dylib` 844,656 bytes:
+patala 0.1.1, `libpatala_ffi.dylib` 849,584 bytes:
 
 ```
 ==> direct (in-process, C ABI via patala.hpp)
-patala direct (C++, in-process) — libpatala_ffi 0.1.0
-abi:       matches 0.1.0
+patala direct (C++, in-process) — libpatala_ffi 0.1.1
+abi:       matches 0.1.1
 rail:      handle 1
 caps:      NonCustodialFinal / wallet address, signed final receipt
            holds_funds=false — patala itself never holds funds
@@ -198,10 +198,10 @@ Measured here, `cargo build -p patala-ffi --release`:
 
 | build | `libpatala_ffi.dylib` |
 |---|---|
-| default — mock rail only, fully offline | **844,656 bytes** |
-| `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,330,544 bytes |
+| default — mock rail only, fully offline | **849,584 bytes** |
+| `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,350,144 bytes |
 
-llmux's `libllmux.dylib` on this same machine is 12,787,504 bytes — **15.1×**,
+llmux's `libllmux.dylib` on this same machine is 12,823,104 bytes — **15.1×**,
 measured rather than quoted.
 
 ## Building

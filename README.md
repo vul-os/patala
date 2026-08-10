@@ -31,12 +31,14 @@ spawns and manages for you.
 ## Status: foundational — built and unit-tested; one rail has one live testnet result
 
 The core, the rails and the polyglot layer are all in this repo. `make check`
-runs two passes and both are gates: **319 offline tests** across the nine
-landed crates in the default workspace build (309 unit and integration tests
-plus 10 doctests), and **573 more** once every processor feature is compiled in
-(`cargo test -p patala-fiat --all-features`, 553, + `cargo test -p patala-uniffi
---features fiat-all`, 20). Clippy-clean, fmt-clean; the default build pulls no
-chain and no processor.
+runs **seven gates**: `fmt-check`, `lint`, `test`, `test-features`, `doc`,
+`features` and `site-check`. Two of them are the test suites — **324 offline
+tests** across the nine landed crates in the default workspace build (314 unit
+and integration tests plus 10 doctests), and **618 more** once every processor
+feature is compiled in (`cargo test -p patala-fiat --all-features`, 570, +
+`cargo test -p patala-uniffi --features fiat-all`, 20, + `cargo test -p
+patala-ffi --features fiat-all`, 28). Clippy-clean, fmt-clean; the default build
+pulls no chain and no processor.
 
 What that does *not* mean: **no rail here has been run against a live
 merchant account from this repo**, and only **one** rail has been run
@@ -180,14 +182,14 @@ never does. There is no balance table, no payout queue, no ledger.
 | Crate | What it is | Class | Tests | Live-verified? |
 |---|---|---|---|---|
 | `patala-core` | trait + capability model + `FailoverRail` + `MockRail` + the webhook seam + the destination seam | — | 38 + 3 doctests | offline by design |
-| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 553 (all features) | **no — no live merchant account** |
+| `patala-fiat` | 20 direct processor adapters + the ISO-4217 currency table + the offline `manual` rail | custodial, reversible | 570 (all features) | **no — no live merchant account** |
 | `patala-solana` | SPL-USDC on Solana, ported from `magnetite-seams/src/solana/` | non-custodial, final | 56 (+1 gated) + 2 doctests | **no — testnet step in its README** |
 | `patala-stellar` | native USDC on Stellar (SDF's own `stellar-xdr`/`stellar-strkey`) | non-custodial, final | 84 (+3 gated) + 5 doctests | **no — testnet step in its README** |
 | `patala-hyperswitch` | adapter to a self-hosted Hyperswitch (its whole processor set as one rail) | custodial, reversible | 23 | **no — needs a live instance** |
 | `patala-uniffi` | the one UniFFI surface, namespace `patala` → Python, Go, Kotlin and Swift today, wasm later | — | 11 Rust (20 with `fiat-all`) + 19 top-level Go binding tests, 34 with the `fiat` build tag (`patala-go/bindingtest`) + ✓ ran under Python 3.13 and Go 1.25 | executed, and now CI-enforced |
 | `patala-py` | the Python wheel over `patala-uniffi` (cdylib + generated `patala.py`) | — | 3 (namespace + re-export) + the CI `smoke-python` job | executed, and now CI-enforced |
-| `patala-ffi` | a plain `extern "C"` cdylib (JSON in/out, `uint64` handles) for the eleven languages UniFFI cannot serve — C, C++, Swift, Java, Node/Deno/Bun, Ruby, PHP, .NET, Elixir | — | 23 Rust (25 with `fiat-all`) + 55 checks driven through C by `ctest/smoke.c` | executed, and now CI-enforced |
-| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 15 (12 HTTP round-trips + 3 unit) | executed |
+| `patala-ffi` | a plain `extern "C"` cdylib (JSON in/out, `uint64` handles) for the eleven languages UniFFI cannot serve — C, C++, Swift, Java, Node/Deno/Bun, Ruby, PHP, .NET, Elixir | — | 26 Rust (28 with `fiat-all`) + 58 checks driven through C by `ctest/smoke.c` | executed, and now CI-enforced |
+| `patala-sidecar` | loopback HTTP over the core, token-gated, fail-closed | — | 17 (12 HTTP round-trips + 5 unit) | executed |
 
 One honest caveat on that table: **the sidecar's rail registry is still
 mock-only.** The server, its auth, its error mapping and all six endpoints
@@ -280,14 +282,14 @@ against a Go library in the same environment as a control:
 | JVM threads, before `dlopen` → after → after a round trip | **23 → 23 → 23** | — |
 | A Node `worker_threads` worker that entered the library | **exits 0 in ~33 ms** | never exits — killed at 15 s |
 | Node process threads across a round trip | **7 → 7** | 7 → 13 |
-| Release library, offline mock-only build | **844,656 bytes** | `libllmux.dylib` 12,787,504 |
+| Release library, offline mock-only build | **849,584 bytes** | `libllmux.dylib` 12,823,104 |
 
 So **Java and Kotlin default to in-process here**: `libjsig` is the siblings'
 whole argument for the sidecar, it is a flag on the *java launch command* that a
 library cannot add to a running process, and patala does not need it. And
 patala's **Node** package ships a working `callAsync`, which neither sibling
 could. `--features fiat-all` — twenty processor adapters, UniFFI, reqwest and
-TLS — brings the library to 6,330,544 bytes.
+TLS — brings the library to 6,350,144 bytes.
 
 The costs that *are* real are stated in every package rather than buried: a
 current-thread Tokio runtime per handle, so **calls on one handle serialise**;

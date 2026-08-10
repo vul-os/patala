@@ -22,13 +22,15 @@ Out of scope: vulnerabilities requiring an already-compromised host, and issues 
 
 ## Release artifacts: there are none
 
-patala **publishes no artifacts today**, so there is nothing here to checksum, sign or
-verify. Stated explicitly because "no signing" and "signing that was skipped" look the same
-from the outside, and only one of them is a finding:
+patala is **tagged** — `v0.1.1`, its first release — but it still **publishes no
+artifacts**, so there is nothing here to checksum, sign or verify. Stated explicitly
+because "no signing" and "signing that was skipped" look the same from the outside, and
+only one of them is a finding:
 
-- no release workflow (`.github/workflows/` contains `ci.yml` only) and no tags;
-- no crate is published to crates.io — `patala-py` and `patala-sidecar` set
-  `publish = false`, and nothing publishes the rest;
+- a tag exists, but **no release workflow does** — `.github/workflows/` contains `ci.yml`
+  only, so nothing is built, uploaded or attested when a tag is pushed;
+- no crate is published to crates.io — `patala-ffi`, `patala-py`, `patala-sidecar` and
+  `patala-uniffi` set `publish = false`, and nothing publishes the rest;
 - no container image, no npm package, no prebuilt binary, no install script;
 - `patala-go` is an in-repo Go module (`github.com/vul-os/patala/patala-go`). If it is ever
   consumed through the module proxy, its integrity comes from Go's own `go.sum` and the

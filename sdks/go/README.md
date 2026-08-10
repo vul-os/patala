@@ -26,7 +26,7 @@ sdks/go/examples/run.sh sidecar
 
 For most languages patala's in-process path is close to free: it is Rust, so
 there is no runtime in your process, no GC, no scheduler, no signal handlers,
-no fork hazard, and the mock-only C ABI is 844,656 bytes. Go does not get that
+no fork hazard, and the mock-only C ABI is 849,584 bytes. Go does not get that
 deal, because reaching a Rust library from Go means **cgo**, and cgo costs the
 things Go people chose Go for:
 

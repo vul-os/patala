@@ -6,7 +6,8 @@ generated wrapper, native types throughout.
 
 ## Dependencies
 
-patala is not on crates.io yet (`SECURITY.md`: no artifacts are published).
+patala is not on crates.io yet — v0.1.1 is tagged, but no workflow builds or
+publishes anything from a tag (`SECURITY.md`).
 Vendor by path or by git:
 
 ```toml

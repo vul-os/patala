@@ -120,7 +120,7 @@ server stack in its dependency tree is the thing itself, not a leak:
 ```text
 hyper v1.11.0
 ├── axum v0.7.9
-│   └── patala-sidecar v0.1.0
+│   └── patala-sidecar v0.1.1
 └── hyper-util v0.1.20
     └── axum v0.7.9 (*)
 ```
@@ -135,12 +135,14 @@ false is worse than one that is exactly true.
 Structure alone is not a gate — a crate can be added to `default-members` in a
 one-line diff that reviews cleanly. What actually holds the property:
 
-- **`make check` runs two passes, and both are gates.** `cargo test
-  --workspace` uses each crate's *default* feature set — and `patala-fiat`'s
-  is empty, so a plain `--workspace` run executes the currency table, the
-  registry and the `manual` rail and **none** of the twenty adapters. That was
-  hundreds of tests that existed and never ran. `make test-features` is the
-  fix, and it is part of `check`, not an optional extra:
+- **`make check` runs seven gates** — `fmt-check`, `lint`, `test`,
+  `test-features`, `doc`, `features` and `site-check` — and the two test passes
+  are both of them, not one. `cargo test --workspace` uses each crate's
+  *default* feature set, and `patala-fiat`'s is empty, so a plain `--workspace`
+  run executes the currency table, the registry and the `manual` rail and
+  **none** of the twenty adapters. That was hundreds of tests that existed and
+  never ran. `make test-features` is the fix, and it is part of `check`, not an
+  optional extra:
 
   ```make
   test:
@@ -148,6 +150,7 @@ one-line diff that reviews cleanly. What actually holds the property:
   test-features:
   	cargo test -p patala-fiat --all-features
   	cargo test -p patala-uniffi --features fiat-all
+  	cargo test -p patala-ffi --features fiat-all
   ```
 
 - **Clippy is run twice for the same reason.** `cargo clippy --workspace`
@@ -160,6 +163,17 @@ one-line diff that reviews cleanly. What actually holds the property:
   `patala-uniffi`'s `fiat-all` would compile fine and silently vanish from the Go
   binding's cdylib — present in Rust, absent in every other language, with
   nothing failing. That script fails the build instead.
+
+  **It also builds and lints all twenty processor features individually**, which
+  is new in 0.1.1 and is what makes the promise on this page true. Until then
+  **fourteen of the twenty single-processor builds did not compile at all**:
+  `src/httpshared.rs` gated itself on six feature names while fifteen adapters
+  called into it. `--all-features` and the empty default set both compiled, so
+  nothing in `make check` ever built the one-processor configuration this page
+  recommends, and the only workaround was `--all-features` — twenty processors
+  linked into a payments binary, the exact outcome the design exists to avoid.
+  The `features = ["stripe"]` example above happened to be one of the six that
+  worked.
 
 ## What this costs you
 

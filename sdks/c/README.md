@@ -50,8 +50,8 @@ example.
 
 **These are examples, not tests.** The test is
 [`patala-ffi/ctest/smoke.c`](../../patala-ffi/ctest/smoke.c): it `dlopen()`s
-the artifact, resolves all six symbols **by name**, runs 55 checks and then
-asserts that 55 checks *ran*. That is what catches a missing `#[no_mangle]`, a
+the artifact, resolves all six symbols **by name**, runs 58 checks and then
+asserts that 58 checks *ran*. That is what catches a missing `#[no_mangle]`, a
 renamed export or a header that has drifted from the library — a different job
 from showing someone how to call this. These examples link the library
 instead, because that is how a program with an installed library is actually
@@ -59,13 +59,13 @@ written.
 
 ## Real output
 
-macOS 15.7.3 (24G419), Apple silicon, Apple clang 17.0.0, patala 0.1.0,
-`libpatala_ffi.dylib` 844,656 bytes:
+macOS 15.7.3 (24G419), Apple silicon, Apple clang 17.0.0, patala 0.1.1,
+`libpatala_ffi.dylib` 849,584 bytes:
 
 ```
 ==> direct (in-process, C ABI)
-patala direct (C, in-process) — libpatala_ffi 0.1.0
-abi:       matches 0.1.0
+patala direct (C, in-process) — libpatala_ffi 0.1.1
+abi:       matches 0.1.1
 rail:      handle 1
 caps:      NonCustodialFinal / wallet address, signed final receipt
            holds_funds=false — patala itself never holds funds
@@ -159,10 +159,10 @@ are in the same position.
 
 | build | `libpatala_ffi.dylib` |
 |---|---|
-| default — mock rail only, fully offline | **844,656 bytes** |
-| `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,330,544 bytes |
+| default — mock rail only, fully offline | **849,584 bytes** |
+| `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,350,144 bytes |
 
-llmux's `libllmux.dylib` on this same machine is **12,787,504 bytes** (measured,
+llmux's `libllmux.dylib` on this same machine is **12,823,104 bytes** (measured,
 not quoted — llmux's own README carries a slightly older figure), and its
 linux/arm64 build is larger still. That is **15.1×** patala's, and it is a
 consequence of the language rather than of doing less: the mock rail here is
@@ -286,7 +286,7 @@ Built and executed **on this machine** while writing these examples:
 
 | target | status |
 |---|---|
-| darwin/arm64 | **built and run.** `libpatala_ffi.dylib`, 844,656 bytes; both examples above |
+| darwin/arm64 | **built and run.** `libpatala_ffi.dylib`, 849,584 bytes; both examples above |
 | linux/x86_64 | **not built here.** CI's `c abi` job builds the `.so` on `ubuntu-latest` and runs `make smoke-ffi` against it |
 | linux/arm64 | not built |
 | darwin/x86_64 | not built |

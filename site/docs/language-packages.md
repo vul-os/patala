@@ -40,6 +40,19 @@ generated UniFFI bindings over `patala-uniffi`, not C-ABI callers — see
 | [go](https://github.com/vul-os/patala/blob/main/sdks/go/README.md) | `sdks/go/examples/run.sh direct` | `sdks/go/examples/run.sh sidecar` |
 | [elixir](https://github.com/vul-os/patala/blob/main/sdks/elixir/README.md) | `cd sdks/elixir && mix run examples/direct_charge.exs` | `cd sdks/elixir && mix run examples/sidecar_charge.exs` |
 
+Three packages also ship a **counted assertion suite** — the per-SDK regression
+gate on the small amount of deciding each of them does in its own language,
+which no example covers:
+
+| Package | Command | Asserts |
+|---|---|---|
+| [node](https://github.com/vul-os/patala/blob/main/sdks/node/README.md) | `cd sdks/node && npm run checks` | 18 assertions on the `verify().valid` / `is_refusal` boundary narrowing, no I/O |
+| [deno](https://github.com/vul-os/patala/blob/main/sdks/deno/README.md) | `cd sdks/deno && deno task checks` | the same 18 |
+| [kotlin](https://github.com/vul-os/patala/blob/main/sdks/kotlin/README.md) | `sdks/kotlin/run-examples.sh checks` | 42, including that `PatalaSidecar` exposes no `isRefusal(String)` |
+
+Each asserts the number of assertions that **ran**, so a suite that quietly
+stops running half of itself fails rather than passing.
+
 ## Which mode each language should default to
 
 | Language | Default | Why |

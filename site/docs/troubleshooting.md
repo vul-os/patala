@@ -47,7 +47,8 @@ patala-fiat = { path = "../patala-fiat", features = ["stripe"] }
 currency table, the registry and the `manual` rail, and **none** of the twenty
 adapters. That was hundreds of tests that existed and never ran.
 
-Run the repo's actual gate, which is two passes:
+Run the repo's actual gate, which is seven — `fmt-check`, `lint`, `test`,
+`test-features`, `doc`, `features` and `site-check`:
 
 ```bash
 make check
@@ -58,7 +59,19 @@ If you only want the feature-gated half:
 ```bash
 make test-features   # cargo test -p patala-fiat --all-features
                      # cargo test -p patala-uniffi --features fiat-all
+                     # cargo test -p patala-ffi  --features fiat-all
 ```
+
+And if you want to check that **one** processor still builds alone, which is the
+configuration an operator actually ships:
+
+```bash
+cargo build -p patala-fiat --features yoco
+```
+
+That is a gate now (`make features`, i.e. `scripts/check-features.sh`), and it
+is new in 0.1.1 because until then fourteen of the twenty did not compile —
+`--all-features` and the empty default set both did, so nothing noticed.
 
 The same applies to clippy: `cargo clippy --workspace` lints each crate at its
 default features, which for `patala-fiat` means twenty adapters never linted.
@@ -349,11 +362,20 @@ verify. Pass the raw bytes you read off the request, before any decoding, and
 forward the headers and — for LNbits, which puts its secret in the URL — the
 query string too.
 
+**Through the sidecar, three headers are dropped before the rail sees them**:
+`authorization`, `proxy-authorization` and `cookie`, plus any header whose value
+is not valid UTF-8. Since 0.1.1. No scheme in this workspace reads any of those
+names, and the sidecar's own bearer token travels in `Authorization` — see
+[the sidecar](sidecar.md#three-headers-are-dropped-since-011). The body is still
+byte for byte.
+
 ### A webhook verified, with status `Unconfirmed`
 
 The delivery is genuine and says **nothing about money**. BTCPay, Coinbase
-Commerce, OpenNode, LNbits and Mollie all authenticate a notification that
-names an object and nothing else. Look up your stored receipt for
+Commerce, OpenNode and LNbits all authenticate a notification that names an
+object and nothing else. (Mollie does not belong in that list and never did: it
+re-fetches from the processor, as iyzico, mercadopago, payfast and paypal do,
+and returns a real settlement verdict.) Look up your stored receipt for
 `event.object_id` and call `verify` on it. Never treat `Unconfirmed` as
 payment — it is not `NotSettled` either, and reporting it as one would be a
 lie in the other direction.

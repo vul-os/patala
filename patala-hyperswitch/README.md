@@ -36,6 +36,13 @@ comments there for the full table). Nothing in this crate has a default or
 fallback base URL, key, or secret; a missing `base_url`/`api_key` is a hard
 `Err`, never a silent default.
 
+**`HyperswitchConfig` redacts its secrets when printed.** It holds an API key
+and a webhook secret, and until 0.1.1 it `derive`d `Debug` — against its own
+field documentation, which already claimed the key was never `Debug`-printed in
+full, and as the sole outlier among 21 configs in the workspace. The derive is
+gone; the hand-written `Debug` prints the base URL, the connector and the
+non-secret knobs, and redacts the two credentials.
+
 ## Choosing a processor is a config value, not a code path
 
 `HyperswitchConfig::connector: Option<String>` maps straight onto

@@ -96,7 +96,10 @@ already knows is wrong.
 
 `patala-py` and `patala-ffi` re-declare the same names as pure forwarders;
 `scripts/check-features.sh` fails the build if any of them drifts, and if
-`fiat-all` misses a processor that exists in `patala-fiat/src/`.
+`fiat-all` misses a processor that exists in `patala-fiat/src/`. Since 0.1.1 it
+additionally builds and lints each of the twenty features **alone** — fourteen
+of them did not compile, which pushed operators to `fiat-all` and linked every
+processor into their binary.
 
 ## Generating bindings
 

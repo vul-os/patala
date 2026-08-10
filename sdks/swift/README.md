@@ -26,7 +26,7 @@ Everything below was executed on this machine, not inferred:
 | macOS | **15.7.3** (build 24G419), Apple silicon |
 | Xcode | **not installed** — Command Line Tools only. See [Checks, not tests](#checks-not-tests) |
 | Package | SwiftPM, tools-version 5.9, platform floor macOS 13 |
-| patala | 0.1.0; `libpatala_ffi.dylib` **844,656 bytes** |
+| patala | 0.1.1; `libpatala_ffi.dylib` **849,584 bytes** |
 
 Not tested: Linux, iOS, any Intel Mac, any other Swift version. See
 [Platform reality](#platform-reality) — the honest answer for iOS is not "it
@@ -51,9 +51,9 @@ Real output:
 
 ```
 ==> direct (in-process, C ABI via dlopen)
-patala direct (Swift, in-process) — libpatala_ffi 0.1.0
+patala direct (Swift, in-process) — libpatala_ffi 0.1.1
 library:   /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
-abi:       matches 0.1.0
+abi:       matches 0.1.1
 caps:      NonCustodialFinal / wallet address, signed final receipt
            holds_funds=false reversible=false currencies=["USDC", "USD"]
 caveat:    patala cannot tell whether this address belongs to an exchange. A struct...
@@ -91,7 +91,7 @@ OK — offline, MockRail only, no value moved. Child reaped on exit.
 import Patala
 
 let library = try Patala.Library.shared()
-try library.requireABI("0.1.0")                 // throws on a stale library
+try library.requireABI("0.1.1")                 // throws on a stale library
 
 let rail = try Rail(configJSON: #"{"rail":"mock","currencies":["USDC"]}"#)
 let receipt = try rail.charge(payRequest)        // JSON in, JSON out
@@ -217,8 +217,8 @@ same machine, same JVM (done as part of patala's Java/Kotlin SDK work):
 
 | | HotSpot signal handlers replaced | handler flags altered | library |
 |---|---|---|---|
-| **patala** | **0** | **0** | 844,656 bytes |
-| llmux | 5 | 3 | 12,787,504 bytes |
+| **patala** | **0** | **0** | 849,584 bytes |
+| llmux | 5 | 3 | 12,823,104 bytes |
 
 The JVM is the harshest case — it installs handlers for `SIGSEGV`, `SIGBUS`,
 `SIGFPE` and more and depends on them — so zero there is the strongest form of
@@ -286,7 +286,7 @@ every path.
 
 | target | status |
 |---|---|
-| macOS 15 / arm64 | **built and run** — both examples and 22/22 checks, against an 844,656-byte `libpatala_ffi.dylib` |
+| macOS 15 / arm64 | **built and run** — both examples and 22/22 checks, against an 849,584-byte `libpatala_ffi.dylib` |
 | macOS / x86_64 | not built |
 | Linux | **not built.** The package has `#if canImport(Darwin)` fallbacks to `Glibc` and no other platform code, but it has not been compiled there. CI builds the `.so` for the C smoke test, not for this |
 | **iOS / iPadOS** | **not built, and do not assume it works.** Direct mode `dlopen`s a `.dylib` you built yourself, which is not how third-party code ships on iOS; and the sidecar spawns a child process, which iOS does not permit at all. The realistic shapes are an `.xcframework` with a *static* patala and UniFFI-generated Swift, or an app that talks to a `patala-sidecar` on a server it trusts. The UniFFI-generated Swift half of the first one now exists — [`uniffi/`](uniffi/), built and run on macOS — but no `.xcframework` and no iOS build do |

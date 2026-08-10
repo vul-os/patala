@@ -115,9 +115,9 @@ rail, which answers in 0.44 ms.
 
 | Library | Bytes |
 |---|---|
-| `libpatala_ffi.dylib`, default — mock rail only, fully offline | **844,656** |
-| `libpatala_ffi.dylib`, `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,330,544 |
-| llmux's `libllmux.dylib`, for comparison | 12,787,504 |
+| `libpatala_ffi.dylib`, default — mock rail only, fully offline | **849,584** |
+| `libpatala_ffi.dylib`, `--features fiat-all` — 20 processor adapters, UniFFI, reqwest, TLS | 6,350,144 |
+| llmux's `libllmux.dylib`, for comparison | 12,823,104 |
 
 **15.1× smaller** on the default build, and it is a consequence of the language
 rather than of doing less: the offline mock rail here is the same `MockRail`
@@ -150,7 +150,7 @@ UniFFI's **Kotlin** backend was blocked until commit `79e5002`: `patala_core::Er
 had two variants with a field named `message`, and UniFFI renders a flat error
 enum as a subclass of `kotlin.Exception`, which already has an open `message`
 property — the field was emitted twice and `kotlinc` gave 12 errors. Renaming
-the field to `detail` was the honest fix; patala has never been tagged, so this
+the field to `detail` was the honest fix; patala had not been tagged then, so it
 was the cheapest moment in its life to change a public field name. **That
 unblocked the Kotlin package, which is now the generated bindings themselves**
 — the old Java-FFM wrapper is deleted, not deprecated — and

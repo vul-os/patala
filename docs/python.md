@@ -132,7 +132,12 @@ Details that bite:
   Anything else raises `InvalidRequest`; there is no silent default.
   `keypair_seed` is `None` for a verify-only rail, or exactly 32 raw Ed25519
   seed bytes for one that can also `charge()`. Constructing the rail touches
-  no network.
+  no network. Since 0.1.1 the bytes you pass are **zeroised** — both the
+  `Vec<u8>` UniFFI allocates for the argument and the fixed-size copy taken from
+  it, including when the length is wrong. Python's own `bytes` object is
+  immutable and is not yours or patala's to wipe, so a seed you hold in Python
+  still lives until it is collected; read it from the environment or a file and
+  drop the reference.
 - **`new_stellar`** — `network` is `"testnet"`, which **requires**
   `usdc_issuer` because Stellar's testnet USDC issuer rotates and has no fixed
   default, or `"public"`/`"mainnet"`, which ignores `usdc_issuer` and uses the

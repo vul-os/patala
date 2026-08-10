@@ -14,7 +14,7 @@ identical in both; only the transport differs.
 | where a signing key lives | in this process, alongside your app | in the sidecar's process, and nowhere else |
 | blocks the calling thread | **yes** — `bun:ffi` has no async mode | no |
 | survives a `fork()` | the library yes; **open the handle in the child** — see below | yes |
-| extra bytes on disk | **844,656 bytes** | the binary you already have |
+| extra bytes on disk | **849,584 bytes** | the binary you already have |
 | rails reachable today | every rail the library was built with | **`mock` only** — the registry is unwritten |
 | platforms | **darwin/arm64 built and executed here** — see below | wherever the binary builds |
 
@@ -51,11 +51,11 @@ bun run examples/direct.ts
 ```
 bun         1.3.14 on darwin/arm64
 library     /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
-bytes       844656
-abi         0.1.0
+bytes       849584
+abi         0.1.1
 threads     8 before dlopen -> 8 after
 
-version     patala: ABI version mismatch — this library is 0.1.0, the caller expected "0.0.0-not-this-one". A stale libpatala_ffi is earlier on the load path than the one you installed.
+version     patala: ABI version mismatch — this library is 0.1.1, the caller expected "0.0.0-not-this-one". A stale libpatala_ffi is earlier on the load path than the one you installed.
 
 rail        handle 1, id mock
 caps        NonCustodialFinal, reversible false, holds_funds false
@@ -258,6 +258,31 @@ fetches nothing, so the listener being up is the whole story.
   (`kind: "rail_error"`), an operational failure.
 - `404` means that `rail_id` is not registered. Today only `"mock"` is.
 
+### `valid` is the JSON boolean `true`, or it is not valid
+
+Since 0.1.1 this SDK **narrows the two documents you make a decision on** at the
+boundary, rather than `as`-casting them into their interfaces.
+
+A cast is a compile-time assertion about a value that arrived at runtime over a
+socket or across a C ABI, and `JSON.parse` hands back whatever shape it was
+given. An absent `valid` is `undefined`; a `valid` that some proxy stringified
+is `"false"` — which is **truthy**. `if (result.valid)` then grants entitlement
+against a receipt no rail confirmed.
+
+Both directions now fail closed:
+
+| field | value you get |
+|---|---|
+| `verify().valid` | `true` **only** for the JSON boolean `true` |
+| `is_refusal` | `false` **only** for the JSON boolean `false` |
+| `human_must_confirm` | `false` **only** for the JSON boolean `false` |
+
+"I could not read the verdict" and "do not send" are the same answer.
+
+Unlike [node](../node) and [deno](../deno), **this package has no `checks.ts`**:
+`narrowVerify` and `narrowVerdict` here are covered only by the two examples.
+Those two carry 18 counted assertions each over exactly this narrowing.
+
 ---
 
 ## The costs of direct mode
@@ -278,9 +303,9 @@ Go-runtime caveats in llmux's and openrate's SDK READMEs are true there and
    handles run concurrently. Open one handle per rail, and more than one if you
    want parallelism on the same rail.
 
-3. **The library is 844,656 bytes** in the default mock-only build — measured,
+3. **The library is 849,584 bytes** in the default mock-only build — measured,
    release, darwin/arm64. A build with all twenty fiat adapters, UniFFI, reqwest
-   and TLS is 6,330,544 bytes.
+   and TLS is 6,350,144 bytes.
 
 4. **Platforms.**
 

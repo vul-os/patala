@@ -13,7 +13,7 @@ Two modes. The JSON is identical in both; only the transport differs.
 | where a signing key lives | in the sidecar's process, and nowhere else | in this process, alongside your app |
 | blocks the event loop | no | only if you want it to — see below |
 | survives a `fork()` | yes | the library yes; **open the handle in the child** — see below |
-| extra bytes on disk | the binary you already have | **844,656 bytes** |
+| extra bytes on disk | the binary you already have | **849,584 bytes** |
 | rails reachable today | **`mock` only** — the registry is unwritten | every rail the library was built with |
 | platforms | wherever the binary builds | **darwin/arm64 built and executed here** — see below |
 
@@ -53,11 +53,11 @@ npm run example:direct
 ```
 node        v24.12.0 on darwin/arm64
 library     /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
-bytes       844656
-abi         0.1.0
+bytes       849584
+abi         0.1.1
 threads     7 before dlopen -> 7 after
 
-version     patala: ABI version mismatch — this library is 0.1.0, the caller expected "0.0.0-not-this-one". A stale libpatala_ffi is earlier on the load path than the one you installed.
+version     patala: ABI version mismatch — this library is 0.1.1, the caller expected "0.0.0-not-this-one". A stale libpatala_ffi is earlier on the load path than the one you installed.
 
 rail        handle 1, id mock
 caps        NonCustodialFinal, reversible false, holds_funds false
@@ -197,7 +197,7 @@ if (!isMainThread) {
 }
 ```
 
-Against `libpatala_ffi.dylib` it prints `worker said: 0.1.0` then
+Against `libpatala_ffi.dylib` it prints `worker said: 0.1.1` then
 `worker exited with 0`. Against `libopenrate-darwin-arm64.dylib`, with only the
 symbol name changed, it prints the version and then hangs — in the run recorded
 here, hard enough that a 5 s `setTimeout` racing the `exit` event never fired
@@ -285,6 +285,27 @@ the listener being up is the whole story.
   from `502` (`kind: "rail_error"`), which is an operational failure.
 - `404` means that `rail_id` is not registered. Today only `"mock"` is.
 
+### `valid` is the JSON boolean `true`, or it is not valid
+
+Since 0.1.1 this SDK **narrows the two documents you make a decision on** at the
+boundary, rather than `as`-casting them into their interfaces.
+
+A cast is a compile-time assertion about a value that arrived at runtime over a
+socket or across a C ABI, and `JSON.parse` hands back whatever shape it was
+given. An absent `valid` is `undefined`; a `valid` that some proxy stringified
+is `"false"` — which is **truthy**. `if (result.valid)` then grants entitlement
+against a receipt no rail confirmed.
+
+Both directions now fail closed:
+
+| field | value you get |
+|---|---|
+| `verify().valid` | `true` **only** for the JSON boolean `true` |
+| `is_refusal` | `false` **only** for the JSON boolean `false` |
+| `human_must_confirm` | `false` **only** for the JSON boolean `false` |
+
+"I could not read the verdict" and "do not send" are the same answer.
+
 ---
 
 ## The costs of direct mode
@@ -307,9 +328,9 @@ Go-runtime caveats in llmux's and openrate's SDK READMEs are true there and
    handles run concurrently. Open one handle per rail, and more than one if you
    want parallelism on the same rail.
 
-3. **The library is 844,656 bytes** in the default mock-only build — measured,
+3. **The library is 849,584 bytes** in the default mock-only build — measured,
    release, darwin/arm64. A build with all twenty fiat adapters, UniFFI, reqwest
-   and TLS is 6,330,544 bytes.
+   and TLS is 6,350,144 bytes.
 
 4. **Platforms.**
 
@@ -367,6 +388,7 @@ sdks/node/
   types.ts              the patala-core JSON shapes, shared by both transports
   direct.ts             the C ABI binding: Rail
   sidecar.ts            spawn, token, /healthz wait, the five endpoints
+  checks.ts             counted assertions over the boundary narrowing
   examples/direct.ts    MockRail in-process, end to end
   examples/sidecar.ts   MockRail over loopback, end to end
 ```
@@ -378,3 +400,13 @@ npm run typecheck:examples   # tsc over examples/ (ESM, its own tsconfig)
 npm run example:direct
 npm run example:sidecar
 ```
+
+```
+npm run checks               # 18 counted assertions over the narrowing, no I/O
+```
+
+`checks.ts` is the only per-SDK regression gate on the narrowing above. It
+touches no network, no child process and no shared library, and it asserts the
+number of assertions that **ran**, so a suite that quietly stops running half of
+itself fails instead of passing.
+

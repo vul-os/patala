@@ -57,7 +57,7 @@ in each case against a Go library in the *same* environment as a control:
 | JVM threads, before `dlopen` → after → after a round trip | **23 → 23 → 23** | — |
 | A Node `worker_threads` worker that entered the library | **exits 0 in ~33 ms** | never exits — killed at 15 s |
 | Node process threads across a round trip | **7 → 7** | 7 → 13 |
-| Release library, mock-only build | **844,656 bytes** | `libllmux.dylib` 12,787,504 |
+| Release library, mock-only build | **849,584 bytes** | `libllmux.dylib` 12,823,104 |
 
 The consequences are concrete rather than rhetorical: Java and Kotlin default to
 in-process here where the siblings default to the sidecar, and patala's Node

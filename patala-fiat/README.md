@@ -166,7 +166,9 @@ What `validate_destination` *does* still decide, offline, in
 `tests/webhook_coverage.rs` enforces this across every compiled-in adapter: a
 new adapter that inherits the trait default fails, one that ever reports
 `StructurallyValid` fails, and `scripts/check-features.sh` fails the build if
-an adapter directory exists that its `dest_shape()` table does not classify.
+an adapter directory exists that its `dest_shape()` table does not classify —
+and, since 0.1.1, if any single-processor feature stops compiling or linting on
+its own.
 
 ### Giving a customer their money back
 
@@ -207,14 +209,30 @@ Two things this deliberately does not do:
   processor sent, so a body that has been through a JSON round-trip will not
   verify. Pass the raw bytes.
 - **It never claims settlement it did not establish.** BTCPay, Coinbase
-  Commerce, OpenNode, LNbits and Mollie authenticate a notification that names
-  an object and nothing else; those report `Unconfirmed`, not `NotSettled`.
+  Commerce, OpenNode and LNbits authenticate a notification that names an object
+  and nothing else; those four report `Unconfirmed`, not `NotSettled`. Mollie is
+  **not** one of them — like iyzico, mercadopago, payfast and paypal it
+  re-fetches and returns a real settlement verdict.
+- **An unauthenticated delivery is an `Err`**, never a `WebhookEvent` with a
+  negative status. 0.1.1 made iyzico obey that: its `retrieveCheckoutForm` round
+  trip *is* the signature check, and the error was discarded, so an anonymous
+  `POST token=anything` produced `Ok(NotSettled)`.
 
 Replay suppression stays yours, keyed on `(rail_id, event_id)` —
 `event.event_id` is non-empty and stable across redelivery of the same event.
+Since 0.1.1 that is enforced at the source: **eight rails refuse a delivery with
+no processor-side id** (payu, payfast, midtrans, razorpay, adyen and paypal on
+an empty one; paystack and flutterwave on `"0"`), because the id used to be
+checked only inside the *settled* arm. Three rails also stopped reading an
+absent settlement-status field as settled.
 
 `tests/webhook_coverage.rs` asserts every compiled-in adapter implements this
-and fails closed, and pins each scheme's documented header names.
+and fails closed, and pins each scheme's documented header names. Since 0.1.1 it
+also tests the half that **accepts**: it signs one genuine delivery per rail and
+requires it to verify, then mutates that delivery twice — id field removed,
+settlement-status field removed — and requires both to be refused. A rail that
+cannot be given a signable offline delivery must name itself in `REFETCH_RAILS`;
+it cannot be quietly absent from both.
 
 ## `manual`
 

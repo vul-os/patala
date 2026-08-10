@@ -8,7 +8,7 @@ trait.
 
 ```toml
 [dependencies]
-# patala is not on crates.io — nothing in this repo is published yet
+# patala is not on crates.io — v0.1.1 is tagged, but nothing is published
 # (`SECURITY.md`). Vendor it by path, as this directory's own Cargo.toml does,
 # or by git URL. Swap in a version when it publishes; nothing else changes.
 patala-core = { path = "../../patala-core" }
@@ -46,7 +46,7 @@ Offline, `MockRail` only, no credentials, no network:
 ```
 
 Real output, this machine — macOS 15.7.3 (24G419), Apple silicon, rustc
-1.97.1, cargo 1.97.1, patala 0.1.0:
+1.97.1, cargo 1.97.1, patala 0.1.1:
 
 ```
 ==> direct (in-process, no FFI)
@@ -165,7 +165,7 @@ containing nothing but `#[tokio::main] async fn main() { println!("baseline"); }
 and subtract.
 
 For contrast, the same round trip from C, C++ or Swift ships and locates
-`libpatala_ffi.dylib` — **844,656 bytes** as a separate file, plus a version
+`libpatala_ffi.dylib` — **849,584 bytes** as a separate file, plus a version
 probe, plus `patala_free` discipline on every returned string. Rust pays none
 of that. It is not a tie that Rust wins on style; the artifact is not there.
 
@@ -184,10 +184,10 @@ handlers for `SIGSEGV`, `SIGBUS` and `SIGFPE` and depends on them:
 
 | | HotSpot signal handlers replaced | handler flags altered | shared library |
 |---|---|---|---|
-| **patala** | **0** | **0** | 844,656 bytes |
-| llmux | 5 | 3 | 12,787,504 bytes |
+| **patala** | **0** | **0** | 849,584 bytes |
+| llmux | 5 | 3 | 12,823,104 bytes |
 
-Rust does not even pay the 844,656 bytes: in direct mode there is no shared
+Rust does not even pay the 849,584 bytes: in direct mode there is no shared
 library in the picture at all.
 
 ## Sidecar

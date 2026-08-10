@@ -294,7 +294,7 @@ Stated precisely, because the interesting claim here is a negative one.
   count across `dlopen` and across a round trip:
   `scripts/ffi-ctest.sh` → `ok   dlopen started no threads (no runtime in the
   host process)` and `ok   a full charge/verify round trip started no threads
-  either`, part of a run of **55 checks, 0 failed**.
+  either`, part of a run of **58 checks, 0 failed**.
 
 **Not measured:** any of this under **CoreCLR**. The .NET examples here ran
 clean, repeatedly, on darwin/arm64 — that is evidence, not proof.
@@ -340,7 +340,7 @@ The **shared library**, direct path only:
 
 | target | status |
 |---|---|
-| darwin/arm64 | **built and executed.** 844,656 bytes, `--release`. Everything on this page ran on it. |
+| darwin/arm64 | **built and executed.** 849,584 bytes, `--release`. Everything on this page ran on it. |
 | linux/amd64 | the `.so` **is** built and the C smoke test **does** run against it, in CI's `c abi` job (`make smoke-ffi` on `ubuntu-latest`, twice — default and `--features fiat-all`). **No .NET has ever been run there.** |
 | darwin/amd64 | **not built.** |
 | linux/arm64 | **not built.** |
@@ -358,7 +358,7 @@ says all of this in its error message rather than throwing a bare
 ## Toolchain this was built and run on
 
 - .NET SDK **10.0.302**, targeting **net8.0**, darwin/arm64
-- Rust **1.97.1**, cargo **1.97.1**, patala **0.1.0**
+- Rust **1.97.1**, cargo **1.97.1**, patala **0.1.1**
 
 The examples project sets `RollForward=LatestMajor` so a net8.0 build starts on
 a machine that only has the .NET 10 runtime, which is the case here.
@@ -385,13 +385,13 @@ sdks/dotnet/
 
 ```
 run-examples: dotnet 10.0.302, cargo 1.97.1 (c980f4866 2026-06-30)
-run-examples: library 844656 bytes
+run-examples: library 849584 bytes
 run-examples: built
 
 ================ DirectCharge (in-process, C ABI) ================
 library: /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
-         844656 bytes
-abi version: 0.1.0 (compared by the library, not by us)
+         849584 bytes
+abi version: 0.1.1 (compared by the library, not by us)
 id:           {"rail_id":"mock"}
 capabilities: {"class":"NonCustodialFinal","reversible":false,"requires_kyc":false,"holds_funds":false,"currencies":["USDC"],"settlement":"Instant","atomic_multi_party":false}
 

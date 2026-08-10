@@ -322,6 +322,24 @@ Rules:
    event — a caller cannot suppress a duplicate it cannot name. Replay-dedup
    itself stays the CALLER's job, keyed on `(rail_id, event_id)`, exactly as
    cackle's `HandleWebhook`/`SeenStore` sits above `Provider.Webhook`.
+
+   **Check it BEFORE you match on status, not inside the settled arm.** That is
+   the exact shape of a defect found in eight rails in 0.1.1: the id was
+   validated only where settlement was being reported, so a correctly signed
+   *non-settling* redelivery arrived with an empty `event_id` — or `"0"`, for
+   two processors that spell absence that way — and the caller had nothing to
+   suppress it by. Refuse the delivery.
+
+   For the same reason, **never treat an absent settlement-status field as
+   settled.** Three rails did; a processor changing its payload shape would have
+   read as paid.
+
+   And if your rail authenticates by **re-fetching** rather than by verifying a
+   signature, the re-fetch *is* the signature check, so propagate its verdict —
+   do not `.ok()` it away. iyzico did, and an anonymous `POST token=anything`
+   became `Ok(NotSettled)`: no money could be fabricated, but that verdict drives
+   a consumer's cancel-order and release-inventory paths. An unauthenticated
+   delivery is an `Err`, never a `WebhookEvent` with a negative status.
 5. If your processor has no push delivery at all, **leave the trait default**
    (`Err(Error::Unsupported("verify_webhook"))`) — see `manual.rs`. Do not
    write a stub that appears to work.
@@ -330,9 +348,15 @@ Add your adapter to `tests/webhook_coverage.rs`'s `adapters()` list, naming
 the headers your scheme documents. That file asserts, for every compiled-in
 adapter, that `verify_webhook` is implemented (not the trait default), that a
 forged delivery is rejected, and that the header names you listed are the ones
-your rail actually reads. `./scripts/check-features.sh` fails the build if a
-`src/<provider>/` directory exists with no entry there, so a new adapter
-cannot silently under-run the harness.
+your rail actually reads. It also tests the **accepting** half: one genuine
+signed delivery per rail must verify, and two mutations of it — id field
+removed, settlement-status field removed — must both be refused. If your rail
+cannot be handed a signable offline delivery because it re-fetches from the
+processor, name it in `REFETCH_RAILS`; a rail cannot be absent from both.
+`./scripts/check-features.sh` fails the build if a `src/<provider>/` directory
+exists with no entry there, so a new adapter cannot silently under-run the
+harness, and it builds and lints your feature **on its own** — see the checklist
+item on isolated builds.
 
 ## 7. `refund()` — almost always NEW code, not a port
 

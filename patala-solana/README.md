@@ -87,6 +87,11 @@ validator.
 | `NotAWallet` | A real 32-byte account nobody can be paid at: the System Program, SPL Token / Token-2022, the ATA program, Memo, Compute Budget, Stake, Vote, the Rent/Clock sysvars, the incinerator, or the USDC/wSOL **mints** themselves — plus anything **off the ed25519 curve**, which is a program-derived address. That last one catches an associated token account, and matters: `charge` derives the recipient's token account *from their wallet address*, so passing an ATA builds a transfer against the token account of a token account. |
 | `StructurallyValid` | Every offline check passed. **Not** "valid" and **not** "safe" — see below. |
 
+**Key material is zeroised on the way in**, since 0.1.1: the keypair file's
+contents, the decoded byte vector, the base58 text and the `Vec<u8>` UniFFI
+allocates are each wiped once consumed, on the error paths too. Before that only
+`SigningKey`'s own copy was wiped and every intermediate was dropped intact.
+
 A pasted `S…` seed is reported as a **private key disclosure**, not as an
 invalid address: the verdict says a key was leaked and what to do about it, and
 deliberately never repeats the value (a verdict is shown to a person and very

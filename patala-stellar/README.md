@@ -61,6 +61,13 @@ so there is no identity → wallet mapping table, preserving the property
 seed) via `keys::Keypair::from_env`; it is never logged, never serialized,
 never written anywhere by this crate.
 
+**Every copy on the way in is zeroised**, since 0.1.1. `SigningKey` already
+wiped the seed it kept, but the intermediates did not: the file contents, the
+decoded vector, the StrKey text, the `Vec<u8>` UniFFI allocates for a
+`keypair_seed` argument were all simply dropped, leaving the material in freed
+heap. `keys.rs` now zeroises each one as soon as it has been consumed,
+including on the error paths.
+
 ## Money
 
 USDC on Stellar has **7 decimals** (`tx::USDC_DECIMALS`) — classic Stellar

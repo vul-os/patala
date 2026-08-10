@@ -46,7 +46,7 @@ sdks/java/signal-probe.sh --checkjni   # HotSpot's own audit of it
 sdks/java/signal-probe.sh --jsig       # again, with libjsig preloaded
 ```
 
-On **OpenJDK 26.0.2 (Homebrew), darwin/arm64, patala 0.1.0**, against
+On **OpenJDK 26.0.2 (Homebrew), darwin/arm64, patala 0.1.1**, against
 `target/release/libpatala_ffi.dylib`:
 
 ```
@@ -308,6 +308,18 @@ The two answers that look like failures and are **not** exceptions:
   `StructurallyValid` — patala does not detect exchange-owned addresses and
   will not guess.
 
+**Branch with a real parser, never with `Json.field`.** This SDK deliberately
+has no JSON dependency, so `Json.java` is a minimal writer plus a substring
+scan. Since 0.1.1 its `field()` is documented as being **for printing, and only
+for printing** — never branch on what it returns. The Kotlin sidecar wrapper had
+a helper built on exactly that scan, and because the scan did not skip
+whitespace after the colon, a verdict reformatted anywhere in transit read as
+`" true"` and a `Malformed` verdict was reported as *not* a refusal, in the
+direction that sends money. That helper was deleted rather than repaired.
+`field()` now skips whitespace around the colon, which makes it a better
+printer, not a parser. Hand the response to Jackson, `javax.json`, or whatever
+your application already has.
+
 ### The default registry is mock-only
 
 `patala-sidecar`'s `default_registry()` registers exactly one rail, `"mock"`.
@@ -362,7 +374,7 @@ The **shared library**, direct path only:
 
 | target | status |
 |---|---|
-| darwin/arm64 | **built and executed.** 844,656 bytes, `--release`. Everything on this page ran on it. |
+| darwin/arm64 | **built and executed.** 849,584 bytes, `--release`. Everything on this page ran on it. |
 | linux/amd64 | the `.so` **is** built and the C smoke test **does** run against it, in CI's `c abi` job (`make smoke-ffi` on `ubuntu-latest`, twice — default and `--features fiat-all`). **No Java has ever been run there.** |
 | darwin/amd64 | **not built.** |
 | linux/arm64 | **not built.** |
@@ -375,7 +387,7 @@ cross-compile script in this repo to point you at, and pretending otherwise
 would be worse than a short table. `PatalaDirect.findLibrary()` says so in its
 error message rather than throwing a bare loader error.
 
-For scale: 844,656 bytes against llmux's `libllmux.dylib` at 12,787,504 bytes,
+For scale: 849,584 bytes against llmux's `libllmux.dylib` at 12,823,104 bytes,
 measured on this machine on the same day.
 
 The **sidecar** has no such matrix — it is an ordinary Rust binary and
@@ -388,7 +400,7 @@ included.
   so both scripts fall back to `$JAVA_HOME/bin` — a JDK you can only reach
   through `JAVA_HOME` is not "no JDK".
 - Maven **3.9.16** (for `pom.xml`; `run-examples.sh` uses plain `javac`)
-- Rust **1.97.1**, cargo **1.97.1**, patala **0.1.0**
+- Rust **1.97.1**, cargo **1.97.1**, patala **0.1.1**
 
 `mvn -o clean compile` was run: it produces class-file major 55 (Java 11) for
 `Patala` and major 66 (Java 22) for `PatalaDirect`, from the one source tree.
@@ -400,7 +412,7 @@ sdks/java/
   src/main/java/org/vulos/patala/Patala.java          sidecar (Java 11+)
   src/main/java/org/vulos/patala/PatalaDirect.java    direct, FFM (Java 22+)
   src/main/java/org/vulos/patala/PatalaException.java
-  src/main/java/org/vulos/patala/Json.java            the only JSON this SDK writes
+  src/main/java/org/vulos/patala/Json.java            the only JSON this SDK writes — for PRINTING only
   examples/DirectCharge.java     runnable — offline, MockRail
   examples/SidecarCharge.java    runnable — loopback only, MockRail
   tools/SignalHandlerProbe.java  the evidence for this README
@@ -415,14 +427,14 @@ sdks/java/
 
 ```
 run-examples: JDK 26 (openjdk version "26.0.2" 2026-07-21)
-run-examples: library 844656 bytes at /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
+run-examples: library 849584 bytes at /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
 run-examples: compiled
 
 ================ DirectCharge (in-process, C ABI) ================
 library: /Users/pc/code/vulos/patala/target/release/libpatala_ffi.dylib
-         844656 bytes
-abi version: 0.1.0
-abi check against 0.1.0: ok
+         849584 bytes
+abi version: 0.1.1
+abi check against 0.1.1: ok
 id:           {"rail_id":"mock"}
 capabilities: {"class":"NonCustodialFinal","reversible":false,"requires_kyc":false,"holds_funds":false,"currencies":["USDC"],"settlement":"Instant","atomic_multi_party":false}
 

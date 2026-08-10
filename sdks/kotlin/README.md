@@ -194,7 +194,7 @@ everything here compiles at `-jvm-target 11` and runs on **Java 11+**.
 
 ---
 
-## Sidecar — for key isolation, and unchanged
+## Sidecar — for key isolation
 
 ```kotlin
 PatalaSidecar().use { patala ->
@@ -207,8 +207,40 @@ This path is deliberately **not** regenerated. An HTTP boundary carries JSON;
 that is what it is. What changed is one line: you build the same typed
 `PayRequest` the direct path takes and call `.toJson()` on it at the wire
 boundary, instead of assembling a document by hand. Responses are still
-strings, still read with `Json.field`, still going through
-[`sdks/java`](../java)'s HTTP client — one client, not two.
+strings, still going through [`sdks/java`](../java)'s HTTP client — one client,
+not two.
+
+### Breaking in 0.1.1: `PatalaSidecar.isRefusal(String)` is gone
+
+It was **deleted, not repaired**, and if you called it you must replace it with
+a real parse.
+
+```kotlin
+val verdict = mapper.readTree(patala.validateDestination(dest))
+if (verdict.path("is_refusal").asBoolean(true)) return   // default: refuse
+```
+
+The old helper was `Json.field(verdictJson, "is_refusal") == "true"`, and
+`Json.field` is a **substring scan, not a parser**: it did not skip whitespace
+after the colon. A verdict reformatted anywhere in transit — by
+`System.Text.Json`, by a proxy, by anything that pretty-prints — read as
+`" true"`, so `isRefusal` returned **`false` for a `Malformed` verdict**. That
+is failing open on the one question in this API where failing open sends the
+payout. Two lines away, `isValid` used the same shape and failed *closed*: the
+polarity was simply inverted.
+
+A better hand-rolled scan is not the fix, which is why the function is gone
+rather than corrected. patala computes `is_refusal` **once**, in Rust, in
+`DestinationVerdict::is_refusal()` from an exhaustive match, and puts it on the
+wire precisely so that no binding has to re-derive it. The direct path had
+already deleted the identical function as a defect, and the Java sidecar client
+this class wraps never had one — the sidecar path was the one that never got
+migrated. `checks/Checks.kt` now asserts its absence by reflection, so it
+cannot come back.
+
+**`Json.field` is for printing, and only for printing.** Never branch on what
+it returns. It still skips whitespace around the colon now, but that makes it a
+better *printer*, not a parser.
 
 `use {}` stops the child process on every path out. Runs on **Java 11+** with
 no native library, no `--enable-native-access` and no platform matrix —
@@ -358,10 +390,18 @@ patala Kotlin checks (generated UniFFI bindings)
   ok   a rail that cannot check answers UNKNOWN
   ok   UNKNOWN is not a refusal — it needs a human
   ok   UNKNOWN still requires a human
+  ok   PatalaSidecar exposes no isRefusal(String) — a JSON scan must not decide whether to send money (found: [])
+  ok   compact: status
+  ok   compact: is_refusal
+  ok   a space after the colon: status
+  ok   a space after the colon: is_refusal
+  ok   pretty-printed over newlines: is_refusal
+  ok   a space BEFORE the colon too: is_refusal
+  ok   an absent key is null
   ok   payRequest refuses a negative amount rather than wrapping it
   ok   use-after-close is an error, not a crash
 
-34 checks ran, 0 failed (expected 34)
+42 checks ran, 0 failed (expected 42)
 PASS
 ```
 
@@ -376,7 +416,7 @@ Deleting `payRequest`'s non-negative guard — the exact bug that would send
 ```
   FAIL payRequest refuses a negative amount rather than wrapping it
 
-34 checks ran, 1 failed (expected 34)
+42 checks ran, 1 failed (expected 42)
 FAIL: 1 check(s) failed
 ```
 
@@ -404,7 +444,7 @@ has no matrix — it is an ordinary Rust binary.
   and macOS's `/usr/bin/java` is a *stub* that exists and fails, so
   [`lib.sh`](lib.sh) runs each candidate JDK before believing it.
 - Kotlin **2.4.10** (`kotlinc-jvm`), `-jvm-target 11`
-- Rust **1.97.1**, patala **0.1.0**
+- Rust **1.97.1**, patala **0.1.1**
 - uniffi **0.29.5**, JNA **5.14.0** — both now real dependencies of this SDK,
   not probe-only
 
@@ -422,7 +462,7 @@ sdks/kotlin/
       Sidecar.kt               PatalaSidecar, PayRequest.toJson()
   examples/DirectCharge.kt     runnable — offline, MockRail, typed end to end
   examples/SidecarCharge.kt    runnable — loopback only, MockRail
-  checks/Checks.kt             34 counted assertions
+  checks/Checks.kt             42 counted assertions
 ```
 
 ## Real output

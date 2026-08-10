@@ -13,5 +13,5 @@
     "declaration": true,
     "noEmit": true
   },
-  "include": ["index.ts", "direct.ts", "sidecar.ts", "types.ts"]
+  "include": ["index.ts", "direct.ts", "sidecar.ts", "types.ts", "checks.ts"]
 }

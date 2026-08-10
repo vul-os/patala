@@ -1,7 +1,7 @@
 {
   "name": "patala",
   "version": "0.1.0",
-  "description": "A sovereign payment-rail substrate — the patala sidecar, or libpatala_ffi in-process.",
+  "description": "A sovereign payment-rail substrate \u2014 the patala sidecar, or libpatala_ffi in-process.",
   "main": "index.js",
   "types": "index.d.ts",
   "exports": {
@@ -51,7 +51,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:examples": "tsc -p examples/tsconfig.json --noEmit",
     "example:direct": "npm run build && node examples/direct.ts",
-    "example:sidecar": "npm run build && node examples/sidecar.ts"
+    "example:sidecar": "npm run build && node examples/sidecar.ts",
+    "checks": "npm run build && node checks.js"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

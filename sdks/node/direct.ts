@@ -47,6 +47,7 @@ import type {
   WebhookDelivery,
   WebhookEvent,
 } from "./types.js";
+import { narrowVerdict, narrowVerify } from "./types.js";
 
 export * from "./types.js";
 
@@ -345,7 +346,7 @@ export class Rail implements Disposable {
    * nothing else, and never retry a `false` as though it were transient.
    */
   verify(receipt: Receipt): VerifyResult {
-    return this.call("verify", receipt);
+    return narrowVerify(this.call("verify", receipt));
   }
 
   /**
@@ -355,7 +356,7 @@ export class Rail implements Disposable {
    * every verdict including `StructurallyValid`.
    */
   validateDestination(destination: string): DestinationVerdict {
-    return this.call("validate-destination", { destination });
+    return narrowVerdict(this.call("validate-destination", { destination }));
   }
 
   /**

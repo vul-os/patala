@@ -157,14 +157,23 @@ module Patala
     # One HTTP call. Raises HTTPError on a non-2xx; use #try for the cases where
     # the status IS the thing you want to look at.
     def request(method, path, body: nil, raw_body: nil, headers: {}, authed: true)
-      status, parsed = try(method, path, body: body, raw_body: raw_body,
-                                         headers: headers, authed: authed)
+      status, parsed, raw = try(method, path, body: body, raw_body: raw_body,
+                                              headers: headers, authed: authed)
       raise HTTPError.new(status, parsed) unless status.between?(200, 299)
 
-      parsed
+      # Re-read the same bytes strictly, because a caller of this method
+      # INDEXES what it returns. `/healthz` is the one 2xx route documented to
+      # answer plain text (the six bytes `ok`); everything under /v1 answers a
+      # JSON document, and a 2xx that will not parse means something other than
+      # this sidecar replied.
+      return parsed if path == "/healthz"
+
+      parsed.is_a?(String) ? parse_ok!(raw) : parsed
     end
 
-    # The same call, returning [status, body] instead of raising.
+    # The same call, returning [status, parsed_body, raw_body] instead of
+    # raising. Two-value destructuring still works; `raw` is there for
+    # `#request` to re-read strictly on a 2xx.
     def try(method, path, body: nil, raw_body: nil, headers: {}, authed: true)
       klass = method == "GET" ? Net::HTTP::Get : Net::HTTP::Post
       req = klass.new(path)
@@ -178,7 +187,7 @@ module Patala
       end
 
       res = Net::HTTP.start(@uri.host, @uri.port, read_timeout: 30) { |http| http.request(req) }
-      [res.code.to_i, parse(res.body)]
+      [res.code.to_i, parse(res.body), res.body]
     end
 
     def self.resolve_binary
@@ -202,12 +211,32 @@ module Patala
 
     private
 
+    # LENIENT, for the [status, body] pair `#try` hands back: a non-2xx body is
+    # not promised to be JSON and sometimes is not — `/v1` behind a failed
+    # bearer check answers the plain text `unauthorized`.
     def parse(raw)
       return nil if raw.nil? || raw.empty?
 
       JSON.parse(raw)
     rescue JSON::ParserError
       raw
+    end
+
+    # STRICT, for every 2xx body, which is where returning the raw String was a
+    # hazard rather than untidiness. `String#[]` takes a String and returns the
+    # matching SUBSTRING, so a caller writing `verify(receipt)["valid"]` — the
+    # entitlement check — got the truthy `"valid"` back from any HTML error page
+    # containing that word, and `verdict["is_refusal"]` behaved the same way. A
+    # Hash and a String answer `[]` with opposite polarities on the one call
+    # that decides whether money moves. A 200 that will not parse means
+    # something other than this sidecar answered.
+    def parse_ok!(raw)
+      return nil if raw.nil? || raw.empty?
+
+      JSON.parse(raw)
+    rescue JSON::ParserError => e
+      raise Error, "patala-sidecar answered 2xx with something that is not JSON " \
+                   "(#{e.message}): #{raw.bytesize} bytes, beginning #{raw[0, 80].inspect}"
     end
   end
 end

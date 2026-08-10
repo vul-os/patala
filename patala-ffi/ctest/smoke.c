@@ -295,6 +295,37 @@ int main(int argc, char **argv) {
 		if (err) p_free(err);
 	}
 
+	/* *err must be NULL after a call that SUCCEEDED, and not merely "nobody
+	 * has failed since you last cleared it". patala_call only ever wrote *err
+	 * on the failing path, so a host that branches on `err != NULL` rather
+	 * than on the return value keeps the first error it ever hit forever: the
+	 * charge below succeeds and still reports "unsupported currency".
+	 *
+	 * Deliberately does NOT reset err between the two calls, because that is
+	 * exactly what the buggy host does not do. */
+	{
+		err = NULL;
+		char *bad = p_call(h, "charge",
+		                   "{\"amount_minor\":1250,\"currency\":\"EUR\","
+		                   "\"destination\":\"mock:wallet:alice\",\"reference\":\"stale-err\"}",
+		                   &err);
+		check(bad == NULL && err != NULL, "the setup call really did fail",
+		      bad ? bad : "(NULL, but *err was not set)");
+		if (bad) p_free(bad);
+		char *stale = err; /* left in place on purpose; freed below */
+
+		char *out = p_call(h, "verify", receipt, &err);
+		check(err == NULL,
+		      "a SUCCEEDING patala_call clears *err, so err != NULL means THIS call failed",
+		      err ? err : "");
+		check(out != NULL && strcmp(out, "{\"valid\":true}") == 0,
+		      "...and it still returned the right answer", out ? out : "NULL");
+		if (out) p_free(out);
+		if (err != stale && err) p_free(err);
+		p_free(stale);
+		err = NULL;
+	}
+
 	/* Fail-closed, and NOT as an error: a rail's honest "this did not settle"
 	 * is data. Tamper by rewriting the amount in the receipt JSON. */
 	{
@@ -466,7 +497,7 @@ int main(int argc, char **argv) {
 	/* Update this when checks are added. It exists because a C test that exits
 	 * 0 having run three of its checks looks exactly like one that ran them
 	 * all. */
-	const int EXPECTED_CHECKS = 55;
+	const int EXPECTED_CHECKS = 58;
 	printf("\n%d checks ran, %d failed (expected %d checks)\n", checks_run, failures, EXPECTED_CHECKS);
 	if (checks_run != EXPECTED_CHECKS) {
 		printf("FAIL: the smoke test ran %d checks, not %d - it took an early exit "

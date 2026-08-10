@@ -13,3 +13,5 @@ node_modules/
 /sidecar.d.ts
 /types.js
 /types.d.ts
+/checks.js
+/checks.d.ts

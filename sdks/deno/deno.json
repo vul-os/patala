@@ -4,14 +4,17 @@
   "exports": "./mod.ts",
   "license": "MIT OR Apache-2.0",
   "tasks": {
-    "check": "deno check mod.ts examples/direct.ts examples/sidecar.ts",
+    "check": "deno check mod.ts checks.ts examples/direct.ts examples/sidecar.ts",
     "lint": "deno lint",
     "fmt:check": "deno fmt --check",
     "example:direct": "deno run --allow-ffi examples/direct.ts",
-    "example:sidecar": "deno run --allow-run --allow-net=127.0.0.1 --allow-env examples/sidecar.ts"
+    "example:sidecar": "deno run --allow-run --allow-net=127.0.0.1 --allow-env examples/sidecar.ts",
+    "checks": "deno run checks.ts"
   },
   "fmt": {
     "lineWidth": 110,
-    "exclude": ["README.md"]
+    "exclude": [
+      "README.md"
+    ]
   }
 }

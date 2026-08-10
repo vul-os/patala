@@ -339,7 +339,7 @@ pub async fn webhook(
         value.to_str().ok().map(|v| (name.as_str(), v.to_string()))
     });
 
-    let delivery = WebhookDelivery::new(body.to_vec(), now_unix())
+    let delivery = WebhookDelivery::new(body.to_vec(), now_unix()?)
         .with_headers(forwarded)
         .with_query(query);
 
@@ -349,9 +349,73 @@ pub async fn webhook(
 /// Current unix time in whole seconds — the `now` a rail checks its replay
 /// window against. Read once, here, so a delivery's tolerance check does not
 /// depend on how long a handler took.
-fn now_unix() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+///
+/// A clock before the epoch is an `Err`, not a `0`. `unwrap_or(0)` looks like
+/// the harmless choice and is not one: `now` is the only input to every
+/// replay-window check in the workspace (Stripe's five minutes, Yoco's, and so
+/// on), each of which computes `|now - signed_timestamp|` — so a `0` makes
+/// every genuine delivery look aeons old and every rail with a window reject
+/// everything, while the rails WITHOUT a window carry on accepting. That is a
+/// silent, partial, whole-fleet outage disguised as a signature failure. There
+/// is no honest `now` to substitute, so the request is refused and says why.
+fn now_unix() -> Result<u64, ApiError> {
+    unix_seconds(std::time::SystemTime::now())
+}
+
+/// [`now_unix`] over an explicit instant, so the pre-epoch branch is reachable
+/// from a test without moving the machine's clock.
+fn unix_seconds(t: std::time::SystemTime) -> Result<u64, ApiError> {
+    t.duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
-        .unwrap_or(0)
+        .map_err(|_| {
+            ApiError::Core(CoreError::Rail(
+                "patala-sidecar: the system clock is before the unix epoch, so a \
+                 webhook's replay window cannot be checked. Refusing the delivery \
+                 rather than checking it against a fabricated time."
+                    .to_string(),
+            ))
+        })
+}
+
+#[cfg(test)]
+mod clock_tests {
+    use super::*;
+    use std::time::{Duration, UNIX_EPOCH};
+
+    /// `now` is the only input to every replay-window check in the workspace,
+    /// and each computes `|now - signed_timestamp|`. This used to be
+    /// `.unwrap_or(0)`, which makes every genuine delivery look aeons old:
+    /// every rail WITH a window (Stripe's five minutes, Yoco's) rejects
+    /// everything while every rail WITHOUT one carries on — a partial,
+    /// silent, fleet-wide outage that reads as a signature failure. There is
+    /// no honest `now` to substitute for a broken clock, so the delivery is
+    /// refused and the refusal says why.
+    #[test]
+    fn a_pre_epoch_clock_is_refused_and_never_becomes_zero() {
+        let before = UNIX_EPOCH - Duration::from_secs(1);
+        match unix_seconds(before) {
+            Err(ApiError::Core(CoreError::Rail(ref m))) => {
+                assert!(
+                    m.contains("clock"),
+                    "refused, but not as a clock fault: {m}"
+                )
+            }
+            Err(_) => panic!("refused, but not as a CoreError::Rail"),
+            Ok(n) => panic!(
+                "a clock before the epoch produced now={n} -- every replay window \
+                 in the workspace would then measure a genuine delivery as {n} \
+                 seconds after 1970 and reject it"
+            ),
+        }
+    }
+
+    #[test]
+    fn a_normal_clock_still_answers() {
+        let t = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        assert_eq!(unix_seconds(t).ok(), Some(1_700_000_000));
+        assert!(
+            matches!(now_unix(), Ok(n) if n > 1_700_000_000),
+            "the real clock must answer a plausible time"
+        );
+    }
 }

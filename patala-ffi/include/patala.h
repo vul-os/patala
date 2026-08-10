@@ -50,6 +50,16 @@
  *             they write a malloc'd, human-readable UTF-8 message there. Pass
  *             NULL for err if you do not want the message. The message is NOT
  *             JSON; do not parse it.
+ *
+ *             *err is set to NULL on ENTRY, so after any of these calls
+ *             `*err != NULL` means THAT call failed. It used not to be: only
+ *             the failing path ever wrote *err, so a host that branched on
+ *             `err != NULL` instead of on the return value kept seeing the
+ *             first error it ever hit, and every later success reported it.
+ *
+ *             Because *err is overwritten and not freed, patala_free any
+ *             message you were given before reusing the same char* for
+ *             another call.
  *   Ownership Every non-const char* this library returns — results AND error
  *             messages — is freed with patala_free, and with nothing else. In
  *             particular NOT with your own free(): this is Rust's allocator.

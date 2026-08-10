@@ -62,6 +62,28 @@ unsafe fn set_err(errp: *mut *mut c_char, message: String) {
     }
 }
 
+/// Set `*errp` to NULL, if the caller supplied somewhere to put a message.
+///
+/// Called on entry by every function that takes an `err` out-parameter, so
+/// **`*err == NULL` means this call succeeded** and not merely "no call has
+/// failed since you last cleared it yourself". `patala_call` used to write
+/// `*err` only on failure, so a host that branched on `err != NULL` rather
+/// than on the return value saw the first error it ever hit for the rest of
+/// the process — every subsequent successful `charge` reported the previous
+/// failure's message. Two of the SDKs in this repo check the return value and
+/// would not have noticed; a host writing straight C is the one that does.
+///
+/// The caller therefore must not leave an unfreed message in `*err` across
+/// calls: it is overwritten, not freed, exactly as `patala.h` now says.
+///
+/// # Safety
+/// `errp` must be null or point to a writable `*mut c_char`.
+unsafe fn clear_err(errp: *mut *mut c_char) {
+    if !errp.is_null() {
+        *errp = std::ptr::null_mut();
+    }
+}
+
 /// A possibly-NULL C string as a Rust `&str`, distinguishing "absent" from
 /// "present but not text".
 ///
@@ -124,6 +146,7 @@ pub unsafe extern "C" fn patala_abi_check(
     expected: *const c_char,
     err: *mut *mut c_char,
 ) -> std::ffi::c_int {
+    clear_err(err);
     let want = as_str(expected);
     if want == crate::ABI_VERSION {
         0
@@ -157,6 +180,7 @@ pub unsafe extern "C" fn patala_abi_check(
 /// be null or point to a writable `*mut c_char`.
 #[no_mangle]
 pub unsafe extern "C" fn patala_new(config_json: *const c_char, err: *mut *mut c_char) -> u64 {
+    clear_err(err);
     // Refuse non-UTF-8 rather than letting it fall through as "" — an empty
     // document means "the offline default MockRail", so collapsing the two
     // turned a corrupt Stripe config into a mock that reports every charge as
@@ -210,6 +234,7 @@ pub unsafe extern "C" fn patala_call(
     request_json: *const c_char,
     err: *mut *mut c_char,
 ) -> *mut c_char {
+    clear_err(err);
     let method = as_str(method).to_string();
     let request = as_str(request_json).to_string();
     match catch_unwind(AssertUnwindSafe(move || crate::call(h, &method, &request))) {

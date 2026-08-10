@@ -603,17 +603,28 @@ fn decode_hex(s: &str) -> Result<Vec<u8>, String> {
     if !bytes.len().is_multiple_of(2) {
         return Err(format!("odd number of hex digits ({})", bytes.len()));
     }
-    let nibble = |c: u8| -> Result<u8, String> {
+    // The offending character is NOT quoted back. The only string that reaches
+    // here is a keypair seed, and its error message travels out through
+    // `patala_new`'s `*err` into whatever the host logs — so echoing even one
+    // character of a private key writes part of it somewhere it was never
+    // meant to be, and 64 malformed attempts differing in one position would
+    // read it out entirely. The POSITION is what a caller needs to fix a typo,
+    // and it discloses nothing.
+    let nibble = |c: u8, at: usize| -> Result<u8, String> {
         match c {
             b'0'..=b'9' => Ok(c - b'0'),
             b'a'..=b'f' => Ok(c - b'a' + 10),
             b'A'..=b'F' => Ok(c - b'A' + 10),
-            _ => Err(format!("{:?} is not a hex digit", c as char)),
+            _ => Err(format!(
+                "the character at position {at} is not a hex digit (it is not quoted \
+                 back here: this is a private key)"
+            )),
         }
     };
     bytes
         .chunks(2)
-        .map(|pair| Ok((nibble(pair[0])? << 4) | nibble(pair[1])?))
+        .enumerate()
+        .map(|(i, pair)| Ok((nibble(pair[0], i * 2)? << 4) | nibble(pair[1], i * 2 + 1)?))
         .collect()
 }
 
@@ -1143,6 +1154,43 @@ mod tests {
         assert!(decode_hex("7b7d").is_ok());
         assert!(decode_hex("7b7").is_err(), "odd length must be refused");
         assert!(decode_hex("zz").is_err(), "non-hex must be refused");
+    }
+
+    /// The only string `decode_hex` is ever handed is a keypair seed, and its
+    /// error travels out through `patala_new`'s `*err` into whatever the host
+    /// logs. It used to say `'z' is not a hex digit`, quoting the offending
+    /// character back — so a caller feeding 64 near-miss seeds that differ in
+    /// one position each would read a private key out of its own log file, one
+    /// character at a time. Restore the `format!("{:?} is not a hex digit",
+    /// c as char)` arm and this reports which secret character it leaked.
+    #[test]
+    fn a_malformed_seed_is_never_quoted_back() {
+        // A plausible seed with one non-hex character among real ones.
+        // `decode_hex` directly: `decode_seed`, its only caller for a seed, is
+        // behind the solana/stellar features and this must hold in every build.
+        // 'z' rather than 'q', because the refusal below says "cannot be
+        // quoted" and this assertion must not match its own explanation.
+        let seed = "0123456789abcdef0123456789abcdef0123456789abcdez0123456789abcdef";
+        let message = decode_hex(seed).unwrap_err();
+        assert!(
+            !message.contains('z'),
+            "the error message quotes the offending character of a private key \
+             back at the caller: {message}"
+        );
+        // Nor any run of the surrounding key material. Four is short enough to
+        // catch a `{:?}` of a slice or a context window, and long enough that
+        // the position number cannot trip it.
+        for w in seed.as_bytes().windows(4) {
+            let run = std::str::from_utf8(w).unwrap();
+            assert!(
+                !message.contains(run),
+                "the error message leaks {run:?} from a private key: {message}"
+            );
+        }
+        assert!(
+            message.contains("position 47"),
+            "and it must still say WHERE, or a typo is unfixable: {message}"
+        );
     }
 
     #[test]

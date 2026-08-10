@@ -238,3 +238,42 @@ export const METHODS = [
   "caveat",
   "providers",
 ] as const satisfies readonly (keyof ResultOf)[];
+
+// ---------------------------------------------------------------------------
+// Boundary narrowing for the two documents a caller makes a decision on
+// ---------------------------------------------------------------------------
+//
+// Everywhere else in this SDK a response is `as`-cast to its interface, which
+// is fine for a Quote or a Receipt: the caller reads fields and reconciles
+// them against its own record. It is not fine for the two documents that ARE
+// the decision. `as` is a compile-time assertion about a value that arrived at
+// runtime over a socket or across a C ABI, and `JSON.parse` hands back
+// whatever shape it was given — an absent `valid` is `undefined`, and a
+// `valid` some proxy stringified is `"false"`, which is TRUTHY. `if
+// (result.valid)` then grants entitlement against a receipt no rail confirmed.
+//
+// Narrowed here, once, so the value handed to a caller is the type it was
+// promised, and so both directions fail closed:
+//   valid       true only for the JSON boolean true
+//   is_refusal  false only for the JSON boolean false
+
+/** `valid` is `true` only when the wire said the JSON boolean `true`. */
+export function narrowVerify(body: unknown): VerifyResult {
+  const valid = (body as { valid?: unknown } | null)?.valid;
+  return { ...(body as VerifyResult), valid: valid === true };
+}
+
+/**
+ * `is_refusal` is `false` only when the wire said the JSON boolean `false`,
+ * and `human_must_confirm` likewise — every verdict patala can produce carries
+ * both, and a document missing either is not a verdict this SDK can read.
+ * "I could not read the verdict" and "do not send" are the same answer.
+ */
+export function narrowVerdict(body: unknown): DestinationVerdict {
+  const v = body as { is_refusal?: unknown; human_must_confirm?: unknown } | null;
+  return {
+    ...(body as DestinationVerdict),
+    is_refusal: v?.is_refusal !== false,
+    human_must_confirm: v?.human_must_confirm !== false,
+  };
+}

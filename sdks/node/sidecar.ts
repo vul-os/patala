@@ -44,6 +44,7 @@ import type {
   WebhookDelivery,
   WebhookEvent,
 } from "./types.js";
+import { narrowVerdict, narrowVerify } from "./types.js";
 
 export interface SidecarOptions {
   /** Fixed port; default is an ephemeral free port on 127.0.0.1. */
@@ -244,11 +245,8 @@ export class Sidecar implements AsyncDisposable {
    * mistaken for "the sidecar broke".
    */
   async verify(receipt: Receipt, railId = this.railId): Promise<VerifyResult> {
-    return (await this.request(
-      "POST",
-      `/v1/rails/${encodeURIComponent(railId)}/verify`,
-      receipt
-    )) as VerifyResult;
+    const body = await this.request("POST", `/v1/rails/${encodeURIComponent(railId)}/verify`, receipt);
+    return narrowVerify(body);
   }
 
   /**
@@ -257,9 +255,10 @@ export class Sidecar implements AsyncDisposable {
    * status code.
    */
   async validateDestination(destination: string, railId = this.railId): Promise<DestinationVerdict> {
-    return (await this.request("POST", `/v1/rails/${encodeURIComponent(railId)}/validate-destination`, {
+    const body = await this.request("POST", `/v1/rails/${encodeURIComponent(railId)}/validate-destination`, {
       destination,
-    })) as DestinationVerdict;
+    });
+    return narrowVerdict(body);
   }
 
   /**

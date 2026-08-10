@@ -218,7 +218,7 @@ defmodule Patala.Sidecar do
     with {:ok, status, body} <-
            req(sidecar, "POST", "/v1/rails/#{rail_id}/webhook", raw_body, headers),
          :ok <- ok_status(status, body) do
-      {:ok, decode(body)}
+      {:ok, decode!(body)}
     end
   end
 
@@ -244,7 +244,7 @@ defmodule Patala.Sidecar do
   defp get(sidecar, path) do
     with {:ok, status, raw} <- req(sidecar, "GET", path, nil, []),
          :ok <- ok_status(status, raw) do
-      {:ok, decode(raw)}
+      {:ok, decode!(raw)}
     end
   end
 
@@ -254,7 +254,7 @@ defmodule Patala.Sidecar do
     with {:ok, status, raw} <-
            req(sidecar, "POST", path, encoded, [{"Content-Type", "application/json"}]),
          :ok <- ok_status(status, raw) do
-      {:ok, decode(raw)}
+      {:ok, decode!(raw)}
     end
   end
 
@@ -275,10 +275,37 @@ defmodule Patala.Sidecar do
 
   defp decode(""), do: nil
 
+  # LENIENT, for the two places that hand the caller a status alongside the
+  # body: `try/5`, and `ok_status/2`'s error branch. A non-2xx body is not
+  # promised to be JSON and sometimes is not — `/v1` behind a failed
+  # `require_token` answers the six bytes `unauthorized`, as plain text.
   defp decode(raw) do
     case JSON.decode(raw) do
       {:ok, decoded} -> decoded
       {:error, _} -> raw
+    end
+  end
+
+  # STRICT, for every 2xx path. This is where `decode/1`'s second return shape
+  # was a hazard: a successful call is documented as `{:ok, map()}`, and a
+  # caller who reads `body["valid"]` — the entitlement check — or
+  # `body["is_refusal"]` through Access gets `nil` from a binary instead of an
+  # error, on a response that was never this sidecar's. A 200 whose body will
+  # not parse means something else answered (a captive portal, a proxy's error
+  # page, a truncated read), and that is a failure, not a differently-shaped
+  # success.
+  defp decode!(""), do: nil
+
+  defp decode!(raw) do
+    case JSON.decode(raw) do
+      {:ok, decoded} ->
+        decoded
+
+      {:error, reason} ->
+        raise RuntimeError,
+              "patala-sidecar answered 2xx with something that is not JSON " <>
+                "(#{inspect(reason)}): #{byte_size(raw)} bytes, beginning " <>
+                inspect(binary_part(raw, 0, min(80, byte_size(raw))))
     end
   end
 

@@ -9,7 +9,77 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+Everything here was found by a review commissioned specifically because patala
+had never been tagged — the one moment when changing a public contract costs
+nothing. All of it is mutation-tested; the quoted strings are the actual
+failures the tests emit when the fix is reverted.
+
+- **A non-UTF-8 byte anywhere in a `patala_new` configuration silently produced
+  a `MockRail`.** `as_str` collapsed invalid UTF-8 to `""`, and an empty
+  document means "the offline default". Demonstrated against the real ABI: a
+  config asking for Stripe returned `handle=1` with `err=NULL`, then reported
+  `id = mock`, `charge` succeeded for 999,999 minor units and `verify` returned
+  `{"valid":true}` — a settled receipt for money that never moved. It was the
+  only place in the library where an error mapped onto *valid*, which is the
+  direction the whole fail-closed design exists to prevent. A host whose config
+  bytes are latin-1 hits it without doing anything exotic.
+- **`isRefusal` failed open in two SDKs**, in the direction that costs money.
+  The .NET and Kotlin sidecar helpers scanned for `"is_refusal":true` without
+  skipping whitespace after the colon, so a verdict reformatted by
+  `System.Text.Json` or any proxy yielded `" true"` and a **`Malformed` verdict
+  reported as not-a-refusal** — after which each README's own gate sends the
+  payout. Two lines away, `IsValid` used the same shape and failed *closed*: the
+  polarity was inverted. Kotlin's helper was deleted rather than repaired,
+  because `Direct.kt` had already deleted the identical function as a defect and
+  a better hand-rolled scan keeps the bug class alive. .NET kept its API and
+  moved to a real parser, which was in the shared framework all along.
+- **iyzico accepted a completely unauthenticated callback.** Its
+  `retrieveCheckoutForm` round trip *is* the signature check, and the error was
+  discarded — so `POST token=anything` produced a `WebhookEvent` with a negative
+  status, which `patala-core`'s own contract forbids outright. No money could be
+  fabricated, but an anonymous request could drive a consumer's cancel-order or
+  release-inventory path.
+- **Eight rails could emit a delivery with no dedup key** (`event_id` empty, or
+  `"0"` for two of them), which the webhook contract says is impossible. The id
+  was validated only inside the *settled* arm, so a correctly signed
+  non-settling redelivery had nothing to suppress it by.
+- **Three rails read an absent settlement-status field as settled.** Not
+  reachable today, but a processor payload change would have read as paid.
+- **Fourteen of twenty single-processor builds did not compile**, pushing
+  operators to `--all-features` and linking all twenty processors into a
+  payments binary. The root cause was `cfg` drift in two places; the fix makes
+  the marker features name their own dependencies, so they cannot drift again.
+- Smaller: `*err` is cleared on entry (a stale message otherwise outlives its
+  call); a malformed key seed reported the offending *character* back to the
+  caller and now reports its position; a pre-epoch clock made every replay
+  window measure against `now = 0`; Ruby, Elixir, Node, Bun and Deno accepted a
+  non-JSON 2xx body or a truthy non-`true` value where they must not.
+
+- **Key material is now zeroised.** There was none anywhere: `SigningKey` wiped
+  the seed it kept, but every copy on the way to it — file contents, the decoded
+  vector, the base58/StrKey text, the `Vec<u8>` UniFFI allocates — was dropped
+  intact. `HyperswitchConfig` also derived `Debug` while holding an API key and
+  a webhook secret, against its own field doc; it was the sole outlier among 21
+  configs. And the sidecar forwarded **every** request header into
+  `WebhookDelivery`, which meant its own bearer token — the credential whose
+  isolation is the process's entire reason to exist — was handed to arbitrary
+  rail code.
+
+**Examined and found clean**, which is worth recording alongside the above: 300k
+mutated JSON documents and 400k generated fiat configs across 21 providers,
+constructing 19,089 live rails, produced **zero panics**. Every MAC comparison
+in all 22 webhook implementations goes through a constant-time path — not one
+`==` on a MAC. No `*Rail` struct in any of 23 crates derives `Debug`. All 15
+managed sidecars mint 32 CSPRNG bytes and pass them in the child's environment,
+never argv. `cargo audit`: 0 advisories across 268 dependencies. The
+fail-closed contract holds end to end across `patala-core`, `patala-uniffi`,
+`patala-ffi`, the sidecar and all fifteen packages — no binding maps `Ok(false)`
+onto an exception, and none maps an error onto valid.
+
 ### Added
+
 - **`patala-ffi` — a plain `extern "C"` shared library over `patala-core`.** UniFFI has no backend for C, C++, Node/Deno/Bun, PHP or Elixir; those languages now load a hand-written C ABI instead: JSON in and JSON out (the *same* JSON `patala-sidecar` already serves), `uint64` registry handles that are never reused, errors as plain UTF-8 strings freed with `patala_free`, `0`/`-1` returns with `*err` set. Six symbols: `patala_abi_version`, `patala_abi_check`, `patala_new`, `patala_close`, `patala_call`, `patala_free`. It matches the ABI convention `llmux` and `openrate` shipped, so a reader who learns one has learned all three — **minus their Go-runtime caveats, which do not apply**: patala is Rust, so loading this library starts no threads, installs no signal handlers, runs no GC or scheduler, and is fork-safe. The default (mock-only, fully offline) release artifact is **844,656 bytes**, against ~13 MB for the Go-based equivalent.
 - **`patala-ffi/ctest/smoke.c` + `scripts/ffi-ctest.sh` + CI job `c-abi`.** Every Rust test in `patala-ffi` calls the Rust functions directly and would pass with a missing `#[no_mangle]` or a header that had drifted. The smoke test `dlopen`s the built artifact, resolves each symbol by name and drives a real `MockRail` charge → verify round trip through `include/patala.h` — 55 checks, and it asserts that all 55 *ran*, so a C program that exits `0` having executed three of them fails. It also counts the process's threads across `dlopen` and across a full round trip, which turns "no runtime in your process" from a README sentence into an enforced fact; on a platform it cannot count threads on it fails rather than skipping.
 

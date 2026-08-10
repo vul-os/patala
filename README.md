@@ -314,8 +314,13 @@ all five surfaces side by side.
 No code path holds funds; every receipt fails closed if it can't be
 verified; a rail that can't do a refund or a webhook check returns
 `Unsupported` rather than faking one. See `SECURITY.md` for the reporting
-process and the full scope — and for the plain statement that **patala
-publishes no artifacts today**, so there is nothing to sign or checksum yet.
+process and the full scope — and for what a tagged release publishes: a source
+archive plus prebuilt C ABI bundles for linux/amd64 and darwin/arm64, a
+`SHA256SUMS` manifest covering every asset, and a sigstore build-provenance
+attestation minted from the workflow's OIDC identity (no long-lived signing
+key). `scripts/verify.sh` is the consumer half and fails closed — there is no
+skip path, and a missing manifest is never read as "nothing to check". patala
+is still on **no package registry**, so Rust consumers vendor by path or git.
 
 ## Deferred (designed for, not built)
 

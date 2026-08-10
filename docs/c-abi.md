@@ -287,11 +287,36 @@ int main(void) {
 
 | Target | Status |
 |---|---|
-| darwin/arm64 | **built and executed** — every number on this page was measured on it |
-| linux/amd64 | the `.so` is built and the C smoke test runs on it in CI's `c abi` job; no language package has been run there |
+| darwin/arm64 | **built, executed and published** — every number on this page was measured on it |
+| linux/amd64 | **built, executed and published** — the `.so` is built and the C smoke test runs on it in CI's `c abi` job; no language package has been run there |
 | **linux/arm64** | **not built** |
 | **darwin/amd64** | **not built** |
 | **windows/amd64** | **does not exist — no DLL ships, and nobody has tried** |
+
+The two published rows are attached to each tagged release as
+`patala_<v>_c-abi_<os>_<arch>.tar.gz`, carrying `lib/libpatala_ffi.*` and the
+matching `include/patala.h` in one archive — they are a matched pair, and a
+consumer able to download them separately will eventually pair a new header
+with an old library. They are built with every rail compiled in
+(`fiat-all,solana,stellar,hyperswitch`), because a consumer who downloads a
+prebuilt C library has no Rust toolchain with which to add one later.
+
+The other three rows are absent for one reason: nothing here cross-compiles.
+The packaging step `dlopen`s the library it just built and drives a real
+charge → verify round trip through it, so a platform CI cannot both build
+**and** execute is a platform patala does not publish.
+
+Verify what you downloaded before you load it — the manifest and the
+provenance attestation are described in `SECURITY.md`:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/vul-os/patala/<tag>/scripts/verify.sh
+bash verify.sh --tag <tag> --attest patala_<v>_c-abi_linux_amd64.tar.gz
+```
+
+A verified digest says these are the bytes the release workflow built. It is
+not a substitute for `patala_abi_check()`, which is the library telling you at
+load time that it is the version your bindings were generated against.
 
 llmux's and openrate's matrices are different from this one and from each
 other. Do not assume one covers another.

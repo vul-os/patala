@@ -17,13 +17,17 @@ credentials for anything.
 > the question "did this actually settle", and it re-derives the answer from
 > the rail every time.
 
-## Before you start: patala is not published yet
+## Before you start: patala is on no package registry
 
 There is no `cargo add patala-core`, no `pip install patala-py`, and no
-`go get`. `SECURITY.md` says it plainly: **patala publishes no artifacts
-today.** Vendor it by path or by git URL from
+`go get`. Vendor it by path or by git URL from
 <https://github.com/vul-os/patala> until that changes. Every command below
 assumes you have the repo checked out.
+
+A tagged release *does* publish artifacts — a source archive, prebuilt C ABI
+bundles, a `SHA256SUMS` manifest covering both, and a build-provenance
+attestation (`SECURITY.md`, and `scripts/verify.sh` to check them). That is a
+download you verify, not a dependency your package manager can resolve.
 
 ## 1. Rust
 

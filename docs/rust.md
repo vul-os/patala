@@ -6,9 +6,9 @@ generated wrapper, native types throughout.
 
 ## Dependencies
 
-patala is not on crates.io yet — v0.1.1 is tagged, but no workflow builds or
-publishes anything from a tag (`SECURITY.md`).
-Vendor by path or by git:
+patala is not on crates.io. A tagged release publishes a verifiable source
+archive and prebuilt C ABI bundles, never a crate (`SECURITY.md`), so a Rust
+consumer vendors by path or by git:
 
 ```toml
 [dependencies]

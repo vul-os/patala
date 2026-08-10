@@ -9,9 +9,11 @@ the message means, not just what to type.
 
 ### `error: no matching package named 'patala-core' found`
 
-patala is not published. There is no crates.io release, no PyPI package and no
-`go get` — `SECURITY.md` says so plainly, and it is why there is nothing to
-sign or checksum yet. Depend on it by path or by git:
+patala is on no package registry: no crates.io release, no PyPI package, no
+`go get`. (A tagged release does publish assets — a source archive and prebuilt
+C ABI bundles, checksummed and attested, see `SECURITY.md` — but those are
+downloads you verify with `scripts/verify.sh`, not registry entries cargo can
+resolve.) Depend on it by path or by git:
 
 ```toml
 patala-core = { git = "https://github.com/vul-os/patala" }

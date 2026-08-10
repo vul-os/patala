@@ -18,12 +18,13 @@ each of the four languages that can reach it.
 Add `patala-core` (and whichever rail crates/features you need) as a
 dependency and program against the `PaymentRail` trait. The default build
 pulls no chain and no processor — you opt into a rail with its feature flag.
-**patala isn't on crates.io yet** (`SECURITY.md`: "no crate is published to
-crates.io") — vendor it by path or `git` until it is:
+**patala isn't on crates.io** (`SECURITY.md`: "No crate on crates.io" — a
+tagged release publishes a source archive and prebuilt C ABI bundles, never a
+crate) — vendor it by path or `git`:
 
 ```toml
 [dependencies]
-# Not on crates.io yet (SECURITY.md) — vendor by path or git until it publishes.
+# Not on crates.io (SECURITY.md) — vendor by path or git.
 patala-core    = { git = "https://github.com/vul-os/patala" }
 patala-stellar = { git = "https://github.com/vul-os/patala" }  # opt in per rail
 ```

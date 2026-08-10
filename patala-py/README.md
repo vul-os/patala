@@ -190,7 +190,12 @@ Details:
   also `charge()` — per `PATALA.md` §6 that same key is both the signing
   identity and the wallet the funds move from, no separate mapping table.
   Building the rail touches no network; only `quote`/`charge`/`verify` call
-  `rpc_url`.
+  `rpc_url`. Since 0.1.1 the seed bytes are **zeroised** on the Rust side — both
+  the `Vec<u8>` UniFFI allocates for the argument and the fixed-size copy taken
+  from it, including when the length is wrong. Python's own `bytes` is immutable
+  and neither yours nor patala's to wipe, so a seed you hold in Python lives
+  until it is collected; read it from the environment or a file and drop the
+  reference.
 - **`new_stellar(horizon_url, network, usdc_issuer, keypair_seed)`** —
   `network` is `"testnet"` (which *requires* `usdc_issuer`, since Stellar's
   testnet USDC issuer rotates and has no fixed default) or

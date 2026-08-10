@@ -54,6 +54,35 @@ public fun PayRequest.toJson(): String =
  * JVM's signal handlers" — is true of llmux and openrate and **false here**.
  * See `README.md`, which carries the measurement rather than the claim.
  *
+ * ### There is no `isRefusal(json)` here, and that is the fix
+ *
+ * This class used to carry `Json.field(verdictJson, "is_refusal") == "true"`,
+ * and [org.vulos.patala.Json.field] is a substring scan, not a parser: it did
+ * not skip whitespace after the colon. A verdict reformatted anywhere between
+ * patala and here read as `" true"`, so `isRefusal` returned **false for a
+ * `Malformed` verdict** — failing open, on the one question in this API where
+ * failing open loses money.
+ *
+ * The direct path deleted the identical function rather than repairing it
+ * (see [Patala]'s docs — `verdict.isRefusal` is a `Boolean` field decided
+ * inside Rust), and [org.vulos.patala.Patala], the Java sidecar client this
+ * class wraps under the same no-JSON-dependency constraint, never had one.
+ * The sidecar path was simply never migrated. It is now.
+ *
+ * A better scan is not the fix. patala computes `is_refusal` once, in
+ * `DestinationVerdict::is_refusal()`, from an exhaustive match, and puts it on
+ * the wire precisely so no binding has to re-derive it. Recovering a boolean
+ * from a JSON document is your parser's job — the same parser every other
+ * method here hands you a document for — and it must default to refusing:
+ *
+ * ```kotlin
+ * val verdict = mapper.readTree(patala.validateDestination(dest))
+ * if (verdict.path("is_refusal").asBoolean(true)) return   // default: refuse
+ * ```
+ *
+ * With no parser on the classpath, `Json.field(verdict, "is_refusal")` will
+ * print the field. It is documented for printing, and only that.
+ *
  * ### The token is mandatory and this class mints one
  *
  * `patala-sidecar` refuses to start without `PATALA_SIDECAR_TOKEN`. Leaving
@@ -149,10 +178,6 @@ public class PatalaSidecar private constructor(
      */
     public fun validateDestination(destination: String, rail: String = railId): String =
         delegate.validateDestination(rail, destination)
-
-    /** `true` when the verdict says do not send — read from `is_refusal`. */
-    public fun isRefusal(verdictJson: String): Boolean =
-        Json.field(verdictJson, "is_refusal") == "true"
 
     /**
      * `POST /v1/rails/{rail}/webhook` — forward the processor's delivery

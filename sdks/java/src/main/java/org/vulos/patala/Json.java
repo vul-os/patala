@@ -46,8 +46,7 @@ public final class Json {
     }
 
     /**
-     * The value of a top-level scalar field, <b>for printing and assertions
-     * only</b>.
+     * The value of a scalar field, <b>for printing, and only for printing</b>.
      *
      * <p>Not a parser and not a substitute for one: it does not understand
      * nesting, so a key that also appears inside a nested object may be found
@@ -55,14 +54,37 @@ public final class Json {
      * verdict, and pulling Jackson in to do that would make the examples a
      * demonstration of Jackson.
      *
+     * <p><b>Never branch on what this returns.</b> The Kotlin sidecar client
+     * had `isRefusal(json) = field(json, "is_refusal") == "true"` over it, and
+     * because this method did not skip the whitespace after the colon, a
+     * verdict reformatted anywhere between patala and the caller yielded
+     * {@code " true"} — so a {@code Malformed} verdict read as "not a
+     * refusal". That helper is gone; recovering a boolean is the job of the
+     * parser you already have, defaulting to refusal. The whitespace is now
+     * skipped anyway, because a printer that prints the wrong thing is still
+     * wrong.
+     *
      * @return the field's text, or {@code null} when the key is absent
      */
     public static String field(String json, String key) {
-        int at = json.indexOf("\"" + key + "\":");
+        int at = json.indexOf("\"" + key + "\"");
         if (at < 0) {
             return null;
         }
-        int from = at + key.length() + 3;
+        int from = at + key.length() + 2;
+        // Whitespace before the colon, the colon, then whitespace after it.
+        // JSON permits all three; `"is_refusal" : true` is the same document
+        // as `"is_refusal":true` and must print the same.
+        while (from < json.length() && Character.isWhitespace(json.charAt(from))) {
+            from++;
+        }
+        if (from >= json.length() || json.charAt(from) != ':') {
+            return null;
+        }
+        from++;
+        while (from < json.length() && Character.isWhitespace(json.charAt(from))) {
+            from++;
+        }
         if (from < json.length() && json.charAt(from) == '"') {
             int to = from + 1;
             while (to < json.length() && json.charAt(to) != '"') {
@@ -71,7 +93,9 @@ public final class Json {
             return json.substring(from + 1, Math.min(to, json.length()));
         }
         int to = from;
-        while (to < json.length() && ",}".indexOf(json.charAt(to)) < 0) {
+        while (to < json.length()
+                && ",}]".indexOf(json.charAt(to)) < 0
+                && !Character.isWhitespace(json.charAt(to))) {
             to++;
         }
         return json.substring(from, to);

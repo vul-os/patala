@@ -1,4 +1,6 @@
+import org.vulos.patala.Json
 import org.vulos.patala.kotlin.Patala
+import org.vulos.patala.kotlin.PatalaSidecar
 import org.vulos.patala.kotlin.payRequest
 import uniffi.patala.DestinationStatus
 import uniffi.patala.PatalaException
@@ -28,7 +30,7 @@ import uniffi.patala.WebhookStatus
  * ```
  */
 private const val ALICE = "mock:wallet:alice"
-private const val EXPECTED_CHECKS = 34
+private const val EXPECTED_CHECKS = 42
 
 private var ran = 0
 private var failed = 0
@@ -141,6 +143,45 @@ fun main() {
         check("UNKNOWN is not a refusal — it needs a human", !verdict.isRefusal)
         check("UNKNOWN still requires a human", verdict.humanMustConfirm)
     }
+
+    // ---- the sidecar client makes no money decision of its own ------------
+    //
+    // PatalaSidecar used to carry
+    // `isRefusal(json) = Json.field(json, "is_refusal") == "true"`, over a
+    // substring scan that did not skip the whitespace after the colon — so a
+    // verdict reformatted anywhere between patala and here read as `" true"`
+    // and a MALFORMED verdict came back "not a refusal". Failing OPEN, on the
+    // one question in this API where failing open loses money.
+    //
+    // The direct path had already deleted the identical function as a defect;
+    // the sidecar path was never migrated. Re-add it and the first check here
+    // reports: `FAIL PatalaSidecar exposes no isRefusal(String) -- a JSON
+    // scan must not decide whether to send money`.
+    val sidecarDecisions =
+        PatalaSidecar::class.java.methods.filter { it.name.lowercase().contains("refusal") }
+    check(
+        "PatalaSidecar exposes no isRefusal(String) — a JSON scan must not " +
+            "decide whether to send money (found: ${sidecarDecisions.map { it.name }})",
+        sidecarDecisions.isEmpty(),
+    )
+
+    // ---- Json.field: a printer, and it must print the truth ---------------
+    //
+    // Still a scan, still documented for printing only — but a printer that
+    // prints the wrong thing is still wrong, and this is the scan the deleted
+    // helper was built on. Every form below is the SAME JSON document.
+    val compact = """{"status":"Malformed","is_refusal":true,"human_must_confirm":true}"""
+    val spaced = """{"status": "Malformed", "is_refusal": true, "human_must_confirm": true}"""
+    val indented = "{\n  \"status\": \"Malformed\",\n  \"is_refusal\": true\n}"
+    val beforeColon = """{"status" : "Malformed", "is_refusal" : true}"""
+
+    check("compact: status", Json.field(compact, "status") == "Malformed")
+    check("compact: is_refusal", Json.field(compact, "is_refusal") == "true")
+    check("a space after the colon: status", Json.field(spaced, "status") == "Malformed")
+    check("a space after the colon: is_refusal", Json.field(spaced, "is_refusal") == "true")
+    check("pretty-printed over newlines: is_refusal", Json.field(indented, "is_refusal") == "true")
+    check("a space BEFORE the colon too: is_refusal", Json.field(beforeColon, "is_refusal") == "true")
+    check("an absent key is null", Json.field(compact, "nope") == null)
 
     // ---- the guards this SDK adds on top of the generated code ------------
     val negative = try {

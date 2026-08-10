@@ -256,7 +256,12 @@ int main(int argc, char **argv) {
 		    sc.post("/v1/rails/mock/validate-destination", R"({"destination":"stellar:wallet:alice"})");
 		std::cout << "dest:      HTTP " << dest.status << " "
 		          << peek::str(dest.body, "status").value_or("?") << " is_refusal="
-		          << (peek::flag(dest.body, "is_refusal").value_or(false) ? "true" : "false")
+		          // .value_or(TRUE), like direct.cpp's: a verdict `peek` cannot
+		          // read is a verdict that has not said you may send. Printing
+		          // is all this does today, but the two files sat one line
+		          // apart with opposite defaults on the same field, and the
+		          // wrong one is the one a reader copies.
+		          << (peek::flag(dest.body, "is_refusal").value_or(true) ? "true" : "false")
 		          << " human_must_confirm="
 		          << (peek::flag(dest.body, "human_must_confirm").value_or(false) ? "true" : "false")
 		          << "\n";

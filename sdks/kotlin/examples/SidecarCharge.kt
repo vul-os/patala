@@ -32,7 +32,14 @@ fun main() {
         for (candidate in listOf(ALICE, "eth:wallet:alice", "")) {
             val verdict = patala.validateDestination(candidate)
             val shown = if (candidate.isEmpty()) "\"\" (empty)" else "\"$candidate\""
-            println("  $shown -> ${Json.field(verdict, "status")}, isRefusal=${patala.isRefusal(verdict)}")
+            // Printed, never branched on: `Json.field` is a scan, and this
+            // client deliberately no longer offers an isRefusal(json) over it
+            // (see PatalaSidecar's docs). A caller decides with its own parser,
+            // defaulting to refusal.
+            println(
+                "  $shown -> ${Json.field(verdict, "status")}, " +
+                    "is_refusal=${Json.field(verdict, "is_refusal")}",
+            )
         }
         println("  all five verdicts are HTTP 200. A 200 means the rail ANSWERED,")
         println("  not that the address is good — read the body, not the status.")

@@ -203,7 +203,12 @@ int main(int argc, char **argv) {
 	}
 	{
 		char status[64] = "";
-		int is_refusal = 0, must_confirm = 0;
+		/* Initialised to a REFUSAL, like direct.c's, so a body json_bool
+		 * cannot find the field in falls the safe way. Printing is all this
+		 * does today, but the two files sat one line apart with opposite
+		 * defaults on the same field, and the wrong one is the one a reader
+		 * copies. */
+		int is_refusal = 1, must_confirm = 0;
 		json_string(r.body, "status", status, sizeof(status));
 		json_bool(r.body, "is_refusal", &is_refusal);
 		json_bool(r.body, "human_must_confirm", &must_confirm);

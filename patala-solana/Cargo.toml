@@ -1,6 +1,6 @@
 [package]
 name = "patala-solana"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "patala rail #2: SPL-USDC on Solana. NonCustodialFinal, wallet-to-wallet, real Ed25519 signing + transaction construction + JSON-RPC. Ported from magnetite-seams/src/solana (PATALA.md §4, §7)."
 license = "MIT OR Apache-2.0"

@@ -1,6 +1,6 @@
 [package]
 name = "patala-core"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "The core seam of patala: one PaymentRail trait, a capability model with the settlement class in the type, class-respecting failover, and an offline deterministic mock rail. Non-custodial. No network or heavy deps in the default build."
 license = "MIT OR Apache-2.0"

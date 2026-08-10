@@ -9,6 +9,61 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-08-10
+
+**The first patala release that publishes anything.** `v0.1.1` was tagged before
+a release workflow existed, so it produced no artifacts and nothing a consumer
+could verify. This tag is the first one that does.
+
+### Added
+
+- **`.github/workflows/release.yml`.** A `v*` tag now builds, checksums, attests
+  and publishes: a source archive, C ABI bundles for linux/amd64 and
+  darwin/arm64, and `SHA256SUMS` over the staged directory. Assets are staged
+  into `release/` and the manifest is emitted **over that directory**, so
+  "published" and "covered" are the same set by construction rather than two
+  hand-maintained lists. The job is red if nothing staged, or if the manifest's
+  line count is not the staged count.
+
+  The C ABI bundle ships the library **and** the header in one archive —
+  separable downloads eventually get paired wrong — built with all rails on,
+  because a prebuilt-library consumer cannot add one later. Two platforms only,
+  and for a structural reason rather than a to-do: the packaging step `dlopen`s
+  the library it just built and drives a real charge → verify round trip through
+  it, so nothing cross-compiles.
+
+  Excluded and stated in `SECURITY.md`: the Python wheel (a wheel on a Release
+  page is not `pip install`-able anyway) and the sidecar binary (its registry is
+  mock-only — it would be a payments daemon that cannot make a payment).
+- **`scripts/verify.sh`** — the consumer half. Exact field-2 name match, no
+  `--skip-verify`, and **no path where an absent `SHA256SUMS` means "nothing to
+  check"**; that shrug turns "I don't know" into "it's fine". 24-case
+  synthetic-origin failure matrix under `--selftest`.
+
+  Worth recording why the name match is exact: swapping it for a substring
+  `grep` was mutation-tested and **reported VERIFIED for bytes vouched for only
+  as a `.sig`**.
+- **`scripts/release-stage.sh`** — refuses on tag/`VERSION` disagreement, a
+  stale crate version, a host that is not the platform the asset name claims,
+  a rail missing from the published feature set, wrong library magic bytes, or a
+  tarball whose contents are not exactly the expected set. Every refusal was
+  broken and observed before being trusted.
+- **CI job `release-tooling` and `make release-selftest`** — both failure
+  matrices run on every push, not only at release time.
+
+### Fixed
+
+- **`patala-py/pyproject.toml` declared `0.1.0` against a `0.1.1` crate.** The
+  wheel would have reported a version its own library did not — the same class
+  of lie as a stale ABI string. The stager's version sweep now reads
+  `pyproject.toml` alongside the nine `Cargo.toml`s, since the Cargo sweep
+  structurally could not see it.
+
+### Changed
+
+- `SECURITY.md`'s "Release artifacts: there are none" is now accurate, along
+  with the six pages and the landing that repeated it.
+
 ## [0.1.1] — 2026-08-10
 
 **patala's first published release.** `[0.1.0]` below is a real entry — a

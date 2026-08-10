@@ -197,9 +197,24 @@ if [ "$crate_count" -lt 9 ]; then
     "found only ${crate_count} workspace crate manifest(s) — expected at least 9." \
     "The version scan matched almost nothing, so passing it would mean nothing."
 fi
+# patala-py ships a wheel whose version comes from pyproject.toml, not from the
+# crate beside it. Those two drifted — pyproject said 0.1.0 against a 0.1.1
+# crate — and the Cargo sweep above cannot see it, because it only reads
+# Cargo.toml. A wheel that reports a version the library does not is the same
+# class of lie as a stale ABI string.
+pyproject="./patala-py/pyproject.toml"
+if [ -f "$pyproject" ]; then
+  py_version="$(awk '/^\[project\]/{p=1;next} /^\[/{p=0} p && /^version *=/{gsub(/[" ]/,"");sub(/^version=/,"");print;exit}' "$pyproject")"
+  [ "$py_version" = "$VERSION" ] || mismatched+=("${pyproject} declares '${py_version}'")
+else
+  die "$E_CRATE_VERSION" \
+    "${pyproject} is missing — the wheel's version is unchecked." \
+    "If patala-py was removed, drop this check with it rather than leaving it inert."
+fi
+
 if [ "${#mismatched[@]}" -ne 0 ]; then
   die "$E_CRATE_VERSION" \
-    "${#mismatched[@]} crate(s) do not declare version '${VERSION}':" \
+    "${#mismatched[@]} manifest(s) do not declare version '${VERSION}':" \
     "${mismatched[@]}" \
     "Bump them, or tag the version the workspace actually is."
 fi

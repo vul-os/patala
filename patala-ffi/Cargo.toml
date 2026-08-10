@@ -1,6 +1,6 @@
 [package]
 name = "patala-ffi"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A plain C ABI over patala-core: JSON in, JSON out, uint64 handles, no UniFFI. The path for the languages UniFFI has no backend for — C, C++, Node/Deno/Bun, PHP, Elixir. See PATALA.md §5."
 license = "MIT OR Apache-2.0"

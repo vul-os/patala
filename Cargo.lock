@@ -1134,7 +1134,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "patala-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "serde",
@@ -1144,7 +1144,7 @@ dependencies = [
 
 [[package]]
 name = "patala-ffi"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "patala-core",
  "patala-uniffi",
@@ -1155,7 +1155,7 @@ dependencies = [
 
 [[package]]
 name = "patala-fiat"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "patala-hyperswitch"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "hex",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "patala-py"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "patala-core",
  "patala-uniffi",
@@ -1202,7 +1202,7 @@ dependencies = [
 
 [[package]]
 name = "patala-sidecar"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "axum",
@@ -1217,7 +1217,7 @@ dependencies = [
 
 [[package]]
 name = "patala-solana"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "blake3",
@@ -1238,7 +1238,7 @@ dependencies = [
 
 [[package]]
 name = "patala-stellar"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "async-trait",
  "ed25519-dalek",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "patala-uniffi"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "patala-core",
  "patala-fiat",

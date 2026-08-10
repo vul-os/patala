@@ -1,6 +1,6 @@
 [package]
 name = "patala-fiat"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "patala fiat foundation: the ISO-4217 minor-unit currency table (147 currencies, checksum-pinned), the provider-registry pattern (manual always-on/never-disableable), the offline `manual` PaymentRail, and 20 feature-gated CustodialReversible processor adapters (Stripe, Paystack, Adyen, PayPal, Square, Razorpay, ...) -- ported from cackle's internal/money + internal/payments (Go). Money-critical logic (currency exponents, amount conversions, fail-closed verify, webhook signature verification) is preserved faithfully; only the seam differs (patala-core's PaymentRail trait vs cackle's Provider interface). Default feature set is empty and links no HTTP client. See README.md and PORTING.md."
 license = "MIT OR Apache-2.0"

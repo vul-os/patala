@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "patala-py"
-version = "0.1.0"
+version = "0.1.2"
 description = "Python bindings for patala — a sovereign, centerless payment-rail substrate. MockRail is always available; SolanaRail/StellarRail/HyperswitchRail ship when the wheel is built with the matching cargo feature (solana/stellar/hyperswitch)."
 readme = "README.md"
 license = { text = "MIT" }

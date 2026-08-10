@@ -1,6 +1,6 @@
 [package]
 name = "patala-sidecar"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "A thin local HTTP server over patala-core (quote/charge/verify as JSON), for any language and for key isolation. See PATALA.md §5."
 license = "MIT OR Apache-2.0"

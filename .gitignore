@@ -24,3 +24,8 @@ dist/
 
 # BEAM crash dumps — an Elixir NIF fault drops one of these at the repo root.
 erl_crash.dump
+
+# Where scripts/release-stage.sh stages published assets (and where the
+# release workflow emits SHA256SUMS over). Build output: a checked-in copy of
+# a release bundle would be a second set of bytes claiming to be the release.
+/release/

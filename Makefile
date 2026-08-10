@@ -10,7 +10,7 @@
 # (patala-go has its own Makefile for the UniFFI binding generation — this one
 # is the Rust workspace.)
 
-.PHONY: check fmt fmt-check lint test test-features doc features site-check smoke-python smoke-go smoke-ffi smoke-kotlin smoke-swift probe-ruby clean
+.PHONY: check fmt fmt-check lint test test-features doc features site-check smoke-python smoke-go smoke-ffi smoke-kotlin smoke-swift probe-ruby release-selftest clean
 
 # The full gate. Run before pushing.
 check: fmt-check lint test test-features doc features site-check
@@ -171,6 +171,21 @@ smoke-swift:
 # becomes worth reconsidering for sdks/ruby. Needs ruby and python3.
 probe-ruby:
 	./scripts/uniffi-ruby-probe.sh
+
+# The release tooling's failure matrices. `scripts/verify.sh` is what a user
+# runs on a downloaded asset and `scripts/release-stage.sh` is what builds and
+# packages the C ABI bundle; both refuse rather than warn, and both prove it
+# here. Out of `check` for the same reason the smoke targets are: verify.sh's
+# synthetic origin needs python3, and `check` is the pure-cargo gate. CI runs
+# this as its own job on every push.
+#
+# release-stage.sh --selftest covers only the refusals that need no build; it
+# prints the four that need a built library and says they are not covered.
+# Those run for real in .github/workflows/release.yml, which builds the bundle
+# it publishes and then verifies it with the same verify.sh a user runs.
+release-selftest:
+	bash scripts/verify.sh --selftest
+	bash scripts/release-stage.sh --selftest
 
 clean:
 	cargo clean

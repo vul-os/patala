@@ -195,6 +195,42 @@ jobs:
       - name: make smoke-swift
         run: make smoke-swift
 
+  # The release tooling is exercised on every push, not only when a tag is
+  # pushed. `.github/workflows/release.yml` runs perhaps twice a year; a
+  # checksum guard that has quietly stopped failing is indistinguishable, from
+  # a green pipeline, from one that works — and the first time anyone would
+  # find out is the release itself.
+  #
+  # verify.sh's 24 cases stand up a synthetic origin that is broken in exactly
+  # one way each and assert the exit code AND that a diagnostic was printed
+  # ("aborted with no message" is the real-world bug being guarded against).
+  # release-stage.sh's 6 cases cover the refusals that need no toolchain; the
+  # four that need a built library are named in its output as NOT covered here
+  # and run for real in the release job.
+  release-tooling:
+    name: release verifier + stager (failure matrices)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: |
+          bash -n scripts/verify.sh
+          bash -n scripts/release-stage.sh
+
+      - name: ShellCheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck scripts/verify.sh scripts/release-stage.sh
+
+      - name: verify.sh — failure matrix (synthetic origin)
+        run: bash scripts/verify.sh --selftest
+
+      - name: release-stage.sh — failure matrix (no build needed)
+        run: bash scripts/release-stage.sh --selftest
+
   c-abi:
     name: c abi (dlopened from C, not just compiled)
     runs-on: ubuntu-latest
